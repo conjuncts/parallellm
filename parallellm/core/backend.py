@@ -1,5 +1,5 @@
 from typing import Optional
-from parallellm.core.datastore import DataStore
+from parallellm.core.datastore.base import DataStore
 
 
 class BaseBackend(DataStore):
@@ -20,11 +20,10 @@ class BaseBackend(DataStore):
     def retrieve(self, stage: str, doc_hash: str, seq_id: int = None) -> Optional[str]:
         self._poll_changes()
         return self.datastore.retrieve(stage, doc_hash, seq_id)
-    
+
     def store(self, stage: str, doc_hash: str, response: str) -> int:
         self._poll_changes()
         return self.datastore.store(stage, doc_hash, response)
-    
+
     def persist(self):
         self.datastore.persist()
-    

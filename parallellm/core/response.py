@@ -30,7 +30,7 @@ class LLMResponse:
         """
         Resolve the response to a string.
 
-        :returns: The resolved string response. If this value is not available, 
+        :returns: The resolved string response. If this value is not available,
             execution should stop gracefully and proceed to the next batch.
         """
         return self._backend.retrieve(self.stage, self.doc_hash, self.seq_id)

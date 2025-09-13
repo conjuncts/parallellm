@@ -1,21 +1,30 @@
-from parallellm.core.gateway import Parallellm
+from parallellm.core.gateway import ParalleLLM
 # from parallellm.core.manager import BatchManager
 
 
 print("Before")
 
-# mgr = BatchManager()
-mgr = Parallellm.resume_directory(".enzy")
+pllm = ParalleLLM.resume_directory(".pllm")
 
-with mgr:
-    mgr.when_stage("init")
-    print("Inside init stage")
+with pllm:
+    print("This will always be executed")
+    pllm.goto_stage("begin")
 
-    mgr.goto_stage("next")
+with pllm:
+    pllm.when_stage("begin")
 
-with mgr:
-    mgr.when_stage("next")
-    print("Inside next stage")
+    print("Inside stage 'begin' (the starting stage)")
+    resp = pllm.ask_llm(
+        "You are a helpful assistant",
+        "Please name 8 NFL teams. Place your final answer in a code block, separated by newlines.",
+    )
+
+    pllm.goto_stage("end")
+
+with pllm:
+    pllm.when_stage("end")
+
+    print("Inside stage 'end' (the terminal stage)")
 print("After")
 
-mgr.persist()
+pllm.persist()
