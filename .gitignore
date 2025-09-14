@@ -9,5 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
-.pllm
 .env
+
+# PLLM outputs
+.pllm
+.temp

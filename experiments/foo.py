@@ -7,7 +7,13 @@ from dotenv import load_dotenv
 print("Before")
 
 load_dotenv()
-pllm = ParalleLLM.resume_directory(".pllm", provider="openai", log_level=logging.DEBUG)
+pllm = ParalleLLM.resume_directory(
+    ".pllm",
+    # ".temp",
+    provider="openai",  #
+    strategy="async",
+    log_level=logging.DEBUG,
+)
 
 with pllm:
     print("This will always be executed")

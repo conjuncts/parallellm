@@ -19,7 +19,7 @@ class BaseBackend:
         raise NotImplementedError
 
     def persist(self):
-        self.datastore.persist()
+        pass
 
     def retrieve(self, stage: str, doc_hash: str, seq_id: int = None) -> Optional[str]:
         raise NotImplementedError

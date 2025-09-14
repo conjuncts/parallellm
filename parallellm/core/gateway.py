@@ -2,10 +2,11 @@ import logging
 from typing import Literal
 
 from parallellm.core.backend.async_backend import AsyncBackend
+from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.datastore.sqlite import SQLiteDataStore
 from parallellm.core.manager import BatchManager
 from parallellm.file_io.file_manager import FileManager
-from parallellm.provider.openai import AsyncOpenAIProvider
+from parallellm.provider.openai import AsyncOpenAIProvider, SyncOpenAIProvider
 from parallellm.logging.fancy import parallellm_log_handler
 
 
@@ -34,19 +35,28 @@ class ParalleLLMGateway:
 
         if strategy == "async":
             backend = AsyncBackend(fm)
+        elif strategy == "sync":
+            backend = SyncBackend(fm)
         else:
             raise NotImplementedError(f"Strategy '{strategy}' is not implemented yet")
+
         if provider == "openai":
             if strategy == "async":
                 from openai import AsyncOpenAI
 
                 client = AsyncOpenAI()
-            else:
+                provider = AsyncOpenAIProvider(client=client, backend=backend)
+            elif strategy == "sync":
                 from openai import OpenAI
 
                 client = OpenAI()
+                provider = SyncOpenAIProvider(client=client, backend=backend)
+            else:
+                # For other strategies, default to async for now
+                from openai import AsyncOpenAI
 
-            provider = AsyncOpenAIProvider(client=client, backend=backend)
+                client = AsyncOpenAI()
+                provider = AsyncOpenAIProvider(client=client, backend=backend)
 
         # Get the parallellm logger and configure it specifically
         logger = logging.getLogger("parallellm")
