@@ -112,7 +112,7 @@ class FileManager:
         :returns: Path to the stage directory
         """
         stage_dir = self.directory / "datastore" / str(stage)
-        stage_dir.mkdir(exist_ok=True)
+        stage_dir.mkdir(parents=True, exist_ok=True)
         return stage_dir
 
     def load_datastore(self, stage: str) -> Tuple[List[str], Dict[str, int]]:

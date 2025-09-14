@@ -1,5 +1,22 @@
+from typing import List, Optional, Union
+
+from parallellm.core.response import LLMDocument, LLMIdentity
+
+
 class BaseProvider:
-    pass
+    def submit_query_to_provider(
+        self,
+        instructions,
+        documents: Union[LLMDocument, List[LLMDocument]] = [],
+        *,
+        hashed: str,
+        stage: str,
+        seq_id: int,
+        llm: Optional[LLMIdentity] = None,
+        _hoist_images=None,
+        **kwargs,
+    ):
+        raise NotImplementedError
 
 
 class SyncProvider(BaseProvider):

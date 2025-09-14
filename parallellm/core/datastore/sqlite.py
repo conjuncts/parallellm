@@ -1,4 +1,6 @@
 import sqlite3
+import json
+import threading
 from typing import Optional
 
 from parallellm.core.datastore.base import DataStore
@@ -17,12 +19,20 @@ class SQLiteDataStore(DataStore):
         :param file_manager: FileManager instance to handle file I/O operations
         """
         self.file_manager = file_manager
-        self._connections: dict[str, sqlite3.Connection] = {}
-        self._dirty_stages: set[str] = set()
+        # Use threading.local to ensure each thread has its own connections
+        self._local = threading.local()
+
+    def _get_connections(self) -> dict[str, sqlite3.Connection]:
+        """Get the connections dictionary for the current thread"""
+        if not hasattr(self._local, "connections"):
+            self._local.connections = {}
+        return self._local.connections
 
     def _get_connection(self, stage: str) -> sqlite3.Connection:
-        """Get or create SQLite connection for a stage"""
-        if stage not in self._connections:
+        """Get or create SQLite connection for a stage in the current thread"""
+        connections = self._get_connections()
+
+        if stage not in connections:
             # Create database file using file manager
             directory = self.file_manager.allocate_datastore(stage)
             db_path = directory / "datastore.db"
@@ -37,6 +47,8 @@ class SQLiteDataStore(DataStore):
                     seq_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     doc_hash TEXT NOT NULL,
                     response TEXT NOT NULL,
+                    response_id TEXT,
+                    metadata TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(doc_hash)
                 )
@@ -48,9 +60,9 @@ class SQLiteDataStore(DataStore):
             """)
 
             conn.commit()
-            self._connections[stage] = conn
+            connections[stage] = conn
 
-        return self._connections[stage]
+        return connections[stage]
 
     def retrieve(
         self, stage: str, doc_hash: str, seq_id: Optional[int] = None
@@ -82,12 +94,46 @@ class SQLiteDataStore(DataStore):
         row = cursor.fetchone()
         return row["response"] if row else None
 
+    def retrieve_metadata(
+        self, stage: str, doc_hash: str, seq_id: Optional[int] = None
+    ) -> Optional[dict]:
+        """
+        Retrieve metadata from SQLite.
+
+        :param stage: The stage of the response.
+        :param doc_hash: The document hash of the response.
+        :param seq_id: The sequential ID of the response (optional).
+        :returns: The retrieved metadata as a dictionary, or None if not found.
+        """
+        conn = self._get_connection(stage)
+
+        # If seq_id is provided, try direct lookup first for optimization
+        if seq_id is not None:
+            cursor = conn.execute(
+                "SELECT metadata FROM responses WHERE seq_id = ? AND doc_hash = ?",
+                (seq_id, doc_hash),
+            )
+            row = cursor.fetchone()
+            if row and row["metadata"]:
+                return json.loads(row["metadata"])
+
+        # Fallback to doc_hash lookup
+        cursor = conn.execute(
+            "SELECT metadata FROM responses WHERE doc_hash = ?", (doc_hash,)
+        )
+        row = cursor.fetchone()
+        if row and row["metadata"]:
+            return json.loads(row["metadata"])
+        return None
+
     def store(
         self,
         stage: str,
         doc_hash: str,
+        seq_id: Optional[int],
         response: str,
-        seq_id: Optional[int] = None,
+        response_id: str,
+        *,
         save_to_file: bool = True,
     ) -> Optional[int]:
         """
@@ -96,8 +142,9 @@ class SQLiteDataStore(DataStore):
         :param stage: The stage of the response.
         :param doc_hash: The document hash of the response.
         :param response: The response content to store.
+        :param response_id: The response ID to store.
         :param seq_id: The sequential ID of the response (optional).
-        :param save_to_file: Whether to commit the transaction immediately.
+        :param save_to_file: Whether to commit the transaction immediately (ignored - always commits).
         :returns: The seq_id where the response was stored.
         """
         conn = self._get_connection(stage)
@@ -106,8 +153,8 @@ class SQLiteDataStore(DataStore):
             if seq_id is not None:
                 # Try to insert with specific seq_id
                 cursor = conn.execute(
-                    "INSERT OR REPLACE INTO responses (seq_id, doc_hash, response) VALUES (?, ?, ?)",
-                    (seq_id, doc_hash, response),
+                    "INSERT OR REPLACE INTO responses (seq_id, doc_hash, response, response_id) VALUES (?, ?, ?, ?)",
+                    (seq_id, doc_hash, response, response_id),
                 )
                 actual_seq_id = seq_id
             else:
@@ -120,68 +167,119 @@ class SQLiteDataStore(DataStore):
                 if existing:
                     # Update existing record
                     conn.execute(
-                        "UPDATE responses SET response = ? WHERE doc_hash = ?",
-                        (response, doc_hash),
+                        "UPDATE responses SET response = ?, response_id = ? WHERE doc_hash = ?",
+                        (response, response_id, doc_hash),
                     )
                     actual_seq_id = existing["seq_id"]
                 else:
                     # Insert new record (seq_id will be auto-generated)
                     cursor = conn.execute(
-                        "INSERT INTO responses (doc_hash, response) VALUES (?, ?)",
-                        (doc_hash, response),
+                        "INSERT INTO responses (doc_hash, response, response_id) VALUES (?, ?, ?)",
+                        (doc_hash, response, response_id),
                     )
                     actual_seq_id = cursor.lastrowid
 
-            # Mark stage as dirty
-            self._dirty_stages.add(stage)
-
-            # Commit immediately if save_to_file is True
-            if save_to_file:
-                conn.commit()
-                self._dirty_stages.discard(stage)
-
+            # Always commit immediately for thread safety
+            conn.commit()
             return actual_seq_id
 
         except sqlite3.Error as e:
             conn.rollback()
             raise RuntimeError(f"SQLite error while storing response: {e}")
 
+    def store_metadata(
+        self,
+        stage: str,
+        doc_hash: str,
+        seq_id: Optional[int],
+        response_id: str,
+        metadata: dict,
+    ) -> None:
+        """
+        Store metadata in SQLite.
+
+        :param stage: The stage of the metadata.
+        :param doc_hash: The document hash of the response.
+        :param seq_id: The sequential ID of the response (optional).
+        :param response_id: The response ID to store.
+        :param metadata: The metadata to store.
+        """
+        conn = self._get_connection(stage)
+
+        try:
+            # Serialize metadata to JSON
+            metadata_json = json.dumps(metadata) if metadata else None
+
+            if seq_id is not None:
+                # Update by seq_id and doc_hash
+                cursor = conn.execute(
+                    "UPDATE responses SET metadata = ? WHERE seq_id = ? AND doc_hash = ?",
+                    (metadata_json, seq_id, doc_hash),
+                )
+                if cursor.rowcount == 0:
+                    # Record doesn't exist, create it with just metadata
+                    conn.execute(
+                        "INSERT INTO responses (seq_id, doc_hash, response, response_id, metadata) VALUES (?, ?, '', ?, ?)",
+                        (seq_id, doc_hash, response_id, metadata_json),
+                    )
+            else:
+                # Update by doc_hash only
+                cursor = conn.execute(
+                    "UPDATE responses SET metadata = ? WHERE doc_hash = ?",
+                    (metadata_json, doc_hash),
+                )
+                if cursor.rowcount == 0:
+                    # Record doesn't exist, create it with just metadata
+                    conn.execute(
+                        "INSERT INTO responses (doc_hash, response, response_id, metadata) VALUES (?, '', ?, ?)",
+                        (doc_hash, response_id, metadata_json),
+                    )
+
+            # Always commit immediately for thread safety
+            conn.commit()
+
+        except sqlite3.Error as e:
+            conn.rollback()
+            raise RuntimeError(f"SQLite error while storing metadata: {e}")
+
     def persist(self, stage: Optional[str] = None) -> None:
         """
         Persist (commit) changes to SQLite database(s).
 
-        :param stage: The stage to persist (if None, persist all stages with changes).
+        Note: This implementation always commits immediately, so this method is a no-op.
+
+        :param stage: The stage to persist (ignored - always commits immediately).
         """
-        if stage is not None:
-            # Persist specific stage
-            if stage in self._dirty_stages and stage in self._connections:
-                self._connections[stage].commit()
-                self._dirty_stages.discard(stage)
-        else:
-            # Persist all dirty stages
-            for dirty_stage in list(self._dirty_stages):
-                if dirty_stage in self._connections:
-                    self._connections[dirty_stage].commit()
-                self._dirty_stages.discard(dirty_stage)
+        # No-op since we always commit immediately
+        pass
 
     def close(self, stage: Optional[str] = None) -> None:
         """
-        Close SQLite connection(s).
+        Close SQLite connection(s) for the current thread.
 
         :param stage: The stage connection to close (if None, close all connections).
         """
+        connections = self._get_connections()
+
         if stage is not None:
-            if stage in self._connections:
-                self._connections[stage].close()
-                del self._connections[stage]
-                self._dirty_stages.discard(stage)
+            if stage in connections:
+                connections[stage].close()
+                del connections[stage]
         else:
-            # Close all connections
-            for conn in self._connections.values():
+            # Close all connections for current thread
+            for conn in connections.values():
                 conn.close()
-            self._connections.clear()
-            self._dirty_stages.clear()
+            connections.clear()
 
     def __del__(self):
-        """Cleanup: close all connections when the object is destroyed"""
-        self.close()
+        """
+        Cleanup: close all connections when the object is destroyed.
+        Note: Only closes connections from the current thread to avoid threading issues.
+        """
+        try:
+            # Only try to close connections if we're in a thread that has them
+            if hasattr(self, "_local") and hasattr(self._local, "connections"):
+                self.close()
+        except Exception:
+            # Ignore any errors during cleanup in destructor
+            pass

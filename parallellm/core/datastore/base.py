@@ -28,8 +28,10 @@ class DataStore(ABC):
         self,
         stage: str,
         doc_hash: str,
+        seq_id: Optional[int],
         response: str,
-        seq_id: Optional[int] = None,
+        response_id: str,
+        *,
         save_to_file: bool = True,
     ) -> Optional[int]:
         """
@@ -37,10 +39,28 @@ class DataStore(ABC):
 
         :param stage: The stage of the response.
         :param doc_hash: The document hash of the response.
-        :param response: The response content to store.
         :param seq_id: The sequential ID of the response (optional).
+        :param response: The response content to store.
+        :param response_id: The response ID to store.
         :param save_to_file: Whether to save the updated data back to the file.
         :returns: The seq_id where the response was stored (if applicable).
+        """
+        raise NotImplementedError
+
+    def store_metadata(
+        self,
+        stage: str,
+        doc_hash: str,
+        seq_id: Optional[int],
+        response_id: str,
+        metadata: dict,
+    ) -> None:
+        """
+        Store metadata in the backend.
+
+        :param stage: The stage of the metadata.
+        :param metadata: The metadata to store.
+        :param save_to_file: Whether to save the updated data back to the file.
         """
         raise NotImplementedError
 
@@ -305,8 +325,9 @@ class ListDataStore(DataStore):
         self,
         stage: str,
         doc_hash: str,
+        seq_id: Optional[int],
         response: str,
-        seq_id: Optional[int] = None,
+        *,
         save_to_file: bool = True,
     ) -> int:
         """

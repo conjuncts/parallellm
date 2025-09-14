@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Literal, Union
 from PIL import Image
 
 from parallellm.core.backend import BaseBackend
@@ -14,8 +14,24 @@ class LLMIdentity:
         """
         self.identity = identity
 
+    def to_str(self, provider: Union[Literal["openai"], None] = None) -> str:
+        """
+        Convert to a string representation for a specific provider.
+
+        :param provider: A specific provider (ie. openai)
+        """
+        if provider == "openai":
+            if self.identity is None:
+                return "gpt-4.1-nano"
+            return self.identity
+        return self.identity
+
 
 class LLMResponse:
+    pass
+
+
+class PendingLLMResponse(LLMResponse):
     """
     Base class for a response from an LLM.
     """
@@ -25,6 +41,7 @@ class LLMResponse:
         self.seq_id = seq_id
         self.doc_hash = doc_hash
         self._backend = backend
+        self.value = None
 
     def resolve(self) -> str:
         """
@@ -33,4 +50,29 @@ class LLMResponse:
         :returns: The resolved string response. If this value is not available,
             execution should stop gracefully and proceed to the next batch.
         """
-        return self._backend.retrieve(self.stage, self.doc_hash, self.seq_id)
+        if self.value is not None:
+            return self.value
+
+        self.value = self._backend.retrieve(self.stage, self.doc_hash, self.seq_id)
+        return self.value
+
+
+class ReadyLLMResponse(LLMResponse):
+    """
+    A response that is already resolved.
+    """
+
+    def __init__(self, stage, seq_id, doc_hash, value: str):
+        self.stage = stage
+        self.seq_id = seq_id
+        self.doc_hash = doc_hash
+        self.value = value
+
+    def resolve(self) -> str:
+        """
+        Resolve the response to a string.
+
+        :returns: The resolved string response. If this value is not available,
+            execution should stop gracefully and proceed to the next batch.
+        """
+        return self.value
