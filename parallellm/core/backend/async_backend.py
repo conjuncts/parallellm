@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import types
 import threading
 import atexit
@@ -139,7 +140,7 @@ class AsyncBackend(BaseBackend):
         return task
 
     async def _poll_changes(
-        self, stage: str, until_doc_hash: str, until_seq_id: int = None
+        self, until_stage: str, until_doc_hash: str, until_seq_id: int = None
     ):
         """
         A chance to poll for changes and update the data store
@@ -160,8 +161,10 @@ class AsyncBackend(BaseBackend):
             # done_tasks.append(coro)
 
             # Stop if we reached the target
-            if until_doc_hash == doc_hash and (
-                until_seq_id is None or until_seq_id == int(seq_id)
+            if (
+                until_stage == stage
+                and until_doc_hash == doc_hash
+                and (until_seq_id is None or until_seq_id == int(seq_id))
             ):
                 break
 
@@ -176,9 +179,19 @@ class AsyncBackend(BaseBackend):
         await self._poll_changes(stage, doc_hash)
         return self._async_ds.retrieve(stage, doc_hash, seq_id)
 
-    def persist(self):
+    def persist(self, timeout=30.0):
         """Synchronous persist that uses the backend's event loop"""
-        pass  # SQLite commits immediately
+        # SQLite commits immediately
+
+        # but we DO want to wait for all pending tasks to complete
+        if self._loop is not None and not self._loop.is_closed():
+            future = asyncio.run_coroutine_threadsafe(
+                self._poll_changes(None, None), self._loop
+            )
+            try:
+                future.result(timeout=timeout)
+            except Exception as e:
+                print(f"Warning: Failed to wait for pending tasks: {e}")
 
     def retrieve(self, stage: str, doc_hash: str, seq_id: int = None) -> Optional[str]:
         """Synchronous retrieve that uses the backend's event loop"""

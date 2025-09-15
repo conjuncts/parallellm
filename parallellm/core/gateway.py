@@ -66,7 +66,10 @@ class ParalleLLMGateway:
         # Prevent propagation to root logger to avoid duplicate messages
         logger.propagate = False
         return BatchManager(
-            file_manager=fm, backend=backend, provider=provider, logger=logger
+            file_manager=fm,
+            backend=backend,
+            provider=provider,
+            logger=logger,
         )
 
 

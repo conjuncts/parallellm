@@ -7,20 +7,17 @@ init()
 
 # Create a custom formatter with colors
 class ColoredFormatter(logging.Formatter):
+    _status_colors = {
+        logging.INFO: Fore.CYAN,
+        logging.WARNING: Fore.YELLOW,
+        logging.ERROR: Fore.RED,
+        logging.DEBUG: Fore.LIGHTBLACK_EX,
+    }
+
     def format(self, record):
         # Apply colors based on log level
-        if record.levelno == logging.INFO:
-            record.levelname = f"{Fore.BLUE}[pllm {record.levelname}]{Style.RESET_ALL}"
-        elif record.levelno == logging.WARNING:
-            record.levelname = (
-                f"{Fore.YELLOW}[pllm {record.levelname}]{Style.RESET_ALL}"
-            )
-        elif record.levelno == logging.ERROR:
-            record.levelname = f"{Fore.RED}[pllm {record.levelname}]{Style.RESET_ALL}"
-        elif record.levelno == logging.DEBUG:
-            record.levelname = (
-                f"{Fore.LIGHTBLACK_EX}[pllm {record.levelname}]{Style.RESET_ALL}"
-            )
+        color = self._status_colors.get(record.levelno, "")
+        record.levelname = f"{color}[pllm {record.levelname}]{Style.RESET_ALL}"
 
         return super().format(record)
 

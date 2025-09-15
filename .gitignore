@@ -11,6 +11,9 @@ wheels/
 
 .env
 
+# Experiments
+experiments/
+
 # PLLM outputs
 .pllm
 .temp

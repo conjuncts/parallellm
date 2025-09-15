@@ -12,6 +12,28 @@ from parallellm.core.response import (
 )
 from parallellm.provider.base import BaseProvider
 from parallellm.file_io.file_manager import FileManager
+from parallellm.logging.dash_logger import DashboardLogger, HashStatus
+
+
+class StatusDashboard:
+    """Context manager for the hash status dashboard"""
+
+    def __init__(self, dash_logger: DashboardLogger):
+        self._dash_logger = dash_logger
+        self._was_displaying = False
+
+    def __enter__(self):
+        # Store current display state and enable display
+        print()
+        self._was_displaying = self._dash_logger.display
+        self._dash_logger.set_display(True)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Finalize the line and restore original display state
+        self._dash_logger.finalize_line()
+        self._dash_logger.set_display(self._was_displaying)
+        print()
 
 
 class BatchManager:
@@ -22,12 +44,15 @@ class BatchManager:
         provider: BaseProvider,
         *,
         logger,
+        dash_logger_k: int = 10,
     ):
         """
         channel: str, optional
             Parallellm is typically used as a singleton.
             If you want to have multiple instances,
             specify a channel name.
+        dash_logger_k: int, optional
+            Number of hashes to display in the hash logger (default 10)
         """
         self._backend = backend
         self._fm = file_manager
@@ -35,8 +60,20 @@ class BatchManager:
         self._logger = logger
         self._current_seq = 0
 
+        # Initialize the hash logger with display disabled by default
+        self._dash_logger = DashboardLogger(k=dash_logger_k, display=False)
+
     def __enter__(self):
         return self
+
+    def dashboard(self, log_k: int = 10):
+        """
+        Create a context manager for the status dashboard.
+
+        :param log_k: Number of hashes to display in the dashboard (default 10)
+        """
+        # TODO implement log_k
+        return StatusDashboard(self._dash_logger)
 
     @property
     def current_stage(self):
@@ -53,16 +90,12 @@ class BatchManager:
     def when_stage(self, stage_name):
         if stage_name != self.current_stage:
             raise WrongStage()
-        self._logger.info(
-            f"{Fore.GREEN}Entered stage '{Fore.CYAN}{stage_name}{Fore.GREEN}'{Style.RESET_ALL}"
-        )
+        self._logger.info(f"Entered stage {Fore.CYAN}{stage_name}{Style.RESET_ALL}")
 
     def goto_stage(self, stage_name):
         # TODO: TODO: TODO: delay stage change until after the task manager exits.
         self.metadata["current_stage"] = stage_name
-        self._logger.info(
-            f"{Fore.GREEN}Switched to stage '{Fore.CYAN}{stage_name}{Fore.GREEN}'{Style.RESET_ALL}"
-        )
+        self._logger.info(f"Switched to stage {Fore.CYAN}{stage_name}{Style.RESET_ALL}")
 
     def save_userdata(self, key, value):
         """
@@ -85,7 +118,42 @@ class BatchManager:
         """
         Ensure that everything is properly saved
         """
+        self._backend.persist()
+
         self._fm.persist()
+
+    def set_hash_display(self, display: bool):
+        """
+        Enable or disable hash logger console display
+
+        Args:
+            display: Whether to show hash logger output
+        """
+        self._dash_logger.set_display(display)
+
+    def update_hash_status(self, hash_value: str, status: str):
+        """
+        Update the status of a hash in the logger
+
+        Args:
+            hash_value: The hash value to update
+            status: New status - one of 'C' (cached), '↗' (sent), '↘' (received), '✓' (stored)
+        """
+        status_map = {
+            "C": HashStatus.CACHED,
+            "↗": HashStatus.SENT,
+            "↘": HashStatus.RECEIVED,
+            "✓": HashStatus.STORED,
+        }
+        if status in status_map:
+            self._dash_logger.update_hash(hash_value, status_map[status])
+
+    def finalize_hash_display(self):
+        """
+        Finalize the hash display line and move to next line.
+        Useful when you want to ensure subsequent print() calls appear on new lines.
+        """
+        self._dash_logger.finalize_line()
 
     def ask_llm(
         self,
@@ -119,7 +187,7 @@ class BatchManager:
         hashed = compute_hash(instructions, documents)
         cached = self._backend.retrieve(self.current_stage, hashed, seq_id)
         if cached is not None:
-            self._logger.info(f"{Fore.YELLOW}C {hashed[:8]}{Style.RESET_ALL}")
+            self._dash_logger.update_hash(hashed, HashStatus.CACHED)
             return ReadyLLMResponse(
                 stage=self.current_stage,
                 seq_id=seq_id,
@@ -128,7 +196,7 @@ class BatchManager:
             )
 
         # Not cached, submit to provider
-        self._logger.info(f"{Fore.YELLOW}↗ {hashed[:8]}{Style.RESET_ALL}")
+        self._dash_logger.update_hash(hashed, HashStatus.SENT)
         return self._provider.submit_query_to_provider(
             instructions,
             documents,
@@ -136,6 +204,7 @@ class BatchManager:
             seq_id=seq_id,
             hashed=hashed,
             llm=llm,
+            dash_logger=self._dash_logger,
             _hoist_images=_hoist_images,
             **kwargs,
         )

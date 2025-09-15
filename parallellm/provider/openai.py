@@ -31,6 +31,7 @@ class SyncOpenAIProvider(SyncProvider):
         stage: str,
         seq_id: int,
         llm: Optional[LLMIdentity] = None,
+        dash_logger=None,
         _hoist_images=None,
         **kwargs,
     ):
@@ -69,6 +70,7 @@ class AsyncOpenAIProvider(AsyncProvider):
         stage: str,
         seq_id: int,
         llm: Optional[LLMIdentity] = None,
+        dash_logger=None,
         _hoist_images=None,
         **kwargs,
     ):
@@ -83,5 +85,9 @@ class AsyncOpenAIProvider(AsyncProvider):
         self.backend.submit_coro(stage=stage, doc_hash=hashed, seq_id=seq_id, coro=coro)
 
         return PendingLLMResponse(
-            stage=stage, seq_id=seq_id, doc_hash=hashed, backend=self.backend
+            stage=stage,
+            seq_id=seq_id,
+            doc_hash=hashed,
+            backend=self.backend,
+            dash_logger=dash_logger,
         )

@@ -13,6 +13,7 @@ class BaseProvider:
         stage: str,
         seq_id: int,
         llm: Optional[LLMIdentity] = None,
+        dash_logger=None,
         _hoist_images=None,
         **kwargs,
     ):
