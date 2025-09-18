@@ -171,6 +171,29 @@ class DashboardLogger:
         with self._lock:
             return {entry.full_hash: entry.status for entry in self._hashes.values()}
 
+    def coordinated_print(self, *args, **kwargs):
+        """
+        Print to console while properly coordinating with dashboard display.
+        This clears the dashboard line, prints the content, then redraws the dashboard.
+        """
+        if not self.display:
+            # Dashboard not active, use regular print
+            print(*args, **kwargs)
+            return
+
+        with self._lock:
+            # Clear the current dashboard line if it exists
+            if self._console_written:
+                sys.stdout.write(f"\r\033[K")
+                sys.stdout.flush()
+            
+            # Print the user's content
+            print(*args, **kwargs)
+            # sys.stdout.flush()
+            
+            # Redraw the dashboard line
+            # self._update_console()
+
     def finalize_line(self):
         """
         Finalize the current console line by moving to the next line.

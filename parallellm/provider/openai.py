@@ -13,9 +13,21 @@ from parallellm.core.response import (
 from parallellm.provider.base import AsyncProvider, SyncProvider
 
 from openai import OpenAI, AsyncOpenAI
+from openai.types.responses.response_input_param import Message
 
 # client = OpenAI()
 
+def _fix_documents(documents: Union[LLMDocument, List[LLMDocument]]) -> List[Message]:
+    """Ensure documents are in the correct format for OpenAI API"""
+    if isinstance(documents, list):
+        for i, doc in enumerate(documents):
+            if isinstance(doc, str):
+                msg: Message = {
+                    "role": "user",
+                    "content": doc,
+                }
+                documents[i] = msg
+    return documents
 
 class SyncOpenAIProvider(SyncProvider):
     def __init__(self, client: OpenAI, backend: SyncBackend):
@@ -31,12 +43,12 @@ class SyncOpenAIProvider(SyncProvider):
         stage: str,
         seq_id: int,
         llm: Optional[LLMIdentity] = None,
-        dash_logger=None,
         _hoist_images=None,
         **kwargs,
     ):
         """Synchronously submit a query to OpenAI and return a ready response"""
 
+        documents = _fix_documents(documents)
         def sync_openai_call():
             return self.client.responses.create(
                 model=llm.to_str("openai") if llm else "gpt-4.1-nano",
@@ -70,10 +82,10 @@ class AsyncOpenAIProvider(AsyncProvider):
         stage: str,
         seq_id: int,
         llm: Optional[LLMIdentity] = None,
-        dash_logger=None,
         _hoist_images=None,
         **kwargs,
     ):
+        documents = _fix_documents(documents)
         coro = self.client.responses.create(
             model=llm.to_str("openai") if llm else "gpt-4.1-nano",
             instructions=instructions,
@@ -89,5 +101,4 @@ class AsyncOpenAIProvider(AsyncProvider):
             seq_id=seq_id,
             doc_hash=hashed,
             backend=self.backend,
-            dash_logger=dash_logger,
         )

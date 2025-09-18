@@ -7,6 +7,7 @@ from typing import Optional
 from parallellm.core.backend import BaseBackend
 from parallellm.core.datastore.sqlite import SQLiteDataStore
 from parallellm.file_io.file_manager import FileManager
+from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 from parallellm.provider.guess import guess_schema
 
 
@@ -18,8 +19,9 @@ class AsyncBackend(BaseBackend):
     The DataStore
     """
 
-    def __init__(self, fm: FileManager):
+    def __init__(self, fm: FileManager, dash_logger: Optional[DashboardLogger] = None):
         self._fm = fm
+        self._dash_logger = dash_logger
 
         self.tasks: list[asyncio.Task] = []
         self._loop: asyncio.BaseEventLoop = None
@@ -122,6 +124,9 @@ class AsyncBackend(BaseBackend):
         future = asyncio.run_coroutine_threadsafe(
             self._create_and_store_task(stage, doc_hash, seq_id, coro), self._loop
         )
+
+        if self._dash_logger is not None:
+            self._dash_logger.update_hash(doc_hash, HashStatus.SENT)
         # Don't wait for the result, just submit it
         return future
 
@@ -159,6 +164,10 @@ class AsyncBackend(BaseBackend):
                 stage, doc_hash, int(seq_id), resp_id, resp_metadata
             )
             # done_tasks.append(coro)
+
+            # do logging
+            if self._dash_logger is not None:
+                self._dash_logger.update_hash(doc_hash, HashStatus.RECEIVED)
 
             # Stop if we reached the target
             if (

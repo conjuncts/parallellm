@@ -6,6 +6,7 @@ from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.datastore.sqlite import SQLiteDataStore
 from parallellm.core.manager import BatchManager
 from parallellm.file_io.file_manager import FileManager
+from parallellm.logging.dash_logger import DashboardLogger
 from parallellm.provider.openai import AsyncOpenAIProvider, SyncOpenAIProvider
 from parallellm.logging.fancy import parallellm_log_handler
 
@@ -32,9 +33,11 @@ class ParalleLLMGateway:
 
         # 2. Setup components
         fm = FileManager(directory)
+        dash_logger = DashboardLogger(k=10, display=False)
+
 
         if strategy == "async":
-            backend = AsyncBackend(fm)
+            backend = AsyncBackend(fm, dash_logger=dash_logger)
         elif strategy == "sync":
             backend = SyncBackend(fm)
         else:
@@ -70,6 +73,7 @@ class ParalleLLMGateway:
             backend=backend,
             provider=provider,
             logger=logger,
+            dash_logger=dash_logger,
         )
 
 

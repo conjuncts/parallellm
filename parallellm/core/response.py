@@ -1,8 +1,11 @@
-from typing import Literal, Union
+from typing import TYPE_CHECKING, Literal, Union
 from PIL import Image
 
 from parallellm.core.backend import BaseBackend
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
+
+if TYPE_CHECKING:
+    from parallellm.core.manager import BatchManager
 
 # Type alias for documents that can be either text or images
 LLMDocument = Union[str, Image.Image]
@@ -50,23 +53,18 @@ class PendingLLMResponse(LLMResponse):
         seq_id,
         doc_hash,
         backend: BaseBackend,
-        *,
-        dash_logger: DashboardLogger = None,
     ):
         self.stage = stage
         self.seq_id = seq_id
         self.doc_hash = doc_hash
         self._backend = backend
         self.value = None
-        self.dash_logger = dash_logger
 
     def resolve(self) -> str:
         if self.value is not None:
             return self.value
 
         self.value = self._backend.retrieve(self.stage, self.doc_hash, self.seq_id)
-        if self.dash_logger is not None:
-            self.dash_logger.update_hash(self.doc_hash, HashStatus.RECEIVED)
         return self.value
 
 
