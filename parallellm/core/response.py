@@ -32,6 +32,9 @@ class LLMIdentity:
 
 
 class LLMResponse:
+    def __init__(self, value):
+        self.value = value
+
     def resolve(self) -> str:
         """
         Resolve the response to a string.
@@ -39,7 +42,7 @@ class LLMResponse:
         :returns: The resolved string response. If this value is not available,
             execution should stop gracefully and proceed to the next batch.
         """
-        raise NotImplementedError()
+        return self.value
 
 
 class PendingLLMResponse(LLMResponse):

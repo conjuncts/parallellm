@@ -2,6 +2,7 @@ from typing import Optional, List, Dict, Any
 from parallellm.core.backend import BaseBackend
 from parallellm.core.datastore.sqlite import SQLiteDataStore
 from parallellm.file_io.file_manager import FileManager
+from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 from parallellm.provider.guess import guess_schema
 
 
@@ -11,9 +12,10 @@ class SyncBackend(BaseBackend):
     This backend is simpler and more straightforward for synchronous workflows.
     """
 
-    def __init__(self, fm: FileManager):
+    def __init__(self, fm: FileManager, dash_logger: Optional[DashboardLogger] = None):
         self._fm = fm
         self._ds = SQLiteDataStore(self._fm)
+        self._dash_logger = dash_logger
 
         # Store results directly instead of managing async tasks
         self._pending_results: Dict[str, Any] = {}
@@ -23,7 +25,11 @@ class SyncBackend(BaseBackend):
     ):
         """Submit a synchronous function call and store the result immediately"""
         try:
+            if self._dash_logger is not None:
+                self._dash_logger.update_hash(doc_hash, HashStatus.SENT)
             result = sync_function(*args, **kwargs)
+            if self._dash_logger is not None:
+                self._dash_logger.update_hash(doc_hash, HashStatus.RECEIVED)
 
             # Process and store the result
             resp_text, resp_id, resp_metadata = guess_schema(result)

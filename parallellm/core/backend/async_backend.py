@@ -24,6 +24,7 @@ class AsyncBackend(BaseBackend):
         self._dash_logger = dash_logger
 
         self.tasks: list[asyncio.Task] = []
+        self.task_metas: list[dict] = []
         self._loop: asyncio.BaseEventLoop = None
         self._loop_thread = None
         self._shutdown_event = threading.Event()
@@ -136,12 +137,15 @@ class AsyncBackend(BaseBackend):
         """Helper to create and store a task in the event loop"""
 
         # Wrap the coro to include metadata
+        metadata = {"stage": stage, "doc_hash": doc_hash, "seq_id": seq_id}
+
         async def wrapped_coro():
             result = await coro
-            return result, {"stage": stage, "doc_hash": doc_hash, "seq_id": seq_id}
+            return result, metadata
 
         task = asyncio.create_task(wrapped_coro())
         self.tasks.append(task)
+        self.task_metas.append(metadata)
         return task
 
     async def _poll_changes(
@@ -177,15 +181,26 @@ class AsyncBackend(BaseBackend):
             ):
                 break
 
-        # for done_task in done_tasks:
-        # self.tasks.remove(done_task)
-        self.tasks = [t for t in self.tasks if not t.done()]
-        pass
+        # pop tasks and metadatas
+        bad_indices = []
+        for i, t in enumerate(self.tasks):
+            if t.done():
+                bad_indices.append(i)
+        for i in reversed(bad_indices):
+            del self.tasks[i]
+            del self.task_metas[i]
 
     async def aretrieve(
         self, stage: str, doc_hash: str, seq_id: int = None
     ) -> Optional[str]:
-        await self._poll_changes(stage, doc_hash)
+        # only poll for changes if we have a matching task
+        if any(
+            m["stage"] == stage
+            and m["doc_hash"] == doc_hash
+            and (seq_id is None or m["seq_id"] == seq_id)
+            for m in self.task_metas
+        ):
+            await self._poll_changes(stage, doc_hash)
         return self._async_ds.retrieve(stage, doc_hash, seq_id)
 
     def persist(self, timeout=30.0):

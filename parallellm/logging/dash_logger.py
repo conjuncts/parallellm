@@ -1,4 +1,5 @@
 import sys
+import shutil
 import threading
 from collections import OrderedDict
 from typing import Dict, Optional, Set
@@ -33,12 +34,13 @@ class DashboardLogger:
     Sophisticated hash logger that displays top k=10 hashes with dynamic console updates.
 
     Features:
-    - Shows the top k=10 hash entries
+    - Shows the top k=10 hash entries (or fewer if console width is limited)
     - Allows updating hash statuses
     - Option to enable/disable console output
     - Console rewrites itself to minimize spam
     - Status changes update existing entries instead of adding new ones
     - Carriage return based rewriting that allows standard print() calls
+    - Automatically adjusts display based on console width to prevent overflow
     """
 
     def __init__(self, k: int = 10, display: bool = True):
@@ -91,8 +93,7 @@ class DashboardLogger:
                     # Remove the oldest entry (first item in OrderedDict)
                     self._hashes.popitem(last=False)
 
-            # Move the updated/added entry to the end (most recent)
-            self._hashes.move_to_end(hash_id)
+            # Keep hashes stable when possible
 
             if self.display:
                 self._update_console()
@@ -102,16 +103,42 @@ class DashboardLogger:
         if not self.display:
             return
 
+        # Get console width, with fallback to 80 if unable to determine
+        try:
+            console_width = shutil.get_terminal_size().columns
+        except (OSError, ValueError):
+            console_width = 80  # Fallback for environments without proper terminal
+
         # Build the display line with grey [DASH] prefix
         prefix = f"{Fore.LIGHTBLACK_EX}[pllm DASH]{Style.RESET_ALL} "
+        prefix_len = len("[pllm DASH] ")  # Length without color codes
+
+        # Calculate how many hashes we can display based on console width
+        # Each hash entry is approximately: "S 12345678 " (11 characters)
+        available_width = console_width - prefix_len - 5  # 5 chars buffer for safety
+        max_displayable_hashes = max(1, available_width // 11)  # At least show 1 hash
+
+        # Limit the number of hashes to display
+        hashes_to_show = list(self._hashes.values())[-max_displayable_hashes:]
+
         status_parts = []
-        for entry in self._hashes.values():
+        for entry in hashes_to_show:
             color = self._status_colors.get(entry.status, Fore.WHITE)
             status_parts.append(
                 f"{color}{entry.status.value} {entry.hash_id}{Style.RESET_ALL}"
             )
 
         display_line = prefix + " ".join(status_parts)
+
+        # # Additional safety check - truncate if still too long
+        # if len(display_line.encode('utf-8')) > console_width:
+        #     # Count visible characters (excluding color codes) and truncate
+        #     visible_chars = prefix_len + sum(11 for _ in status_parts)  # 11 chars per hash entry
+        #     if visible_chars > console_width:
+        #         # Remove entries from the beginning until it fits
+        #         while status_parts and len(prefix + " ".join(status_parts)) + prefix_len > console_width - 5:
+        #             status_parts.pop(0)
+        #         display_line = prefix + " ".join(status_parts)
 
         if self._console_written:
             # Move cursor to beginning of line and clear the entire line, then print new content
@@ -186,13 +213,9 @@ class DashboardLogger:
             if self._console_written:
                 sys.stdout.write(f"\r\033[K")
                 sys.stdout.flush()
-            
+
             # Print the user's content
             print(*args, **kwargs)
-            # sys.stdout.flush()
-            
-            # Redraw the dashboard line
-            # self._update_console()
 
     def finalize_line(self):
         """

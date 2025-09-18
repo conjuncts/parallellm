@@ -18,7 +18,7 @@ from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 class StatusDashboard:
     """Context manager for the hash status dashboard"""
 
-    def __init__(self, batch_manager: 'BatchManager', log_k: int):
+    def __init__(self, batch_manager: "BatchManager", log_k: int):
         self._batch_manager = batch_manager
         self._was_displaying = False
         self._log_k = log_k
@@ -58,11 +58,11 @@ class StatusDashboard:
         self._dash_logger.coordinated_print(*args, **kwargs)
 
 
-
 # New context manager class for BatchManager
 class ParalleLLMContext:
     """Context manager for BatchManager lifecycle (default context)"""
-    def __init__(self, batch_manager: 'BatchManager'):
+
+    def __init__(self, batch_manager: "BatchManager"):
         self._bm = batch_manager
 
     def __enter__(self):
@@ -101,7 +101,7 @@ class BatchManager:
         self._current_seq = 0
 
         # Initialize the hash logger with display disabled by default
-        self._dash_logger = dash_logger
+        self._dash_logger: DashboardLogger = dash_logger
 
     def default(self):
         """
@@ -153,7 +153,6 @@ class BatchManager:
         The intended way to let data persist across stages
         """
         return self._fm.load_userdata(self.current_stage, key)
-
 
     def persist(self):
         """

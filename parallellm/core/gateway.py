@@ -35,11 +35,10 @@ class ParalleLLMGateway:
         fm = FileManager(directory)
         dash_logger = DashboardLogger(k=10, display=False)
 
-
         if strategy == "async":
             backend = AsyncBackend(fm, dash_logger=dash_logger)
         elif strategy == "sync":
-            backend = SyncBackend(fm)
+            backend = SyncBackend(fm, dash_logger=dash_logger)
         else:
             raise NotImplementedError(f"Strategy '{strategy}' is not implemented yet")
 

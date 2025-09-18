@@ -52,7 +52,7 @@ with pllm.dashboard() as d:
     # Finalize hash logger display before stage change
 
 with pllm.default():
-    pllm.when_stage("begin") # stage-controlled - needs to modify the global counter
+    pllm.when_stage("begin")  # stage-controlled - needs to modify the global counter
     print("Inside stage 'begin'")
     pllm.goto_stage("end")
 
