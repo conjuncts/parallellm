@@ -1,12 +1,12 @@
 import hashlib
-from typing import List
+from typing import List, Optional
 from io import BytesIO
 from PIL import Image
 
 from parallellm.core.response import LLMDocument
 
 
-def compute_hash(instructions, documents: List[LLMDocument]) -> str:
+def compute_hash(instructions: Optional[str], documents: List[LLMDocument]) -> str:
     """
     Compute a hash for the given instructions and documents.
 
@@ -15,7 +15,8 @@ def compute_hash(instructions, documents: List[LLMDocument]) -> str:
     :returns: A SHA-256 hash representing the combined content, in hexadecimal format.
     """
     hasher = hashlib.sha256()
-    hasher.update(instructions.encode("utf-8"))
+    if instructions:
+        hasher.update(instructions.encode("utf-8"))
     for doc in documents:
         if isinstance(doc, str):
             hasher.update(doc.encode("utf-8"))

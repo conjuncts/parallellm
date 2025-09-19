@@ -23,7 +23,6 @@ pllm = ParalleLLM.resume_directory(
 with pllm.dashboard() as d:
     d.print("===Starting Tournament===")
     resp = pllm.ask_llm(
-        "You are a helpful assistant",
         "Please name 32 enzymes. Place your final answer in a code block, separated by newlines.",
     )
 
@@ -39,7 +38,8 @@ with pllm.dashboard() as d:
             if i + 1 < len(teams):
                 resp = pllm.ask_llm(
                     f"Given two enzymes, choose the one you like more. Only respond with the name of the enzyme.",
-                    [teams[i], teams[i + 1]],
+                    teams[i],
+                    teams[i + 1],
                 )
                 # do NOT call resp.resolve() in the hot loop
                 responses.append(resp)

@@ -2,6 +2,7 @@ import logging
 from typing import List, Optional, Union
 from colorama import Fore, Style, init
 from parallellm.core.backend import BaseBackend
+from parallellm.core.cast.fix_docs import cast_documents
 from parallellm.core.exception import NotAvailable, WrongStage
 from parallellm.core.hash import compute_hash
 from parallellm.core.response import (
@@ -191,9 +192,9 @@ class BatchManager:
 
     def ask_llm(
         self,
-        instructions,
-        documents: Union[LLMDocument, List[LLMDocument]] = [],
-        *,
+        documents: Union[LLMDocument, List[LLMDocument]],
+        *additional_documents: LLMDocument,
+        instructions: Optional[str] = None,
         llm: Union[LLMIdentity, str, None] = None,
         _hoist_images=None,
         **kwargs,
@@ -201,8 +202,9 @@ class BatchManager:
         """
         Ask the LLM a question
 
-        :param instructions: The system prompt to use
-        :param documents: Documents to use as context. Can be strings or images.
+        :param documents: Documents to use, such as the prompt.
+            Can be strings or images.
+        :param instructions: The system prompt to use.
         :param llm: The identity of the LLM to use.
             Can be helpful multi-agent or multi-model scenarios.
         :param _hoist_images: Gemini recommends that images be hoisted to the front of the message.
@@ -216,6 +218,8 @@ class BatchManager:
 
         seq_id = self._current_seq
         self._current_seq += 1
+
+        documents = cast_documents(documents, list(additional_documents))
 
         # Cache using datastore
         hashed = compute_hash(instructions, documents)

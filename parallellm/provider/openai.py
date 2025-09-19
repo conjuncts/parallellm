@@ -18,7 +18,9 @@ from openai.types.responses.response_input_param import Message
 # client = OpenAI()
 
 
-def _fix_documents(documents: Union[LLMDocument, List[LLMDocument]]) -> List[Message]:
+def _fix_docs_for_openai(
+    documents: Union[LLMDocument, List[LLMDocument]],
+) -> List[Message]:
     """Ensure documents are in the correct format for OpenAI API"""
     if isinstance(documents, list):
         for i, doc in enumerate(documents):
@@ -50,7 +52,7 @@ class SyncOpenAIProvider(SyncProvider):
     ):
         """Synchronously submit a query to OpenAI and return a ready response"""
 
-        documents = _fix_documents(documents)
+        documents = _fix_docs_for_openai(documents)
 
         def sync_openai_call():
             return self.client.responses.create(
@@ -88,7 +90,7 @@ class AsyncOpenAIProvider(AsyncProvider):
         _hoist_images=None,
         **kwargs,
     ):
-        documents = _fix_documents(documents)
+        documents = _fix_docs_for_openai(documents)
         coro = self.client.responses.create(
             model=llm.to_str("openai") if llm else "gpt-4.1-nano",
             instructions=instructions,

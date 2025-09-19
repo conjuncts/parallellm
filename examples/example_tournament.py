@@ -15,7 +15,7 @@ pllm = ParalleLLM.resume_directory(
     # ".pllm",
     ".temp",
     provider="openai",  #
-    strategy="async",
+    strategy="sync",
     log_level=logging.DEBUG,
 )
 
@@ -24,7 +24,6 @@ with pllm.dashboard() as d:
     d.print("This will always be executed")
 
     resp = pllm.ask_llm(
-        "You are a helpful assistant",
         "Please name 8 NFL teams. Place your final answer in a code block, separated by newlines.",
     )
 
@@ -35,8 +34,6 @@ with pllm.dashboard() as d:
     games = []
     for i in range(0, len(teams), 2):
         resp = pllm.ask_llm(
-            "You are a sports analyst",
-            # f"Predict the winner of the game between the {teams[i]} and the {teams[i + 1]}. Give a paragraph of reasoning.",
             f"Given a game between the {teams[i]} and the {teams[i + 1]}, simply predict the winner and the score.",
         )
         d.print("Asked!")
