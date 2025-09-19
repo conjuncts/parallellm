@@ -44,7 +44,7 @@ class SyncOpenAIProvider(SyncProvider):
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
         hashed: str,
-        stage: str,
+        checkpoint: str,
         seq_id: int,
         llm: Optional[LLMIdentity] = None,
         _hoist_images=None,
@@ -64,12 +64,12 @@ class SyncOpenAIProvider(SyncProvider):
 
         # Execute the call synchronously and store the result
         resp_text, _, _ = self.backend.submit_sync_call(
-            stage=stage, doc_hash=hashed, seq_id=seq_id, sync_function=sync_openai_call
+            checkpoint=checkpoint, doc_hash=hashed, seq_id=seq_id, sync_function=sync_openai_call
         )
 
         # Return a ready response since the operation completed immediately
         return ReadyLLMResponse(
-            stage=stage, seq_id=seq_id, doc_hash=hashed, value=resp_text
+            checkpoint=checkpoint, seq_id=seq_id, doc_hash=hashed, value=resp_text
         )
 
 
@@ -84,7 +84,7 @@ class AsyncOpenAIProvider(AsyncProvider):
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
         hashed: str,
-        stage: str,
+        checkpoint: str,
         seq_id: int,
         llm: Optional[LLMIdentity] = None,
         _hoist_images=None,
@@ -99,10 +99,10 @@ class AsyncOpenAIProvider(AsyncProvider):
         )
 
         # Submit to the backend for asynchronous execution
-        self.backend.submit_coro(stage=stage, doc_hash=hashed, seq_id=seq_id, coro=coro)
+        self.backend.submit_coro(checkpoint=checkpoint, doc_hash=hashed, seq_id=seq_id, coro=coro)
 
         return PendingLLMResponse(
-            stage=stage,
+            checkpoint=checkpoint,
             seq_id=seq_id,
             doc_hash=hashed,
             backend=self.backend,

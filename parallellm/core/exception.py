@@ -8,7 +8,7 @@ class ParallellmSignal(Exception):
     """
 
 
-class WrongStage(ParallellmSignal):
+class WrongCheckpoint(ParallellmSignal):
     def __init__(self, message=None):
         """
         If you are seeing this exception, you are doing something wrong.
@@ -19,7 +19,7 @@ class WrongStage(ParallellmSignal):
         if message is None:
             super().__init__(
                 "This exception should not be seen. "
-                "You should be calling Parallellm.when_stage() inside a 'with' block."
+                "You should be calling Parallellm.when_checkpoint() inside a 'with' block."
             )
         else:
             super().__init__(message)

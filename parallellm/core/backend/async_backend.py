@@ -115,7 +115,7 @@ class AsyncBackend(BaseBackend):
                 print(f"Warning: Failed to cleanup datastore: {e}")
 
     def submit_coro(
-        self, stage: str, doc_hash: str, seq_id: int, coro: types.CoroutineType
+        self, checkpoint: str, doc_hash: str, seq_id: int, coro: types.CoroutineType
     ):
         """Submit a coroutine to be executed in the backend's event loop"""
         if self._loop is None or self._loop.is_closed():
@@ -123,7 +123,7 @@ class AsyncBackend(BaseBackend):
 
         # Create the task in the backend's event loop
         future = asyncio.run_coroutine_threadsafe(
-            self._create_and_store_task(stage, doc_hash, seq_id, coro), self._loop
+            self._create_and_store_task(checkpoint, doc_hash, seq_id, coro), self._loop
         )
 
         if self._dash_logger is not None:
@@ -132,12 +132,12 @@ class AsyncBackend(BaseBackend):
         return future
 
     async def _create_and_store_task(
-        self, stage: str, doc_hash: str, seq_id: int, coro: types.CoroutineType
+        self, checkpoint: str, doc_hash: str, seq_id: int, coro: types.CoroutineType
     ):
         """Helper to create and store a task in the event loop"""
 
         # Wrap the coro to include metadata
-        metadata = {"stage": stage, "doc_hash": doc_hash, "seq_id": seq_id}
+        metadata = {"checkpoint": checkpoint, "doc_hash": doc_hash, "seq_id": seq_id}
 
         async def wrapped_coro():
             result = await coro
@@ -149,7 +149,7 @@ class AsyncBackend(BaseBackend):
         return task
 
     async def _poll_changes(
-        self, until_stage: str, until_doc_hash: str, until_seq_id: int
+        self, until_checkpoint: str, until_doc_hash: str, until_seq_id: int
     ):
         """
         A chance to poll for changes and update the data store
@@ -160,14 +160,14 @@ class AsyncBackend(BaseBackend):
         for coro in asyncio.as_completed(self.tasks):
             result, metadata = await coro
 
-            stage = metadata["stage"]
+            checkpoint = metadata["checkpoint"]
             doc_hash = metadata["doc_hash"]
             seq_id = metadata["seq_id"]
 
             resp_text, resp_id, resp_metadata = guess_schema(result)
-            self._async_ds.store(stage, doc_hash, int(seq_id), resp_text, resp_id)
+            self._async_ds.store(checkpoint, doc_hash, int(seq_id), resp_text, resp_id)
             self._async_ds.store_metadata(
-                stage, doc_hash, int(seq_id), resp_id, resp_metadata
+                checkpoint, doc_hash, int(seq_id), resp_id, resp_metadata
             )
             done_tasks.append(metadata)
 
@@ -177,7 +177,7 @@ class AsyncBackend(BaseBackend):
 
             # Stop if we reached the target
             if (
-                until_stage == stage
+                until_checkpoint == checkpoint
                 and until_doc_hash == doc_hash
                 and until_seq_id == int(seq_id)
             ):
@@ -189,16 +189,16 @@ class AsyncBackend(BaseBackend):
             if meta in done_tasks:
                 self.tasks.pop(i)
                 self.task_metas.pop(i)
-                # print(f"Completed {meta['stage']}:{meta['doc_hash'][:8]}:{meta['seq_id']}")
+                # print(f"Completed {meta['checkpoint']}:{meta['doc_hash'][:8]}:{meta['seq_id']}")
 
-    async def aretrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
+    async def aretrieve(self, checkpoint: str, doc_hash: str, seq_id: int) -> Optional[str]:
         # only poll for changes if we have a matching task
         if any(
-            m["stage"] == stage and m["doc_hash"] == doc_hash and m["seq_id"] == seq_id
+            m["checkpoint"] == checkpoint and m["doc_hash"] == doc_hash and m["seq_id"] == seq_id
             for m in self.task_metas
         ):
-            await self._poll_changes(stage, doc_hash, seq_id)
-        return self._async_ds.retrieve(stage, doc_hash, seq_id)
+            await self._poll_changes(checkpoint, doc_hash, seq_id)
+        return self._async_ds.retrieve(checkpoint, doc_hash, seq_id)
 
     def persist(self, timeout=30.0):
         """Synchronous persist that uses the backend's event loop"""
@@ -214,9 +214,9 @@ class AsyncBackend(BaseBackend):
             except Exception as e:
                 print(f"Warning: Failed to wait for pending tasks: {e}")
 
-    def retrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
+    def retrieve(self, checkpoint: str, doc_hash: str, seq_id: int) -> Optional[str]:
         """Synchronous retrieve that uses the backend's event loop"""
-        return self._run_coroutine(self.aretrieve(stage, doc_hash, seq_id))
+        return self._run_coroutine(self.aretrieve(checkpoint, doc_hash, seq_id))
 
     def __del__(self):
         """Clean up resources when the AsyncBackend is destroyed"""

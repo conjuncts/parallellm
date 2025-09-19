@@ -29,7 +29,7 @@ class FileManager:
         # Load existing metadata
         self.metadata = self._load_metadata()
         if self.metadata is None:
-            self.metadata = {"current_stage": "begin"}
+            self.metadata = {"current_checkpoint": "begin"}
 
     def _create_lock(self):
         """Create lock file with current process ID"""
@@ -61,28 +61,28 @@ class FileManager:
         with open(self.metadata_file, "w") as f:
             json.dump(metadata, f, indent=2)
 
-    def current_stage(self):
+    def current_checkpoint(self):
         """
-        Get the current stage from in-memory metadata
+        Get the current checkpoint from in-memory metadata
         """
-        return self.metadata.get("current_stage")
+        return self.metadata.get("current_checkpoint")
 
-    def set_current_stage(self, stage):
+    def set_current_checkpoint(self, checkpoint):
         """
-        Set the current stage in memory (will be written on persist())
+        Set the current checkpoint in memory (will be written on persist())
         """
-        self.metadata["current_stage"] = stage
+        self.metadata["current_checkpoint"] = checkpoint
 
-    def save_userdata(self, stage, key, value, overwrite=False):
+    def save_userdata(self, checkpoint, key, value, overwrite=False):
         """
-        Internally persist data across stages
+        Internally persist data across checkpoints
         """
-        # Create stage directory
-        stage_dir = self.directory / str(stage)
-        stage_dir.mkdir(exist_ok=True)
+        # Create checkpoint directory
+        checkpoint_dir = self.directory / str(checkpoint)
+        checkpoint_dir.mkdir(exist_ok=True)
 
         # Save data using pickle for complex objects
-        data_file = stage_dir / f"{key}.pkl"
+        data_file = checkpoint_dir / f"{key}.pkl"
 
         if data_file.exists() and not overwrite:
             return
@@ -90,13 +90,13 @@ class FileManager:
         with open(data_file, "wb") as f:
             pickle.dump(value, f)
 
-    def load_userdata(self, stage, key):
+    def load_userdata(self, checkpoint, key):
         """
-        Internally load data across stages
+        Internally load data across checkpoints
         """
         # Construct expected file path
-        stage_dir = self.directory / str(stage)
-        data_file = stage_dir / f"{key}.pkl"
+        checkpoint_dir = self.directory / str(checkpoint)
+        data_file = checkpoint_dir / f"{key}.pkl"
 
         if not data_file.exists():
             raise FileNotFoundError(f"Data file not found: {data_file}")
@@ -104,26 +104,26 @@ class FileManager:
         with open(data_file, "rb") as f:
             return pickle.load(f)
 
-    def allocate_datastore(self, stage: str) -> Path:
+    def allocate_datastore(self, checkpoint: str) -> Path:
         """
-        Allocate directory for a stage's datastore
+        Allocate directory for a checkpoint's datastore
 
-        :param stage: The stage name
-        :returns: Path to the stage directory
+        :param checkpoint: The checkpoint name
+        :returns: Path to the checkpoint directory
         """
-        stage_dir = self.directory / "datastore" / str(stage)
-        stage_dir.mkdir(parents=True, exist_ok=True)
-        return stage_dir
+        checkpoint_dir = self.directory / "datastore" / str(checkpoint)
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        return checkpoint_dir
 
-    def load_datastore(self, stage: str) -> Tuple[List[str], Dict[str, int]]:
+    def load_datastore(self, checkpoint: str) -> Tuple[List[str], Dict[str, int]]:
         """
-        Load datastore data for a stage from a parquet file
+        Load datastore data for a checkpoint from a parquet file
 
-        :param stage: The stage name
+        :param checkpoint: The checkpoint name
         :returns: Tuple of (data_list, hash_map)
         """
-        stage_dir = self.directory / str(stage)
-        parquet_file = stage_dir / "datastore.parquet"
+        checkpoint_dir = self.directory / str(checkpoint)
+        parquet_file = checkpoint_dir / "datastore.parquet"
 
         # Initialize empty structures
         data_list = []

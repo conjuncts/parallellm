@@ -13,11 +13,11 @@ class DataStore(ABC):
     Stores responses
     """
 
-    def retrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
+    def retrieve(self, checkpoint: str, doc_hash: str, seq_id: int) -> Optional[str]:
         """
         Retrieve a response from the backend.
 
-        :param stage: The stage of the response.
+        :param checkpoint: The checkpoint of the response.
         :param doc_hash: The document hash of the response.
         :param seq_id: The sequential ID of the response.
         :returns: The retrieved LLMResponse.
@@ -26,7 +26,7 @@ class DataStore(ABC):
 
     def store(
         self,
-        stage: str,
+        checkpoint: str,
         doc_hash: str,
         seq_id: int,
         response: str,
@@ -37,7 +37,7 @@ class DataStore(ABC):
         """
         Store a response in the backend.
 
-        :param stage: The stage of the response.
+        :param checkpoint: The checkpoint of the response.
         :param doc_hash: The document hash of the response.
         :param seq_id: The sequential ID of the response.
         :param response: The response content to store.
@@ -49,7 +49,7 @@ class DataStore(ABC):
 
     def store_metadata(
         self,
-        stage: str,
+        checkpoint: str,
         doc_hash: str,
         seq_id: int,
         response_id: str,
@@ -58,7 +58,7 @@ class DataStore(ABC):
         """
         Store metadata in the backend.
 
-        :param stage: The stage of the metadata.
+        :param checkpoint: The checkpoint of the metadata.
         :param doc_hash: The document hash of the response.
         :param seq_id: The sequential ID of the response.
         :param response_id: The response ID to store.
@@ -66,11 +66,11 @@ class DataStore(ABC):
         """
         raise NotImplementedError
 
-    def persist(self, stage: Optional[str] = None) -> None:
+    def persist(self, checkpoint: Optional[str] = None) -> None:
         """
         Persist changes to file(s).
 
-        :param stage: The stage to persist (if None, persist all stages with changes).
+        :param checkpoint: The checkpoint to persist (if None, persist all checkpoints with changes).
         """
         raise NotImplementedError
 
@@ -80,29 +80,29 @@ class DataStore(ABC):
 #     Backed by a polars DataFrame
 #     """
 
-#     def __init__(self, stage_to_resource: dict[str, str]):
+#     def __init__(self, checkpoint_to_resource: dict[str, str]):
 #         """
 
-#         :param stage_to_resource: A mapping from stage names to file paths to parquet files
+#         :param checkpoint_to_resource: A mapping from checkpoint names to file paths to parquet files
 
 #         dataframe should have columns:
 #             - doc_hash: str
 #             - response: str
 #             - seq_id: int (optional)
 #         """
-#         self.stage_to_resource = stage_to_resource
+#         self.checkpoint_to_resource = checkpoint_to_resource
 #         self._dataframes: dict[str, pl.DataFrame] = {}
 
-#     def _load_stage(self, stage: str) -> pl.DataFrame:
-#         if stage not in self._dataframes:
-#             if stage not in self.stage_to_resource:
-#                 raise ValueError(f"Stage {stage} not found in stage_to_resource mapping")
-#             path = self.stage_to_resource[stage]
-#             self._dataframes[stage] = pl.read_parquet(path)
-#         return self._dataframes[stage]
+#     def _load_checkpoint(self, checkpoint: str) -> pl.DataFrame:
+#         if checkpoint not in self._dataframes:
+#             if checkpoint not in self.checkpoint_to_resource:
+#                 raise ValueError(f"Checkpoint {checkpoint} not found in checkpoint_to_resource mapping")
+#             path = self.checkpoint_to_resource[checkpoint]
+#             self._dataframes[checkpoint] = pl.read_parquet(path)
+#         return self._dataframes[checkpoint]
 
-#     def retrieve(self, stage: str, doc_hash: str, seq_id: Optional[int] = None) -> Optional[str]:
-#         df = self._load_stage(stage)
+#     def retrieve(self, checkpoint: str, doc_hash: str, seq_id: Optional[int] = None) -> Optional[str]:
+#         df = self._load_checkpoint(checkpoint)
 #         # First, try an O(1) lookup just to see if it works
 
 #         if seq_id is not None:
@@ -120,23 +120,23 @@ class DataStore(ABC):
 
 #         return filtered.item(0, "response")
 
-#     def store(self, stage: str, doc_hash: str, response: str, seq_id: Optional[int] = None, save_to_file: bool = True) -> None:
+#     def store(self, checkpoint: str, doc_hash: str, response: str, seq_id: Optional[int] = None, save_to_file: bool = True) -> None:
 #         """
 #         Store a response in the backend.
 
-#         :param stage: The stage of the response.
+#         :param checkpoint: The checkpoint of the response.
 #         :param doc_hash: The document hash of the response.
 #         :param response: The response content to store.
 #         :param seq_id: The sequential ID of the response (optional).
 #         :param save_to_file: Whether to save the updated DataFrame back to the parquet file.
 #         """
-#         # Load or initialize the DataFrame for this stage
+#         # Load or initialize the DataFrame for this checkpoint
 #         try:
-#             df = self._load_stage(stage)
+#             df = self._load_checkpoint(checkpoint)
 #         except ValueError:
-#             # Stage doesn't exist yet, create a new DataFrame
-#             if stage not in self.stage_to_resource:
-#                 raise ValueError(f"Stage {stage} not found in stage_to_resource mapping")
+#             # Checkpoint doesn't exist yet, create a new DataFrame
+#             if checkpoint not in self.checkpoint_to_resource:
+#                 raise ValueError(f"Checkpoint {checkpoint} not found in checkpoint_to_resource mapping")
 
 #             # Create empty DataFrame with correct schema
 #             if seq_id is not None:
@@ -151,7 +151,7 @@ class DataStore(ABC):
 #                     "response": []
 #                 }, schema={"doc_hash": pl.Utf8, "response": pl.Utf8})
 
-#             self._dataframes[stage] = df
+#             self._dataframes[checkpoint] = df
 
 #         # Check if the doc_hash already exists
 #         existing = df.filter(pl.col("doc_hash") == doc_hash)
@@ -189,11 +189,11 @@ class DataStore(ABC):
 #             df = pl.concat([df, new_row])
 
 #         # Update the cached DataFrame
-#         self._dataframes[stage] = df
+#         self._dataframes[checkpoint] = df
 
 #         # Save to file if requested
 #         if save_to_file:
-#             path = self.stage_to_resource[stage]
+#             path = self.checkpoint_to_resource[checkpoint]
 #             df.write_parquet(path)
 
 
@@ -202,24 +202,24 @@ class DataStore(ABC):
 #     Backed by hashmaps for fast lookups, with polars DataFrame/parquet for serialization
 #     """
 
-#     def __init__(self, stage_to_resource: dict[str, str]):
+#     def __init__(self, checkpoint_to_resource: dict[str, str]):
 #         """
 
-#         :param stage_to_resource: A mapping from stage names to file paths to parquet files
+#         :param checkpoint_to_resource: A mapping from checkpoint names to file paths to parquet files
 
 #         dataframe should have columns:
 #             - doc_hash: str
 #             - response: str
 #             - seq_id: int (optional)
 #         """
-#         self.stage_to_resource = stage_to_resource
+#         self.checkpoint_to_resource = checkpoint_to_resource
 #         self._hashmaps: dict[str, dict[str, str]] = {}
 
-#     def _load_stage(self, stage: str) -> dict[str, str]:
-#         if stage not in self._hashmaps:
-#             if stage not in self.stage_to_resource:
-#                 raise ValueError(f"Stage {stage} not found in stage_to_resource mapping")
-#             path = self.stage_to_resource[stage]
+#     def _load_checkpoint(self, checkpoint: str) -> dict[str, str]:
+#         if checkpoint not in self._hashmaps:
+#             if checkpoint not in self.checkpoint_to_resource:
+#                 raise ValueError(f"Checkpoint {checkpoint} not found in checkpoint_to_resource mapping")
+#             path = self.checkpoint_to_resource[checkpoint]
 #             df = pl.read_parquet(path)
 
 #             # Convert DataFrame to hashmap for O(1) lookups
@@ -227,11 +227,11 @@ class DataStore(ABC):
 #             for row in df.iter_rows(named=True):
 #                 hashmap[row['doc_hash']] = row['response']
 
-#             self._hashmaps[stage] = hashmap
-#         return self._hashmaps[stage]
+#             self._hashmaps[checkpoint] = hashmap
+#         return self._hashmaps[checkpoint]
 
-#     def retrieve(self, stage: str, doc_hash: str, seq_id: Optional[int] = None) -> Optional[str]:
-#         hashmap = self._load_stage(stage)
+#     def retrieve(self, checkpoint: str, doc_hash: str, seq_id: Optional[int] = None) -> Optional[str]:
+#         hashmap = self._load_checkpoint(checkpoint)
 #         return hashmap.get(doc_hash)
 
 
@@ -246,19 +246,19 @@ class ListDataStore(DataStore):
         :param file_manager: FileManager instance to handle file I/O operations
         """
         self.file_manager = file_manager
-        # data: stage -> list of responses (seq_id is the index)
+        # data: checkpoint -> list of responses (seq_id is the index)
         self._data: dict[str, list[str]] = {}
-        # hashes: stage -> (doc_hash -> seq_id)
+        # hashes: checkpoint -> (doc_hash -> seq_id)
         self._hashes: dict[
             str, dict[str, int]
-        ] = {}  # Track which stages have unsaved changes
-        self._dirty_stages: set[str] = set()
+        ] = {}  # Track which checkpoints have unsaved changes
+        self._dirty_checkpoints: set[str] = set()
 
-    def _load_stage(self, stage: str) -> None:
-        """Load stage data from parquet into lists and hash mappings"""
-        if stage not in self._data:
+    def _load_checkpoint(self, checkpoint: str) -> None:
+        """Load checkpoint data from parquet into lists and hash mappings"""
+        if checkpoint not in self._data:
             parquet_file = (
-                self.file_manager.allocate_datastore(stage) / "datastore.parquet"
+                self.file_manager.allocate_datastore(checkpoint) / "datastore.parquet"
             )
             try:
                 # Initialize empty structures
@@ -294,35 +294,35 @@ class ListDataStore(DataStore):
                 except FileNotFoundError:
                     # File doesn't exist yet, return empty structures
                     pass
-                self._data[stage] = data_list
-                self._hashes[stage] = hash_map
+                self._data[checkpoint] = data_list
+                self._hashes[checkpoint] = hash_map
             except Exception as e:
                 # Initialize empty structures if loading fails
-                self._data[stage] = []
-                self._hashes[stage] = {}
+                self._data[checkpoint] = []
+                self._hashes[checkpoint] = {}
 
-    def retrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
-        self._load_stage(stage)
+    def retrieve(self, checkpoint: str, doc_hash: str, seq_id: int) -> Optional[str]:
+        self._load_checkpoint(checkpoint)
 
         # Try direct access with seq_id
-        data_list = self._data[stage]
+        data_list = self._data[checkpoint]
         if 0 <= seq_id < len(data_list) and data_list[seq_id] is not None:
             # Verify the hash matches (as a safety check)
-            hash_map = self._hashes[stage]
+            hash_map = self._hashes[checkpoint]
             if doc_hash in hash_map and hash_map[doc_hash] == seq_id:
                 return data_list[seq_id]
 
         # Fallback to hash lookup
-        hash_map = self._hashes[stage]
+        hash_map = self._hashes[checkpoint]
         if doc_hash in hash_map:
             found_seq_id = hash_map[doc_hash]
-            return self._data[stage][found_seq_id]
+            return self._data[checkpoint][found_seq_id]
 
         return None
 
     def store(
         self,
-        stage: str,
+        checkpoint: str,
         doc_hash: str,
         seq_id: int,
         response: str,
@@ -333,7 +333,7 @@ class ListDataStore(DataStore):
         """
         Store a response in the backend.
 
-        :param stage: The stage of the response.
+        :param checkpoint: The checkpoint of the response.
         :param doc_hash: The document hash of the response.
         :param seq_id: The sequential ID of the response.
         :param response: The response content to store.
@@ -341,10 +341,10 @@ class ListDataStore(DataStore):
         :param save_to_file: Whether to save the updated data back to the parquet file.
         :returns: The seq_id where the response was stored.
         """
-        self._load_stage(stage)
+        self._load_checkpoint(checkpoint)
 
-        data_list = self._data[stage]
-        hash_map = self._hashes[stage]
+        data_list = self._data[checkpoint]
+        hash_map = self._hashes[checkpoint]
 
         # Check if doc_hash already exists
         if doc_hash in hash_map:
@@ -359,33 +359,33 @@ class ListDataStore(DataStore):
             data_list[seq_id] = response
             hash_map[doc_hash] = seq_id
             actual_seq_id = seq_id
-        # Mark stage as dirty (has unsaved changes)
-        self._dirty_stages.add(stage)
+        # Mark checkpoint as dirty (has unsaved changes)
+        self._dirty_checkpoints.add(checkpoint)
         # Save to file if requested
         if save_to_file:
-            self._save_stage(stage)
+            self._save_checkpoint(checkpoint)
 
         return actual_seq_id
 
-    def persist(self, stage: Optional[str] = None) -> None:
+    def persist(self, checkpoint: Optional[str] = None) -> None:
         """
         Persist changes to file(s).
 
-        :param stage: The stage to persist (if None, persist all stages with changes).
+        :param checkpoint: The checkpoint to persist (if None, persist all checkpoints with changes).
         """
-        if stage is not None:
-            # Persist specific stage
-            if stage in self._dirty_stages:
-                self._save_stage(stage)
+        if checkpoint is not None:
+            # Persist specific checkpoint
+            if checkpoint in self._dirty_checkpoints:
+                self._save_checkpoint(checkpoint)
         else:
-            # Persist all dirty stages
-            for dirty_stage in list(self._dirty_stages):
-                self._save_stage(dirty_stage)
+            # Persist all dirty checkpoints
+            for dirty_checkpoint in list(self._dirty_checkpoints):
+                self._save_checkpoint(dirty_checkpoint)
 
-    def _save_stage(self, stage: str) -> None:
-        """Save stage data to parquet file"""
-        data_list = self._data[stage]
-        hash_map = self._hashes[stage]
+    def _save_checkpoint(self, checkpoint: str) -> None:
+        """Save checkpoint data to parquet file"""
+        data_list = self._data[checkpoint]
+        hash_map = self._hashes[checkpoint]
         # Build reverse mapping for doc_hashes
         id_to_hash = {v: k for k, v in hash_map.items()}
         doc_hashes = []
@@ -401,8 +401,8 @@ class ListDataStore(DataStore):
             }
         ).with_row_index("seq_id")
         # Use file manager to save the DataFrame
-        directory = self.file_manager.allocate_datastore(stage)
+        directory = self.file_manager.allocate_datastore(checkpoint)
         df.write_parquet(directory / "datastore.parquet")
 
-        # Mark stage as clean (saved)
-        self._dirty_stages.discard(stage)
+        # Mark checkpoint as clean (saved)
+        self._dirty_checkpoints.discard(checkpoint)

@@ -10,7 +10,7 @@ class BaseProvider:
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
         hashed: str,
-        stage: str,
+        checkpoint: str,
         seq_id: int,
         llm: Optional[LLMIdentity] = None,
         _hoist_images=None,

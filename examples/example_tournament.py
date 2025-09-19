@@ -46,16 +46,16 @@ with pllm.dashboard() as d:
         game_descriptions.append(resp.resolve())
 
     d.print("Descriptions:", [x[:70] for x in game_descriptions])
-    # Finalize hash logger display before stage change
+    # Finalize hash logger display before checkpoint change
 
 with pllm.default():
-    pllm.when_stage("begin")  # stage-controlled - needs to modify the global counter
-    print("Inside stage 'begin'")
-    pllm.goto_stage("end")
+    pllm.when_checkpoint("begin")  # checkpoint-controlled - needs to modify the global counter
+    print("Inside checkpoint 'begin'")
+    pllm.goto_checkpoint("end")
 
 with pllm.default():
-    pllm.when_stage("end")
-    print("Inside stage 'end'")
+    pllm.when_checkpoint("end")
+    print("Inside checkpoint 'end'")
 
 # Finalize hash display before final print statements
 print("After")

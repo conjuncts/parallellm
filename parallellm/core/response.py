@@ -52,12 +52,12 @@ class PendingLLMResponse(LLMResponse):
 
     def __init__(
         self,
-        stage,
+        checkpoint,
         seq_id,
         doc_hash,
         backend: BaseBackend,
     ):
-        self.stage = stage
+        self.checkpoint = checkpoint
         self.seq_id = seq_id
         self.doc_hash = doc_hash
         self._backend = backend
@@ -67,7 +67,7 @@ class PendingLLMResponse(LLMResponse):
         if self.value is not None:
             return self.value
 
-        self.value = self._backend.retrieve(self.stage, self.doc_hash, self.seq_id)
+        self.value = self._backend.retrieve(self.checkpoint, self.doc_hash, self.seq_id)
         return self.value
 
 
@@ -76,8 +76,8 @@ class ReadyLLMResponse(LLMResponse):
     A response that is already resolved.
     """
 
-    def __init__(self, stage, seq_id, doc_hash, value: str):
-        self.stage = stage
+    def __init__(self, checkpoint, seq_id, doc_hash, value: str):
+        self.checkpoint = checkpoint
         self.seq_id = seq_id
         self.doc_hash = doc_hash
         self.value = value

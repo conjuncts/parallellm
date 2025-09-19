@@ -3,7 +3,7 @@ from typing import List, Optional, Union
 from colorama import Fore, Style, init
 from parallellm.core.backend import BaseBackend
 from parallellm.core.cast.fix_docs import cast_documents
-from parallellm.core.exception import NotAvailable, WrongStage
+from parallellm.core.exception import NotAvailable, WrongCheckpoint
 from parallellm.core.hash import compute_hash
 from parallellm.core.response import (
     LLMIdentity,
@@ -46,7 +46,7 @@ class StatusDashboard:
         self._dash_logger.set_display(self._was_displaying)
         print()
         # Handle exceptions like ParallellmContext
-        if exc_type in (NotAvailable, WrongStage):
+        if exc_type in (NotAvailable, WrongCheckpoint):
             return True
         return False
 
@@ -72,7 +72,7 @@ class ParalleLLMContext:
 
     def __exit__(self, exc_type, exc_value, traceback):
         # Delegate to BatchManager's error handling logic
-        if exc_type in (NotAvailable, WrongStage):
+        if exc_type in (NotAvailable, WrongCheckpoint):
             return True
         return False
 
@@ -106,7 +106,7 @@ class BatchManager:
 
     def default(self):
         """
-        Begins a 'default' stage.
+        Begins a 'default' checkpoint.
         Usage: `with pllm.default(): ...`
         """
         return ParalleLLMContext(self)
@@ -122,8 +122,8 @@ class BatchManager:
         return StatusDashboard(self, log_k=log_k)
 
     @property
-    def current_stage(self):
-        return self.metadata["current_stage"]
+    def current_checkpoint(self):
+        return self.metadata["current_checkpoint"]
 
     @property
     def metadata(self):
@@ -133,27 +133,27 @@ class BatchManager:
     def metadata(self, value):
         self._fm.metadata = value
 
-    def when_stage(self, stage_name):
-        if stage_name != self.current_stage:
-            raise WrongStage()
-        self._logger.info(f"Entered stage {Fore.CYAN}{stage_name}{Style.RESET_ALL}")
+    def when_checkpoint(self, checkpoint_name):
+        if checkpoint_name != self.current_checkpoint:
+            raise WrongCheckpoint()
+        self._logger.info(f"Entered checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}")
 
-    def goto_stage(self, stage_name):
-        # TODO: TODO: TODO: delay stage change until after the task manager exits.
-        self.metadata["current_stage"] = stage_name
-        self._logger.info(f"Switched to stage {Fore.CYAN}{stage_name}{Style.RESET_ALL}")
+    def goto_checkpoint(self, checkpoint_name):
+        # TODO: TODO: TODO: delay checkpoint change until after the task manager exits.
+        self.metadata["current_checkpoint"] = checkpoint_name
+        self._logger.info(f"Switched to checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}")
 
     def save_userdata(self, key, value):
         """
-        The intended way to let data persist across stages
+        The intended way to let data persist across checkpoints
         """
-        return self._fm.save_userdata(self.current_stage, key, value)
+        return self._fm.save_userdata(self.current_checkpoint, key, value)
 
     def load_userdata(self, key):
         """
-        The intended way to let data persist across stages
+        The intended way to let data persist across checkpoints
         """
-        return self._fm.load_userdata(self.current_stage, key)
+        return self._fm.load_userdata(self.current_checkpoint, key)
 
     def persist(self):
         """
@@ -223,11 +223,11 @@ class BatchManager:
 
         # Cache using datastore
         hashed = compute_hash(instructions, documents)
-        cached = self._backend.retrieve(self.current_stage, hashed, seq_id)
+        cached = self._backend.retrieve(self.current_checkpoint, hashed, seq_id)
         if cached is not None:
             self.update_hash_status(hashed, HashStatus.CACHED)
             return ReadyLLMResponse(
-                stage=self.current_stage,
+                checkpoint=self.current_checkpoint,
                 seq_id=seq_id,
                 doc_hash=instructions,
                 value=cached,
@@ -238,7 +238,7 @@ class BatchManager:
         return self._provider.submit_query_to_provider(
             instructions,
             documents,
-            stage=self.current_stage,
+            checkpoint=self.current_checkpoint,
             seq_id=seq_id,
             hashed=hashed,
             llm=llm,

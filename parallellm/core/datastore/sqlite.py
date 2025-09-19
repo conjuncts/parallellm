@@ -28,13 +28,13 @@ class SQLiteDataStore(DataStore):
             self._local.connections = {}
         return self._local.connections
 
-    def _get_connection(self, stage: str) -> sqlite3.Connection:
-        """Get or create SQLite connection for a stage in the current thread"""
+    def _get_connection(self, checkpoint: str) -> sqlite3.Connection:
+        """Get or create SQLite connection for a checkpoint in the current thread"""
         connections = self._get_connections()
 
-        if stage not in connections:
+        if checkpoint not in connections:
             # Create database file using file manager
-            directory = self.file_manager.allocate_datastore(stage)
+            directory = self.file_manager.allocate_datastore(checkpoint)
             db_path = directory / "datastore.db"
 
             # Create connection
@@ -61,20 +61,20 @@ class SQLiteDataStore(DataStore):
             """)
 
             conn.commit()
-            connections[stage] = conn
+            connections[checkpoint] = conn
 
-        return connections[stage]
+        return connections[checkpoint]
 
-    def retrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
+    def retrieve(self, checkpoint: str, doc_hash: str, seq_id: int) -> Optional[str]:
         """
         Retrieve a response from SQLite.
 
-        :param stage: The stage of the response.
+        :param checkpoint: The checkpoint of the response.
         :param doc_hash: The document hash of the response.
         :param seq_id: The sequential ID of the response.
         :returns: The retrieved response content.
         """
-        conn = self._get_connection(stage)
+        conn = self._get_connection(checkpoint)
 
         # Try direct lookup using seq_id and doc_hash
         cursor = conn.execute(
@@ -93,17 +93,17 @@ class SQLiteDataStore(DataStore):
         return row["response"] if row else None
 
     def retrieve_metadata(
-        self, stage: str, doc_hash: str, seq_id: int
+        self, checkpoint: str, doc_hash: str, seq_id: int
     ) -> Optional[dict]:
         """
         Retrieve metadata from SQLite.
 
-        :param stage: The stage of the response.
+        :param checkpoint: The checkpoint of the response.
         :param doc_hash: The document hash of the response.
         :param seq_id: The sequential ID of the response.
         :returns: The retrieved metadata as a dictionary, or None if not found.
         """
-        conn = self._get_connection(stage)
+        conn = self._get_connection(checkpoint)
 
         # Try direct lookup using seq_id and doc_hash
         cursor = conn.execute(
@@ -125,7 +125,7 @@ class SQLiteDataStore(DataStore):
 
     def store(
         self,
-        stage: str,
+        checkpoint: str,
         doc_hash: str,
         seq_id: int,
         response: str,
@@ -136,7 +136,7 @@ class SQLiteDataStore(DataStore):
         """
         Store a response in SQLite.
 
-        :param stage: The stage of the response.
+        :param checkpoint: The checkpoint of the response.
         :param doc_hash: The document hash of the response.
         :param response: The response content to store.
         :param response_id: The response ID to store.
@@ -144,7 +144,7 @@ class SQLiteDataStore(DataStore):
         :param save_to_file: Whether to commit the transaction immediately (ignored - always commits).
         :returns: The seq_id where the response was stored.
         """
-        conn = self._get_connection(stage)
+        conn = self._get_connection(checkpoint)
 
         try:
             # Check if doc_hash already exists
@@ -178,7 +178,7 @@ class SQLiteDataStore(DataStore):
 
     def store_metadata(
         self,
-        stage: str,
+        checkpoint: str,
         doc_hash: str,
         seq_id: int,
         response_id: str,
@@ -187,13 +187,13 @@ class SQLiteDataStore(DataStore):
         """
         Store metadata in SQLite.
 
-        :param stage: The stage of the metadata.
+        :param checkpoint: The checkpoint of the metadata.
         :param doc_hash: The document hash of the response.
         :param seq_id: The sequential ID of the response.
         :param response_id: The response ID to store.
         :param metadata: The metadata to store.
         """
-        conn = self._get_connection(stage)
+        conn = self._get_connection(checkpoint)
 
         try:
             # Serialize metadata to JSON
@@ -218,29 +218,29 @@ class SQLiteDataStore(DataStore):
             conn.rollback()
             raise RuntimeError(f"SQLite error while storing metadata: {e}")
 
-    def persist(self, stage: Optional[str] = None) -> None:
+    def persist(self, checkpoint: Optional[str] = None) -> None:
         """
         Persist (commit) changes to SQLite database(s).
 
         Note: This implementation always commits immediately, so this method is a no-op.
 
-        :param stage: The stage to persist (ignored - always commits immediately).
+        :param checkpoint: The checkpoint to persist (ignored - always commits immediately).
         """
         # No-op since we always commit immediately
         pass
 
-    def close(self, stage: Optional[str] = None) -> None:
+    def close(self, checkpoint: Optional[str] = None) -> None:
         """
         Close SQLite connection(s) for the current thread.
 
-        :param stage: The stage connection to close (if None, close all connections).
+        :param checkpoint: The checkpoint connection to close (if None, close all connections).
         """
         connections = self._get_connections()
 
-        if stage is not None:
-            if stage in connections:
-                connections[stage].close()
-                del connections[stage]
+        if checkpoint is not None:
+            if checkpoint in connections:
+                connections[checkpoint].close()
+                del connections[checkpoint]
         else:
             # Close all connections for current thread
             for conn in connections.values():

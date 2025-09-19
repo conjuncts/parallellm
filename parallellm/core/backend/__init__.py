@@ -12,7 +12,7 @@ class BaseBackend:
     #     super().__init__()
     #     self.datastore = datastore
 
-    async def _poll_changes(self, stage: str, doc_hash: str, seq_id: int):
+    async def _poll_changes(self, checkpoint: str, doc_hash: str, seq_id: int):
         """
         A chance to poll for changes and update the data store
         """
@@ -21,8 +21,8 @@ class BaseBackend:
     def persist(self):
         pass
 
-    def retrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
+    def retrieve(self, checkpoint: str, doc_hash: str, seq_id: int) -> Optional[str]:
         raise NotImplementedError
 
-    def store(self, stage: str, doc_hash: str, response: str, seq_id: int) -> int:
+    def store(self, checkpoint: str, doc_hash: str, response: str, seq_id: int) -> int:
         raise NotImplementedError
