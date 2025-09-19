@@ -50,7 +50,7 @@ class SyncBackend(BaseBackend):
             self._pending_results[key] = e
             raise
 
-    def _poll_changes(self, stage: str, until_doc_hash: str, until_seq_id: int = None):
+    def _poll_changes(self, stage: str, until_doc_hash: str, until_seq_id: int):
         """
         Synchronous version - no polling needed since operations complete immediately
         """
@@ -58,7 +58,7 @@ class SyncBackend(BaseBackend):
         # So there's nothing to poll for
         pass
 
-    def retrieve(self, stage: str, doc_hash: str, seq_id: int = None) -> Optional[str]:
+    def retrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
         """Synchronous retrieve that checks pending results first, then datastore"""
         # Check if we have a pending result
         key = f"{stage}:{doc_hash}:{seq_id}"

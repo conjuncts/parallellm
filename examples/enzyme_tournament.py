@@ -10,12 +10,12 @@ from parallellm.core.response import LLMResponse
 start = time.time()
 load_dotenv()
 
-# shutil.rmtree(".temp", ignore_errors=True)
+shutil.rmtree(".temp", ignore_errors=True)
 pllm = ParalleLLM.resume_directory(
     # ".pllm",
     ".temp",
     provider="openai",  #
-    strategy="sync",
+    strategy="async",
     log_level=logging.DEBUG,
 )
 
@@ -36,16 +36,16 @@ with pllm.dashboard() as d:
         print(f"===Round of {len(teams)}===")
         responses = []
         for i in range(0, len(teams), 2):
-            if i + 1 >= len(teams):
-                # odd number, auto-advance
-                responses.append(LLMResponse(teams[i]))
-            else:
+            if i + 1 < len(teams):
                 resp = pllm.ask_llm(
                     f"Given two enzymes, choose the one you like more. Only respond with the name of the enzyme.",
                     [teams[i], teams[i + 1]],
                 )
                 # do NOT call resp.resolve() in the hot loop
                 responses.append(resp)
+            else:
+                # they win by default
+                responses.append(LLMResponse(teams[i]))
 
         # Resolve only once everything is submitted
         teams = []

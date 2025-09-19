@@ -149,12 +149,14 @@ class AsyncBackend(BaseBackend):
         return task
 
     async def _poll_changes(
-        self, until_stage: str, until_doc_hash: str, until_seq_id: int = None
+        self, until_stage: str, until_doc_hash: str, until_seq_id: int
     ):
         """
         A chance to poll for changes and update the data store
         """
         # collect as results come in
+        # need to keep track of which ones we process (otherwise, race condition)
+        done_tasks = []
         for coro in asyncio.as_completed(self.tasks):
             result, metadata = await coro
 
@@ -167,7 +169,7 @@ class AsyncBackend(BaseBackend):
             self._async_ds.store_metadata(
                 stage, doc_hash, int(seq_id), resp_id, resp_metadata
             )
-            # done_tasks.append(coro)
+            done_tasks.append(metadata)
 
             # do logging
             if self._dash_logger is not None:
@@ -177,30 +179,25 @@ class AsyncBackend(BaseBackend):
             if (
                 until_stage == stage
                 and until_doc_hash == doc_hash
-                and (until_seq_id is None or until_seq_id == int(seq_id))
+                and until_seq_id == int(seq_id)
             ):
                 break
 
-        # pop tasks and metadatas
-        bad_indices = []
-        for i, t in enumerate(self.tasks):
-            if t.done():
-                bad_indices.append(i)
-        for i in reversed(bad_indices):
-            del self.tasks[i]
-            del self.task_metas[i]
+        # pop completed tasks
+        for i in reversed(range(len(self.tasks))):
+            meta = self.task_metas[i]
+            if meta in done_tasks:
+                self.tasks.pop(i)
+                self.task_metas.pop(i)
+                # print(f"Completed {meta['stage']}:{meta['doc_hash'][:8]}:{meta['seq_id']}")
 
-    async def aretrieve(
-        self, stage: str, doc_hash: str, seq_id: int = None
-    ) -> Optional[str]:
+    async def aretrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
         # only poll for changes if we have a matching task
         if any(
-            m["stage"] == stage
-            and m["doc_hash"] == doc_hash
-            and (seq_id is None or m["seq_id"] == seq_id)
+            m["stage"] == stage and m["doc_hash"] == doc_hash and m["seq_id"] == seq_id
             for m in self.task_metas
         ):
-            await self._poll_changes(stage, doc_hash)
+            await self._poll_changes(stage, doc_hash, seq_id)
         return self._async_ds.retrieve(stage, doc_hash, seq_id)
 
     def persist(self, timeout=30.0):
@@ -210,14 +207,14 @@ class AsyncBackend(BaseBackend):
         # but we DO want to wait for all pending tasks to complete
         if self._loop is not None and not self._loop.is_closed():
             future = asyncio.run_coroutine_threadsafe(
-                self._poll_changes(None, None), self._loop
+                self._poll_changes(None, None, None), self._loop
             )
             try:
                 future.result(timeout=timeout)
             except Exception as e:
                 print(f"Warning: Failed to wait for pending tasks: {e}")
 
-    def retrieve(self, stage: str, doc_hash: str, seq_id: int = None) -> Optional[str]:
+    def retrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
         """Synchronous retrieve that uses the backend's event loop"""
         return self._run_coroutine(self.aretrieve(stage, doc_hash, seq_id))
 

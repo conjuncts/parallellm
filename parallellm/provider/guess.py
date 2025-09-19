@@ -1,5 +1,6 @@
 from typing import Union
 from pydantic import BaseModel
+import sys
 
 
 def guess_schema(inp: Union[BaseModel, dict]) -> tuple[str, str, dict]:
@@ -38,5 +39,8 @@ def guess_schema(inp: Union[BaseModel, dict]) -> tuple[str, str, dict]:
         or obj.pop("response_id", None)
         or obj.pop("responseId", None)
     )
+
+    if not resp_text:
+        raise ValueError("Could not find response text in object", obj)
 
     return resp_text, resp_id, obj

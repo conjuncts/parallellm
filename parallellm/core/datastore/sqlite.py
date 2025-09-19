@@ -44,7 +44,8 @@ class SQLiteDataStore(DataStore):
             # Create table if it doesn't exist
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS responses (
-                    seq_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    seq_id INTEGER NOT NULL,
                     doc_hash TEXT NOT NULL,
                     response TEXT NOT NULL,
                     response_id TEXT,
@@ -64,28 +65,25 @@ class SQLiteDataStore(DataStore):
 
         return connections[stage]
 
-    def retrieve(
-        self, stage: str, doc_hash: str, seq_id: Optional[int] = None
-    ) -> Optional[str]:
+    def retrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
         """
         Retrieve a response from SQLite.
 
         :param stage: The stage of the response.
         :param doc_hash: The document hash of the response.
-        :param seq_id: The sequential ID of the response (optional).
+        :param seq_id: The sequential ID of the response.
         :returns: The retrieved response content.
         """
         conn = self._get_connection(stage)
 
-        # If seq_id is provided, try direct lookup first for optimization
-        if seq_id is not None:
-            cursor = conn.execute(
-                "SELECT response FROM responses WHERE seq_id = ? AND doc_hash = ?",
-                (seq_id, doc_hash),
-            )
-            row = cursor.fetchone()
-            if row:
-                return row["response"]
+        # Try direct lookup using seq_id and doc_hash
+        cursor = conn.execute(
+            "SELECT response FROM responses WHERE seq_id = ? AND doc_hash = ?",
+            (seq_id, doc_hash),
+        )
+        row = cursor.fetchone()
+        if row:
+            return row["response"]
 
         # Fallback to doc_hash lookup
         cursor = conn.execute(
@@ -95,27 +93,26 @@ class SQLiteDataStore(DataStore):
         return row["response"] if row else None
 
     def retrieve_metadata(
-        self, stage: str, doc_hash: str, seq_id: Optional[int] = None
+        self, stage: str, doc_hash: str, seq_id: int
     ) -> Optional[dict]:
         """
         Retrieve metadata from SQLite.
 
         :param stage: The stage of the response.
         :param doc_hash: The document hash of the response.
-        :param seq_id: The sequential ID of the response (optional).
+        :param seq_id: The sequential ID of the response.
         :returns: The retrieved metadata as a dictionary, or None if not found.
         """
         conn = self._get_connection(stage)
 
-        # If seq_id is provided, try direct lookup first for optimization
-        if seq_id is not None:
-            cursor = conn.execute(
-                "SELECT metadata FROM responses WHERE seq_id = ? AND doc_hash = ?",
-                (seq_id, doc_hash),
-            )
-            row = cursor.fetchone()
-            if row and row["metadata"]:
-                return json.loads(row["metadata"])
+        # Try direct lookup using seq_id and doc_hash
+        cursor = conn.execute(
+            "SELECT metadata FROM responses WHERE seq_id = ? AND doc_hash = ?",
+            (seq_id, doc_hash),
+        )
+        row = cursor.fetchone()
+        if row and row["metadata"]:
+            return json.loads(row["metadata"])
 
         # Fallback to doc_hash lookup
         cursor = conn.execute(
@@ -130,7 +127,7 @@ class SQLiteDataStore(DataStore):
         self,
         stage: str,
         doc_hash: str,
-        seq_id: Optional[int],
+        seq_id: int,
         response: str,
         response_id: str,
         *,
@@ -143,41 +140,33 @@ class SQLiteDataStore(DataStore):
         :param doc_hash: The document hash of the response.
         :param response: The response content to store.
         :param response_id: The response ID to store.
-        :param seq_id: The sequential ID of the response (optional).
+        :param seq_id: The sequential ID of the response.
         :param save_to_file: Whether to commit the transaction immediately (ignored - always commits).
         :returns: The seq_id where the response was stored.
         """
         conn = self._get_connection(stage)
 
         try:
-            if seq_id is not None:
-                # Try to insert with specific seq_id
-                cursor = conn.execute(
-                    "INSERT OR REPLACE INTO responses (seq_id, doc_hash, response, response_id) VALUES (?, ?, ?, ?)",
-                    (seq_id, doc_hash, response, response_id),
+            # Check if doc_hash already exists
+            cursor = conn.execute(
+                "SELECT seq_id FROM responses WHERE doc_hash = ?", (doc_hash,)
+            )
+            existing = cursor.fetchone()
+
+            if existing:
+                # Update existing record, setting seq_id if provided
+                conn.execute(
+                    "UPDATE responses SET response = ?, response_id = ?, seq_id = ? WHERE doc_hash = ?",
+                    (response, response_id, seq_id, doc_hash),
                 )
                 actual_seq_id = seq_id
             else:
-                # Check if doc_hash already exists
+                # Insert new record with seq_id
                 cursor = conn.execute(
-                    "SELECT seq_id FROM responses WHERE doc_hash = ?", (doc_hash,)
+                    "INSERT INTO responses (seq_id, doc_hash, response, response_id) VALUES (?, ?, ?, ?)",
+                    (seq_id, doc_hash, response, response_id),
                 )
-                existing = cursor.fetchone()
-
-                if existing:
-                    # Update existing record
-                    conn.execute(
-                        "UPDATE responses SET response = ?, response_id = ? WHERE doc_hash = ?",
-                        (response, response_id, doc_hash),
-                    )
-                    actual_seq_id = existing["seq_id"]
-                else:
-                    # Insert new record (seq_id will be auto-generated)
-                    cursor = conn.execute(
-                        "INSERT INTO responses (doc_hash, response, response_id) VALUES (?, ?, ?)",
-                        (doc_hash, response, response_id),
-                    )
-                    actual_seq_id = cursor.lastrowid
+                actual_seq_id = seq_id
 
             # Always commit immediately for thread safety
             conn.commit()
@@ -191,7 +180,7 @@ class SQLiteDataStore(DataStore):
         self,
         stage: str,
         doc_hash: str,
-        seq_id: Optional[int],
+        seq_id: int,
         response_id: str,
         metadata: dict,
     ) -> None:
@@ -200,7 +189,7 @@ class SQLiteDataStore(DataStore):
 
         :param stage: The stage of the metadata.
         :param doc_hash: The document hash of the response.
-        :param seq_id: The sequential ID of the response (optional).
+        :param seq_id: The sequential ID of the response.
         :param response_id: The response ID to store.
         :param metadata: The metadata to store.
         """
@@ -210,30 +199,17 @@ class SQLiteDataStore(DataStore):
             # Serialize metadata to JSON
             metadata_json = json.dumps(metadata) if metadata else None
 
-            if seq_id is not None:
-                # Update by seq_id and doc_hash
-                cursor = conn.execute(
-                    "UPDATE responses SET metadata = ? WHERE seq_id = ? AND doc_hash = ?",
-                    (metadata_json, seq_id, doc_hash),
+            # Update by seq_id and doc_hash
+            cursor = conn.execute(
+                "UPDATE responses SET metadata = ? WHERE seq_id = ? AND doc_hash = ?",
+                (metadata_json, seq_id, doc_hash),
+            )
+            if cursor.rowcount == 0:
+                # Record doesn't exist, create it with seq_id and metadata
+                conn.execute(
+                    "INSERT INTO responses (seq_id, doc_hash, response, response_id, metadata) VALUES (?, ?, '', ?, ?)",
+                    (seq_id, doc_hash, response_id, metadata_json),
                 )
-                if cursor.rowcount == 0:
-                    # Record doesn't exist, create it with just metadata
-                    conn.execute(
-                        "INSERT INTO responses (seq_id, doc_hash, response, response_id, metadata) VALUES (?, ?, '', ?, ?)",
-                        (seq_id, doc_hash, response_id, metadata_json),
-                    )
-            else:
-                # Update by doc_hash only
-                cursor = conn.execute(
-                    "UPDATE responses SET metadata = ? WHERE doc_hash = ?",
-                    (metadata_json, doc_hash),
-                )
-                if cursor.rowcount == 0:
-                    # Record doesn't exist, create it with just metadata
-                    conn.execute(
-                        "INSERT INTO responses (doc_hash, response, response_id, metadata) VALUES (?, '', ?, ?)",
-                        (doc_hash, response_id, metadata_json),
-                    )
 
             # Always commit immediately for thread safety
             conn.commit()

@@ -13,7 +13,7 @@ class DataStore(ABC):
     Stores responses
     """
 
-    def retrieve(self, stage: str, doc_hash: str, seq_id: int = None) -> Optional[str]:
+    def retrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
         """
         Retrieve a response from the backend.
 
@@ -28,7 +28,7 @@ class DataStore(ABC):
         self,
         stage: str,
         doc_hash: str,
-        seq_id: Optional[int],
+        seq_id: int,
         response: str,
         response_id: str,
         *,
@@ -39,7 +39,7 @@ class DataStore(ABC):
 
         :param stage: The stage of the response.
         :param doc_hash: The document hash of the response.
-        :param seq_id: The sequential ID of the response (optional).
+        :param seq_id: The sequential ID of the response.
         :param response: The response content to store.
         :param response_id: The response ID to store.
         :param save_to_file: Whether to save the updated data back to the file.
@@ -51,7 +51,7 @@ class DataStore(ABC):
         self,
         stage: str,
         doc_hash: str,
-        seq_id: Optional[int],
+        seq_id: int,
         response_id: str,
         metadata: dict,
     ) -> None:
@@ -59,8 +59,10 @@ class DataStore(ABC):
         Store metadata in the backend.
 
         :param stage: The stage of the metadata.
+        :param doc_hash: The document hash of the response.
+        :param seq_id: The sequential ID of the response.
+        :param response_id: The response ID to store.
         :param metadata: The metadata to store.
-        :param save_to_file: Whether to save the updated data back to the file.
         """
         raise NotImplementedError
 
@@ -299,25 +301,22 @@ class ListDataStore(DataStore):
                 self._data[stage] = []
                 self._hashes[stage] = {}
 
-    def retrieve(
-        self, stage: str, doc_hash: str, seq_id: Optional[int] = None
-    ) -> Optional[str]:
+    def retrieve(self, stage: str, doc_hash: str, seq_id: int) -> Optional[str]:
         self._load_stage(stage)
 
-        # If seq_id is provided, try direct access first
-        if seq_id is not None:
-            data_list = self._data[stage]
-            if 0 <= seq_id < len(data_list) and data_list[seq_id] is not None:
-                # Verify the hash matches (as a safety check)
-                hash_map = self._hashes[stage]
-                if doc_hash in hash_map and hash_map[doc_hash] == seq_id:
-                    return data_list[seq_id]
+        # Try direct access with seq_id
+        data_list = self._data[stage]
+        if 0 <= seq_id < len(data_list) and data_list[seq_id] is not None:
+            # Verify the hash matches (as a safety check)
+            hash_map = self._hashes[stage]
+            if doc_hash in hash_map and hash_map[doc_hash] == seq_id:
+                return data_list[seq_id]
 
         # Fallback to hash lookup
         hash_map = self._hashes[stage]
         if doc_hash in hash_map:
-            seq_id = hash_map[doc_hash]
-            return self._data[stage][seq_id]
+            found_seq_id = hash_map[doc_hash]
+            return self._data[stage][found_seq_id]
 
         return None
 
@@ -325,8 +324,9 @@ class ListDataStore(DataStore):
         self,
         stage: str,
         doc_hash: str,
-        seq_id: Optional[int],
+        seq_id: int,
         response: str,
+        response_id: str,
         *,
         save_to_file: bool = True,
     ) -> int:
@@ -335,8 +335,9 @@ class ListDataStore(DataStore):
 
         :param stage: The stage of the response.
         :param doc_hash: The document hash of the response.
+        :param seq_id: The sequential ID of the response.
         :param response: The response content to store.
-        :param seq_id: The sequential ID of the response (optional, will append if None).
+        :param response_id: The response ID to store.
         :param save_to_file: Whether to save the updated data back to the parquet file.
         :returns: The seq_id where the response was stored.
         """
@@ -352,19 +353,12 @@ class ListDataStore(DataStore):
             data_list[existing_id] = response
             actual_seq_id = existing_id
         else:
-            # Add new record
-            if seq_id is None:
-                # Append to end
-                actual_seq_id = len(data_list)
-                data_list.append(response)
-            else:
-                # Insert at specific position
-                while len(data_list) <= seq_id:
-                    data_list.append(None)
-                data_list[seq_id] = response
-                actual_seq_id = seq_id
-
-            hash_map[doc_hash] = actual_seq_id
+            # Add new record at specified seq_id
+            while len(data_list) <= seq_id:
+                data_list.append(None)
+            data_list[seq_id] = response
+            hash_map[doc_hash] = seq_id
+            actual_seq_id = seq_id
         # Mark stage as dirty (has unsaved changes)
         self._dirty_stages.add(stage)
         # Save to file if requested
