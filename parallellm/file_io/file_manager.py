@@ -31,7 +31,11 @@ class FileManager:
         # Load existing metadata
         self.metadata = self._load_metadata()
         if self.metadata is None:
-            self.metadata = {"latest_checkpoint": None}
+            self.metadata = {}
+        self.metadata.setdefault("latest_checkpoint", None)
+
+        # session_counter: default to 0
+        self.metadata["session_counter"] = self.metadata.get("session_counter", -1) + 1
 
     def _sanitize(self, user_input: Optional[str]) -> str:
         """

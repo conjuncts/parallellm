@@ -12,3 +12,5 @@ class CallIdentifier(TypedDict):
     checkpoint: Optional[str]
     doc_hash: str
     seq_id: int
+    session_id: int
+    """Numeric ID of session. For tracking/metadata purposes only."""

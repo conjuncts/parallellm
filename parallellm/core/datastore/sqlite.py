@@ -47,6 +47,7 @@ class SQLiteDatastore(Datastore):
                 CREATE TABLE IF NOT EXISTS responses (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     seq_id INTEGER NOT NULL,
+                    session_id INTEGER NOT NULL,
                     doc_hash TEXT NOT NULL,
                     response TEXT NOT NULL,
                     response_id TEXT,
@@ -56,10 +57,23 @@ class SQLiteDatastore(Datastore):
                 )
             """)
 
+            # Add session_id column if it doesn't exist (for existing databases)
+            # try:
+            #     conn.execute("ALTER TABLE responses ADD COLUMN session_id INTEGER NOT NULL DEFAULT 0")
+            # except sqlite3.OperationalError:
+            #     # Column already exists, which is fine
+            #     pass
+
             # Create index for faster lookups
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_doc_hash ON responses(doc_hash)
             """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_session_id ON responses(session_id)
+            """)
+            # conn.execute("""
+            #     CREATE INDEX IF NOT EXISTS idx_seq_session ON responses(seq_id, session_id)
+            # """)
 
             conn.commit()
             connections[checkpoint] = conn
@@ -76,6 +90,7 @@ class SQLiteDatastore(Datastore):
         checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
+        # session_id NOT relevant for lookup
 
         conn = self._get_connection(checkpoint)
 
@@ -137,7 +152,7 @@ class SQLiteDatastore(Datastore):
         """
         Store a response in SQLite.
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
         :param response: The response content to store.
         :param response_id: The response ID to store.
         :param save_to_file: Whether to commit the transaction immediately (ignored - always commits).
@@ -146,6 +161,7 @@ class SQLiteDatastore(Datastore):
         checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
+        session_id = call_id["session_id"]
 
         conn = self._get_connection(checkpoint)
 
@@ -157,17 +173,17 @@ class SQLiteDatastore(Datastore):
             existing = cursor.fetchone()
 
             if existing:
-                # Update existing record, setting seq_id if provided
+                # Update existing record, setting seq_id and session_id if provided
                 conn.execute(
-                    "UPDATE responses SET response = ?, response_id = ?, seq_id = ? WHERE doc_hash = ?",
-                    (response, response_id, seq_id, doc_hash),
+                    "UPDATE responses SET response = ?, response_id = ?, seq_id = ?, session_id = ? WHERE doc_hash = ?",
+                    (response, response_id, seq_id, session_id, doc_hash),
                 )
                 actual_seq_id = seq_id
             else:
-                # Insert new record with seq_id
+                # Insert new record with seq_id and session_id
                 cursor = conn.execute(
-                    "INSERT INTO responses (seq_id, doc_hash, response, response_id) VALUES (?, ?, ?, ?)",
-                    (seq_id, doc_hash, response, response_id),
+                    "INSERT INTO responses (seq_id, session_id, doc_hash, response, response_id) VALUES (?, ?, ?, ?, ?)",
+                    (seq_id, session_id, doc_hash, response, response_id),
                 )
                 actual_seq_id = seq_id
 
@@ -188,29 +204,30 @@ class SQLiteDatastore(Datastore):
         """
         Store metadata in SQLite.
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
         :param response_id: The response ID to store.
         :param metadata: The metadata to store.
         """
         checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
+        session_id = call_id["session_id"]
         conn = self._get_connection(checkpoint)
 
         try:
             # Serialize metadata to JSON
             metadata_json = json.dumps(metadata) if metadata else None
 
-            # Update by seq_id and doc_hash
+            # Update by seq_id, session_id and doc_hash
             cursor = conn.execute(
-                "UPDATE responses SET metadata = ? WHERE seq_id = ? AND doc_hash = ?",
-                (metadata_json, seq_id, doc_hash),
+                "UPDATE responses SET metadata = ? WHERE seq_id = ? AND session_id = ? AND doc_hash = ?",
+                (metadata_json, seq_id, session_id, doc_hash),
             )
             if cursor.rowcount == 0:
-                # Record doesn't exist, create it with seq_id and metadata
+                # Record doesn't exist, create it with seq_id, session_id and metadata
                 conn.execute(
-                    "INSERT INTO responses (seq_id, doc_hash, response, response_id, metadata) VALUES (?, ?, '', ?, ?)",
-                    (seq_id, doc_hash, response_id, metadata_json),
+                    "INSERT INTO responses (seq_id, session_id, doc_hash, response, response_id, metadata) VALUES (?, ?, ?, '', ?, ?)",
+                    (seq_id, session_id, doc_hash, response_id, metadata_json),
                 )
 
             # Always commit immediately for thread safety

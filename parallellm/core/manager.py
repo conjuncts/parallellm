@@ -254,6 +254,7 @@ class BatchManager:
             "checkpoint": self.active_checkpoint,
             "doc_hash": hashed,
             "seq_id": seq_id,
+            "session_id": self._fm.metadata["session_counter"],
         }
         cached = self._backend.retrieve(call_id)
         if cached is not None:

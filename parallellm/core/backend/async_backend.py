@@ -4,7 +4,7 @@ import types
 import threading
 import atexit
 from typing import Optional
-from parallellm.core.backend import BaseBackend
+from parallellm.core.backend import BaseBackend, _call_matches
 from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
@@ -169,7 +169,7 @@ class AsyncBackend(BaseBackend):
                 self._dash_logger.update_hash(call_id["doc_hash"], HashStatus.RECEIVED)
 
             # Stop if we reached the target
-            if until_call_id is not None and until_call_id == call_id:
+            if until_call_id is not None and _call_matches(until_call_id, call_id):
                 break
 
         # pop completed tasks
@@ -182,7 +182,7 @@ class AsyncBackend(BaseBackend):
 
     async def aretrieve(self, call_id: CallIdentifier) -> Optional[str]:
         # only poll for changes if we have a matching task
-        if any(m == call_id for m in self.task_metas):
+        if any(_call_matches(m, call_id) for m in self.task_metas):
             await self._poll_changes(call_id)
         return self._async_ds.retrieve(call_id)
 
