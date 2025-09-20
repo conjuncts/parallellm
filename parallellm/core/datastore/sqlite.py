@@ -3,19 +3,19 @@ import json
 import threading
 from typing import Optional
 
-from parallellm.core.datastore.base import DataStore
+from parallellm.core.datastore.base import Datastore
 from parallellm.file_io.file_manager import FileManager
 from parallellm.types import CallIdentifier
 
 
-class SQLiteDataStore(DataStore):
+class SQLiteDatastore(Datastore):
     """
-    SQLite-backed DataStore implementation
+    SQLite-backed Datastore implementation
     """
 
     def __init__(self, file_manager: FileManager):
         """
-        Initialize SQLite DataStore.
+        Initialize SQLite Datastore.
 
         :param file_manager: FileManager instance to handle file I/O operations
         """

@@ -5,7 +5,7 @@ import threading
 import atexit
 from typing import Optional
 from parallellm.core.backend import BaseBackend
-from parallellm.core.datastore.sqlite import SQLiteDataStore
+from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 from parallellm.provider.guess import guess_schema
@@ -17,7 +17,7 @@ class AsyncBackend(BaseBackend):
     A backend is a data store, but also a way to poll.
     This backend owns its own event loop running in a separate thread.
 
-    The DataStore
+    The Datastore
     """
 
     def __init__(self, fm: FileManager, dash_logger: Optional[DashboardLogger] = None):
@@ -32,8 +32,8 @@ class AsyncBackend(BaseBackend):
         self._loop_ready_event = threading.Event()
 
         # Start the event loop in a separate thread
-        # self._ds = SQLiteDataStore(self._fm)
-        self._async_ds: Optional[SQLiteDataStore] = None
+        # self._ds = SQLiteDatastore(self._fm)
+        self._async_ds: Optional[SQLiteDatastore] = None
         self._start_event_loop()
 
         # Register cleanup to run on program exit
@@ -47,7 +47,7 @@ class AsyncBackend(BaseBackend):
             asyncio.set_event_loop(self._loop)
 
             # Initialize the datastore now that the loop is running
-            self._async_ds = SQLiteDataStore(self._fm)
+            self._async_ds = SQLiteDatastore(self._fm)
 
             # Signal that the loop is ready
             self._loop_ready_event.set()

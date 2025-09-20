@@ -3,7 +3,7 @@ from typing import Literal
 
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.sync_backend import SyncBackend
-from parallellm.core.datastore.sqlite import SQLiteDataStore
+from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.manager import BatchManager
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger

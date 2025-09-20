@@ -9,7 +9,7 @@ from parallellm.file_io.file_manager import FileManager
 from parallellm.types import CallIdentifier
 
 
-class DataStore(ABC):
+class Datastore(ABC):
     """
     Stores responses
     """

@@ -1,6 +1,6 @@
 import asyncio
 from typing import Optional
-from parallellm.core.datastore.base import DataStore
+from parallellm.core.datastore.base import Datastore
 from parallellm.types import CallIdentifier
 
 
@@ -8,10 +8,6 @@ class BaseBackend:
     """
     A backend is a data store, but also a way to poll
     """
-
-    # def __init__(self, datastore: DataStore):
-    #     super().__init__()
-    #     self.datastore = datastore
 
     async def _poll_changes(self, call_id: CallIdentifier):
         """

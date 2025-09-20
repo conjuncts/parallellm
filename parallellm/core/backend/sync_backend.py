@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict, Any
 from parallellm.core.backend import BaseBackend
-from parallellm.core.datastore.sqlite import SQLiteDataStore
+from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 from parallellm.provider.guess import guess_schema
@@ -15,7 +15,7 @@ class SyncBackend(BaseBackend):
 
     def __init__(self, fm: FileManager, dash_logger: Optional[DashboardLogger] = None):
         self._fm = fm
-        self._ds = SQLiteDataStore(self._fm)
+        self._ds = SQLiteDatastore(self._fm)
         self._dash_logger = dash_logger
 
         # Store results directly instead of managing async tasks
