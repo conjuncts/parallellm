@@ -3,6 +3,8 @@ import json
 import pickle
 import time
 import atexit
+import re
+import hashlib
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 
@@ -30,6 +32,41 @@ class FileManager:
         self.metadata = self._load_metadata()
         if self.metadata is None:
             self.metadata = {"current_checkpoint": "begin"}
+
+    def _sanitize(self, user_input: Optional[str]) -> str:
+        """
+        Sanitize user input to be safe for use as directory name.
+        Uses format: <first_64_chars>-<8_letter_hash> for non-None checkpoints.
+        Returns "default" if checkpoint is None (non-checkpointed mode).
+
+        :param checkpoint: The checkpoint name to sanitize
+        :returns: Sanitized checkpoint name ("default" for None)
+        """
+        if user_input is None:
+            return "default"
+
+        if not isinstance(user_input, str):
+            user_input = str(user_input)
+
+        checkpoint_hash = hashlib.sha256(user_input.encode("utf-8")).hexdigest()[:8]
+
+        cleaned = "".join([c for c in user_input if c.isalnum() or c in " _-"])
+
+        # Replace multiple spaces/underscores with single ones
+        cleaned = re.sub(r"[_\s]+", "_", cleaned)
+
+        # Remove leading/trailing whitespace, underscores, and dots
+        cleaned = cleaned.strip().strip("_")
+
+        # Take first 64 characters
+        if len(cleaned) > 64:
+            cleaned = cleaned[:64].rstrip("_.")
+
+        if not cleaned:
+            cleaned = "checkpoint"
+
+        # Return format: chk-<first_64_chars>-<8_letter_hash>
+        return f"{cleaned}-{checkpoint_hash}"
 
     def _create_lock(self):
         """Create lock file with current process ID"""
@@ -67,18 +104,28 @@ class FileManager:
         """
         return self.metadata.get("current_checkpoint")
 
-    def set_current_checkpoint(self, checkpoint):
+    def set_current_checkpoint(self, checkpoint: Optional[str]):
         """
         Set the current checkpoint in memory (will be written on persist())
+
+        :param checkpoint: The checkpoint name to set, or None for non-checkpointed mode (uses "default")
         """
         self.metadata["current_checkpoint"] = checkpoint
 
-    def save_userdata(self, checkpoint, key, value, overwrite=False):
+    def save_userdata(
+        self, checkpoint: Optional[str], key: str, value, overwrite=False
+    ):
         """
         Internally persist data across checkpoints
+
+        :param checkpoint: The checkpoint name, or None for default checkpoint
+        :param key: The data key
+        :param value: The data value to save
+        :param overwrite: Whether to overwrite existing data
         """
+
         # Create checkpoint directory
-        checkpoint_dir = self.directory / str(checkpoint)
+        checkpoint_dir = self.directory / "userdata" / self._sanitize(checkpoint)
         checkpoint_dir.mkdir(exist_ok=True)
 
         # Save data using pickle for complex objects
@@ -90,12 +137,16 @@ class FileManager:
         with open(data_file, "wb") as f:
             pickle.dump(value, f)
 
-    def load_userdata(self, checkpoint, key):
+    def load_userdata(self, checkpoint: Optional[str], key: str):
         """
         Internally load data across checkpoints
+
+        :param checkpoint: The checkpoint name, or None for default checkpoint
+        :param key: The data key to load
+        :returns: The loaded data
+        :raises FileNotFoundError: If the data file is not found
         """
-        # Construct expected file path
-        checkpoint_dir = self.directory / str(checkpoint)
+        checkpoint_dir = self.directory / "userdata" / self._sanitize(checkpoint)
         data_file = checkpoint_dir / f"{key}.pkl"
 
         if not data_file.exists():
@@ -104,62 +155,16 @@ class FileManager:
         with open(data_file, "rb") as f:
             return pickle.load(f)
 
-    def allocate_datastore(self, checkpoint: str) -> Path:
+    def allocate_datastore(self, checkpoint: Optional[str]) -> Path:
         """
         Allocate directory for a checkpoint's datastore
 
-        :param checkpoint: The checkpoint name
+        :param checkpoint: The checkpoint name, or None for default checkpoint
         :returns: Path to the checkpoint directory
         """
-        checkpoint_dir = self.directory / "datastore" / str(checkpoint)
+        checkpoint_dir = self.directory / "datastore" / self._sanitize(checkpoint)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         return checkpoint_dir
-
-    def load_datastore(self, checkpoint: str) -> Tuple[List[str], Dict[str, int]]:
-        """
-        Load datastore data for a checkpoint from a parquet file
-
-        :param checkpoint: The checkpoint name
-        :returns: Tuple of (data_list, hash_map)
-        """
-        checkpoint_dir = self.directory / str(checkpoint)
-        parquet_file = checkpoint_dir / "datastore.parquet"
-
-        # Initialize empty structures
-        data_list = []
-        hash_map = {}
-
-        try:
-            df = pl.read_parquet(parquet_file)
-
-            if "seq_id" in df.columns:
-                df = df.sort("seq_id")
-
-                for row in df.iter_rows(named=True):
-                    seq_id = row["seq_id"]
-                    doc_hash = row["doc_hash"]
-                    response = row["response"]
-
-                    # Extend list if necessary to accommodate the seq_id
-                    while len(data_list) <= seq_id:
-                        data_list.append(None)
-
-                    data_list[seq_id] = response
-                    hash_map[doc_hash] = seq_id
-            else:
-                # If no seq_id column, use row order as seq_id
-                for i, row in enumerate(df.iter_rows(named=True)):
-                    doc_hash = row["doc_hash"]
-                    response = row["response"]
-
-                    data_list.append(response)
-                    hash_map[doc_hash] = i
-
-        except FileNotFoundError:
-            # File doesn't exist yet, return empty structures
-            pass
-
-        return data_list, hash_map
 
     def persist(self):
         """
