@@ -49,7 +49,9 @@ with pllm.dashboard() as d:
     # Finalize hash logger display before checkpoint change
 
 with pllm.default():
-    pllm.when_checkpoint("begin")  # checkpoint-controlled - needs to modify the global counter
+    pllm.when_checkpoint(
+        "begin"
+    )  # checkpoint-controlled - needs to modify the global counter
     print("Inside checkpoint 'begin'")
     pllm.goto_checkpoint("end")
 

@@ -14,6 +14,7 @@ from parallellm.core.response import (
 from parallellm.provider.base import BaseProvider
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
+from parallellm.types import CallIdentifier
 
 
 class StatusDashboard:
@@ -136,12 +137,16 @@ class BatchManager:
     def when_checkpoint(self, checkpoint_name):
         if checkpoint_name != self.current_checkpoint:
             raise WrongCheckpoint()
-        self._logger.info(f"Entered checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}")
+        self._logger.info(
+            f"Entered checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
+        )
 
     def goto_checkpoint(self, checkpoint_name):
         # TODO: TODO: TODO: delay checkpoint change until after the task manager exits.
         self.metadata["current_checkpoint"] = checkpoint_name
-        self._logger.info(f"Switched to checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}")
+        self._logger.info(
+            f"Switched to checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
+        )
 
     def save_userdata(self, key, value):
         """
@@ -223,13 +228,17 @@ class BatchManager:
 
         # Cache using datastore
         hashed = compute_hash(instructions, documents)
-        cached = self._backend.retrieve(self.current_checkpoint, hashed, seq_id)
+
+        call_id: CallIdentifier = {
+            "checkpoint": self.current_checkpoint,
+            "doc_hash": hashed,
+            "seq_id": seq_id,
+        }
+        cached = self._backend.retrieve(call_id)
         if cached is not None:
             self.update_hash_status(hashed, HashStatus.CACHED)
             return ReadyLLMResponse(
-                checkpoint=self.current_checkpoint,
-                seq_id=seq_id,
-                doc_hash=instructions,
+                call_id=call_id,
                 value=cached,
             )
 
@@ -238,9 +247,7 @@ class BatchManager:
         return self._provider.submit_query_to_provider(
             instructions,
             documents,
-            checkpoint=self.current_checkpoint,
-            seq_id=seq_id,
-            hashed=hashed,
+            call_id=call_id,
             llm=llm,
             _hoist_images=_hoist_images,
             **kwargs,

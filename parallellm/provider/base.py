@@ -1,6 +1,7 @@
 from typing import List, Optional, Union
 
 from parallellm.core.response import LLMDocument, LLMIdentity
+from parallellm.types import CallIdentifier
 
 
 class BaseProvider:
@@ -9,9 +10,7 @@ class BaseProvider:
         instructions,
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
-        hashed: str,
-        checkpoint: str,
-        seq_id: int,
+        call_id: CallIdentifier,
         llm: Optional[LLMIdentity] = None,
         _hoist_images=None,
         **kwargs,

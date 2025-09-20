@@ -9,6 +9,7 @@ from parallellm.core.datastore.sqlite import SQLiteDataStore
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 from parallellm.provider.guess import guess_schema
+from parallellm.types import CallIdentifier
 
 
 class AsyncBackend(BaseBackend):
@@ -114,30 +115,28 @@ class AsyncBackend(BaseBackend):
             except Exception as e:
                 print(f"Warning: Failed to cleanup datastore: {e}")
 
-    def submit_coro(
-        self, checkpoint: str, doc_hash: str, seq_id: int, coro: types.CoroutineType
-    ):
+    def submit_coro(self, call_id: CallIdentifier, coro: types.CoroutineType):
         """Submit a coroutine to be executed in the backend's event loop"""
         if self._loop is None or self._loop.is_closed():
             raise RuntimeError("AsyncBackend event loop is not running")
 
         # Create the task in the backend's event loop
         future = asyncio.run_coroutine_threadsafe(
-            self._create_and_store_task(checkpoint, doc_hash, seq_id, coro), self._loop
+            self._create_and_store_task(call_id, coro), self._loop
         )
 
         if self._dash_logger is not None:
-            self._dash_logger.update_hash(doc_hash, HashStatus.SENT)
+            self._dash_logger.update_hash(call_id["doc_hash"], HashStatus.SENT)
         # Don't wait for the result, just submit it
         return future
 
     async def _create_and_store_task(
-        self, checkpoint: str, doc_hash: str, seq_id: int, coro: types.CoroutineType
+        self, call_id: CallIdentifier, coro: types.CoroutineType
     ):
         """Helper to create and store a task in the event loop"""
 
         # Wrap the coro to include metadata
-        metadata = {"checkpoint": checkpoint, "doc_hash": doc_hash, "seq_id": seq_id}
+        metadata = call_id.copy()
 
         async def wrapped_coro():
             result = await coro
@@ -148,9 +147,7 @@ class AsyncBackend(BaseBackend):
         self.task_metas.append(metadata)
         return task
 
-    async def _poll_changes(
-        self, until_checkpoint: str, until_doc_hash: str, until_seq_id: int
-    ):
+    async def _poll_changes(self, until_call_id: Optional[CallIdentifier]):
         """
         A chance to poll for changes and update the data store
         """
@@ -160,27 +157,19 @@ class AsyncBackend(BaseBackend):
         for coro in asyncio.as_completed(self.tasks):
             result, metadata = await coro
 
-            checkpoint = metadata["checkpoint"]
-            doc_hash = metadata["doc_hash"]
-            seq_id = metadata["seq_id"]
+            call_id: CallIdentifier = metadata.copy()
 
             resp_text, resp_id, resp_metadata = guess_schema(result)
-            self._async_ds.store(checkpoint, doc_hash, int(seq_id), resp_text, resp_id)
-            self._async_ds.store_metadata(
-                checkpoint, doc_hash, int(seq_id), resp_id, resp_metadata
-            )
+            self._async_ds.store(call_id, resp_text, resp_id)
+            self._async_ds.store_metadata(call_id, resp_id, resp_metadata)
             done_tasks.append(metadata)
 
             # do logging
             if self._dash_logger is not None:
-                self._dash_logger.update_hash(doc_hash, HashStatus.RECEIVED)
+                self._dash_logger.update_hash(call_id["doc_hash"], HashStatus.RECEIVED)
 
             # Stop if we reached the target
-            if (
-                until_checkpoint == checkpoint
-                and until_doc_hash == doc_hash
-                and until_seq_id == int(seq_id)
-            ):
+            if until_call_id is not None and until_call_id == call_id:
                 break
 
         # pop completed tasks
@@ -191,14 +180,11 @@ class AsyncBackend(BaseBackend):
                 self.task_metas.pop(i)
                 # print(f"Completed {meta['checkpoint']}:{meta['doc_hash'][:8]}:{meta['seq_id']}")
 
-    async def aretrieve(self, checkpoint: str, doc_hash: str, seq_id: int) -> Optional[str]:
+    async def aretrieve(self, call_id: CallIdentifier) -> Optional[str]:
         # only poll for changes if we have a matching task
-        if any(
-            m["checkpoint"] == checkpoint and m["doc_hash"] == doc_hash and m["seq_id"] == seq_id
-            for m in self.task_metas
-        ):
-            await self._poll_changes(checkpoint, doc_hash, seq_id)
-        return self._async_ds.retrieve(checkpoint, doc_hash, seq_id)
+        if any(m == call_id for m in self.task_metas):
+            await self._poll_changes(call_id)
+        return self._async_ds.retrieve(call_id)
 
     def persist(self, timeout=30.0):
         """Synchronous persist that uses the backend's event loop"""
@@ -206,17 +192,18 @@ class AsyncBackend(BaseBackend):
 
         # but we DO want to wait for all pending tasks to complete
         if self._loop is not None and not self._loop.is_closed():
+            # Create a dummy TaskIdentifier for _poll_changes - we'll pass None values to poll all
             future = asyncio.run_coroutine_threadsafe(
-                self._poll_changes(None, None, None), self._loop
+                self._poll_changes(None), self._loop
             )
             try:
                 future.result(timeout=timeout)
             except Exception as e:
                 print(f"Warning: Failed to wait for pending tasks: {e}")
 
-    def retrieve(self, checkpoint: str, doc_hash: str, seq_id: int) -> Optional[str]:
+    def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
         """Synchronous retrieve that uses the backend's event loop"""
-        return self._run_coroutine(self.aretrieve(checkpoint, doc_hash, seq_id))
+        return self._run_coroutine(self.aretrieve(call_id))
 
     def __del__(self):
         """Clean up resources when the AsyncBackend is destroyed"""

@@ -1,6 +1,7 @@
 import asyncio
 from typing import Optional
 from parallellm.core.datastore.base import DataStore
+from parallellm.types import CallIdentifier
 
 
 class BaseBackend:
@@ -12,7 +13,7 @@ class BaseBackend:
     #     super().__init__()
     #     self.datastore = datastore
 
-    async def _poll_changes(self, checkpoint: str, doc_hash: str, seq_id: int):
+    async def _poll_changes(self, call_id: CallIdentifier):
         """
         A chance to poll for changes and update the data store
         """
@@ -21,8 +22,8 @@ class BaseBackend:
     def persist(self):
         pass
 
-    def retrieve(self, checkpoint: str, doc_hash: str, seq_id: int) -> Optional[str]:
+    def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
         raise NotImplementedError
 
-    def store(self, checkpoint: str, doc_hash: str, response: str, seq_id: int) -> int:
+    def store(self, call_id: CallIdentifier, response: str) -> int:
         raise NotImplementedError

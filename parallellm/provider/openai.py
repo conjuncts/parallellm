@@ -11,6 +11,7 @@ from parallellm.core.response import (
     ReadyLLMResponse,
 )
 from parallellm.provider.base import AsyncProvider, SyncProvider
+from parallellm.types import CallIdentifier
 
 from openai import OpenAI, AsyncOpenAI
 from openai.types.responses.response_input_param import Message
@@ -43,9 +44,7 @@ class SyncOpenAIProvider(SyncProvider):
         instructions,
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
-        hashed: str,
-        checkpoint: str,
-        seq_id: int,
+        call_id: CallIdentifier,
         llm: Optional[LLMIdentity] = None,
         _hoist_images=None,
         **kwargs,
@@ -64,13 +63,11 @@ class SyncOpenAIProvider(SyncProvider):
 
         # Execute the call synchronously and store the result
         resp_text, _, _ = self.backend.submit_sync_call(
-            checkpoint=checkpoint, doc_hash=hashed, seq_id=seq_id, sync_function=sync_openai_call
+            call_id, sync_function=sync_openai_call
         )
 
         # Return a ready response since the operation completed immediately
-        return ReadyLLMResponse(
-            checkpoint=checkpoint, seq_id=seq_id, doc_hash=hashed, value=resp_text
-        )
+        return ReadyLLMResponse(call_id=call_id, value=resp_text)
 
 
 class AsyncOpenAIProvider(AsyncProvider):
@@ -83,14 +80,13 @@ class AsyncOpenAIProvider(AsyncProvider):
         instructions,
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
-        hashed: str,
-        checkpoint: str,
-        seq_id: int,
+        call_id: CallIdentifier,
         llm: Optional[LLMIdentity] = None,
         _hoist_images=None,
         **kwargs,
     ):
         documents = _fix_docs_for_openai(documents)
+
         coro = self.client.responses.create(
             model=llm.to_str("openai") if llm else "gpt-4.1-nano",
             instructions=instructions,
@@ -99,11 +95,9 @@ class AsyncOpenAIProvider(AsyncProvider):
         )
 
         # Submit to the backend for asynchronous execution
-        self.backend.submit_coro(checkpoint=checkpoint, doc_hash=hashed, seq_id=seq_id, coro=coro)
+        self.backend.submit_coro(call_id=call_id, coro=coro)
 
         return PendingLLMResponse(
-            checkpoint=checkpoint,
-            seq_id=seq_id,
-            doc_hash=hashed,
+            call_id=call_id,
             backend=self.backend,
         )

@@ -3,6 +3,7 @@ from PIL import Image
 
 from parallellm.core.backend import BaseBackend
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
+from parallellm.types import CallIdentifier
 
 if TYPE_CHECKING:
     from parallellm.core.manager import BatchManager
@@ -52,14 +53,10 @@ class PendingLLMResponse(LLMResponse):
 
     def __init__(
         self,
-        checkpoint,
-        seq_id,
-        doc_hash,
+        call_id: CallIdentifier,
         backend: BaseBackend,
     ):
-        self.checkpoint = checkpoint
-        self.seq_id = seq_id
-        self.doc_hash = doc_hash
+        self.call_id = call_id
         self._backend = backend
         self.value = None
 
@@ -67,7 +64,7 @@ class PendingLLMResponse(LLMResponse):
         if self.value is not None:
             return self.value
 
-        self.value = self._backend.retrieve(self.checkpoint, self.doc_hash, self.seq_id)
+        self.value = self._backend.retrieve(self.call_id)
         return self.value
 
 
@@ -76,10 +73,8 @@ class ReadyLLMResponse(LLMResponse):
     A response that is already resolved.
     """
 
-    def __init__(self, checkpoint, seq_id, doc_hash, value: str):
-        self.checkpoint = checkpoint
-        self.seq_id = seq_id
-        self.doc_hash = doc_hash
+    def __init__(self, call_id: CallIdentifier, value: str):
+        self.call_id = call_id
         self.value = value
 
     def resolve(self) -> str:

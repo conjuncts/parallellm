@@ -5,6 +5,7 @@ from typing import Optional
 
 from parallellm.core.datastore.base import DataStore
 from parallellm.file_io.file_manager import FileManager
+from parallellm.types import CallIdentifier
 
 
 class SQLiteDataStore(DataStore):
@@ -65,15 +66,17 @@ class SQLiteDataStore(DataStore):
 
         return connections[checkpoint]
 
-    def retrieve(self, checkpoint: str, doc_hash: str, seq_id: int) -> Optional[str]:
+    def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
         """
         Retrieve a response from SQLite.
 
-        :param checkpoint: The checkpoint of the response.
-        :param doc_hash: The document hash of the response.
-        :param seq_id: The sequential ID of the response.
+        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
         :returns: The retrieved response content.
         """
+        checkpoint = call_id["checkpoint"]
+        doc_hash = call_id["doc_hash"]
+        seq_id = call_id["seq_id"]
+
         conn = self._get_connection(checkpoint)
 
         # Try direct lookup using seq_id and doc_hash
@@ -92,17 +95,17 @@ class SQLiteDataStore(DataStore):
         row = cursor.fetchone()
         return row["response"] if row else None
 
-    def retrieve_metadata(
-        self, checkpoint: str, doc_hash: str, seq_id: int
-    ) -> Optional[dict]:
+    def retrieve_metadata(self, call_id: CallIdentifier) -> Optional[dict]:
         """
         Retrieve metadata from SQLite.
 
-        :param checkpoint: The checkpoint of the response.
-        :param doc_hash: The document hash of the response.
-        :param seq_id: The sequential ID of the response.
+        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
         :returns: The retrieved metadata as a dictionary, or None if not found.
         """
+        checkpoint = call_id["checkpoint"]
+        doc_hash = call_id["doc_hash"]
+        seq_id = call_id["seq_id"]
+
         conn = self._get_connection(checkpoint)
 
         # Try direct lookup using seq_id and doc_hash
@@ -125,9 +128,7 @@ class SQLiteDataStore(DataStore):
 
     def store(
         self,
-        checkpoint: str,
-        doc_hash: str,
-        seq_id: int,
+        call_id: CallIdentifier,
         response: str,
         response_id: str,
         *,
@@ -136,14 +137,16 @@ class SQLiteDataStore(DataStore):
         """
         Store a response in SQLite.
 
-        :param checkpoint: The checkpoint of the response.
-        :param doc_hash: The document hash of the response.
+        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
         :param response: The response content to store.
         :param response_id: The response ID to store.
-        :param seq_id: The sequential ID of the response.
         :param save_to_file: Whether to commit the transaction immediately (ignored - always commits).
         :returns: The seq_id where the response was stored.
         """
+        checkpoint = call_id["checkpoint"]
+        doc_hash = call_id["doc_hash"]
+        seq_id = call_id["seq_id"]
+
         conn = self._get_connection(checkpoint)
 
         try:
@@ -178,21 +181,20 @@ class SQLiteDataStore(DataStore):
 
     def store_metadata(
         self,
-        checkpoint: str,
-        doc_hash: str,
-        seq_id: int,
+        call_id: CallIdentifier,
         response_id: str,
         metadata: dict,
     ) -> None:
         """
         Store metadata in SQLite.
 
-        :param checkpoint: The checkpoint of the metadata.
-        :param doc_hash: The document hash of the response.
-        :param seq_id: The sequential ID of the response.
+        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
         :param response_id: The response ID to store.
         :param metadata: The metadata to store.
         """
+        checkpoint = call_id["checkpoint"]
+        doc_hash = call_id["doc_hash"]
+        seq_id = call_id["seq_id"]
         conn = self._get_connection(checkpoint)
 
         try:
