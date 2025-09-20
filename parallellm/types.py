@@ -1,11 +1,14 @@
-from typing import TypedDict
+from typing import TypedDict, Optional
 
 
 class WorkingMetadata(TypedDict):
-    current_checkpoint: str
+    latest_checkpoint: Optional[str]
+    """
+    Latest checkpoint is that which has last been reached
+    """
 
 
 class CallIdentifier(TypedDict):
-    checkpoint: str
+    checkpoint: Optional[str]
     doc_hash: str
     seq_id: int

@@ -29,7 +29,7 @@ class SQLiteDataStore(DataStore):
             self._local.connections = {}
         return self._local.connections
 
-    def _get_connection(self, checkpoint: str) -> sqlite3.Connection:
+    def _get_connection(self, checkpoint: Optional[str]) -> sqlite3.Connection:
         """Get or create SQLite connection for a checkpoint in the current thread"""
         connections = self._get_connections()
 

@@ -23,7 +23,7 @@ class SyncBackend(BaseBackend):
 
     def submit_sync_call(self, call_id: CallIdentifier, sync_function, *args, **kwargs):
         """Submit a synchronous function call and store the result immediately"""
-        checkpoint = call_id["checkpoint"]
+        checkpoint = call_id["checkpoint"] or ""
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
 

@@ -31,7 +31,7 @@ class FileManager:
         # Load existing metadata
         self.metadata = self._load_metadata()
         if self.metadata is None:
-            self.metadata = {"current_checkpoint": "begin"}
+            self.metadata = {"latest_checkpoint": None}
 
     def _sanitize(self, user_input: Optional[str]) -> str:
         """
@@ -85,7 +85,7 @@ class FileManager:
     #     """Destructor to ensure cleanup"""
     #     self._cleanup()
 
-    def _load_metadata(self) -> WorkingMetadata:
+    def _load_metadata(self) -> Optional[WorkingMetadata]:
         """Load metadata from JSON file"""
         try:
             with open(self.metadata_file, "r") as f:
@@ -93,24 +93,10 @@ class FileManager:
         except (FileNotFoundError, json.JSONDecodeError):
             return None
 
-    def _save_metadata(self, metadata):
+    def _save_metadata(self, metadata: WorkingMetadata):
         """Save metadata to JSON file"""
         with open(self.metadata_file, "w") as f:
             json.dump(metadata, f, indent=2)
-
-    def current_checkpoint(self):
-        """
-        Get the current checkpoint from in-memory metadata
-        """
-        return self.metadata.get("current_checkpoint")
-
-    def set_current_checkpoint(self, checkpoint: Optional[str]):
-        """
-        Set the current checkpoint in memory (will be written on persist())
-
-        :param checkpoint: The checkpoint name to set, or None for non-checkpointed mode (uses "default")
-        """
-        self.metadata["current_checkpoint"] = checkpoint
 
     def save_userdata(
         self, checkpoint: Optional[str], key: str, value, overwrite=False

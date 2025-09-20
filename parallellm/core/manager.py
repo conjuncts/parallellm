@@ -73,6 +73,11 @@ class ParalleLLMContext:
 
     def __exit__(self, exc_type, exc_value, traceback):
         # Delegate to BatchManager's error handling logic
+
+        if self._bm:
+            # Exit their checkpoint if inside one
+            self._bm.active_checkpoint = None
+
         if exc_type in (NotAvailable, WrongCheckpoint):
             return True
         return False
@@ -105,6 +110,12 @@ class BatchManager:
         # Initialize the hash logger with display disabled by default
         self._dash_logger: DashboardLogger = dash_logger
 
+        self.active_checkpoint: Optional[str] = None
+        """
+        Active checkpoint: if we are inside a checkpoint context.
+        Either a checkpoint or None (if anonymous).
+        """
+
     def default(self):
         """
         Begins a 'default' checkpoint.
@@ -123,8 +134,8 @@ class BatchManager:
         return StatusDashboard(self, log_k=log_k)
 
     @property
-    def current_checkpoint(self):
-        return self.metadata["current_checkpoint"]
+    def latest_checkpoint(self):
+        return self.metadata["latest_checkpoint"]
 
     @property
     def metadata(self):
@@ -135,15 +146,23 @@ class BatchManager:
         self._fm.metadata = value
 
     def when_checkpoint(self, checkpoint_name):
-        if checkpoint_name != self.current_checkpoint:
+        # Always allow enter if no checkpoints yet
+        if self.latest_checkpoint is None:
+            self.metadata["latest_checkpoint"] = checkpoint_name
+
+        # But generally, only enter if it is the latest
+        elif checkpoint_name != self.latest_checkpoint:
             raise WrongCheckpoint()
+
+        # Set it as active
+        self.active_checkpoint = checkpoint_name
         self._logger.info(
             f"Entered checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
         )
 
     def goto_checkpoint(self, checkpoint_name):
-        # TODO: TODO: TODO: delay checkpoint change until after the task manager exits.
-        self.metadata["current_checkpoint"] = checkpoint_name
+        # TODO: delay checkpoint change until after the task manager exits.
+        self.metadata["latest_checkpoint"] = checkpoint_name
         self._logger.info(
             f"Switched to checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
         )
@@ -152,13 +171,15 @@ class BatchManager:
         """
         The intended way to let data persist across checkpoints
         """
-        return self._fm.save_userdata(self.current_checkpoint, key, value)
+        if self.active_checkpoint:
+            raise NotAvailable("Cannot save userdata outside of a checkpoint.")
+        return self._fm.save_userdata(self.latest_checkpoint, key, value)
 
-    def load_userdata(self, key):
+    def load_userdata(self, checkpoint, key):
         """
         The intended way to let data persist across checkpoints
         """
-        return self._fm.load_userdata(self.current_checkpoint, key)
+        return self._fm.load_userdata(checkpoint, key)
 
     def persist(self):
         """
@@ -230,7 +251,7 @@ class BatchManager:
         hashed = compute_hash(instructions, documents)
 
         call_id: CallIdentifier = {
-            "checkpoint": self.current_checkpoint,
+            "checkpoint": self.active_checkpoint,
             "doc_hash": hashed,
             "seq_id": seq_id,
         }
