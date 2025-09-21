@@ -25,5 +25,17 @@ class WrongCheckpoint(ParallellmSignal):
             super().__init__(message)
 
 
+class GotoCheckpoint(ParallellmSignal):
+    def __init__(self, checkpoint: str):
+        """
+        This is an internal signal used to jump to a checkpoint.
+
+        It should always be automatically caught as long as you are using
+        the BatchManager inside a 'with' block.
+        """
+        super().__init__(f"Goto checkpoint {checkpoint}")
+        self.checkpoint = checkpoint
+
+
 class NotAvailable(ParallellmSignal):
     pass

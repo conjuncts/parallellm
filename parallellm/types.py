@@ -6,6 +6,10 @@ class WorkingMetadata(TypedDict):
     """
     Latest checkpoint is that which has last been reached
     """
+    checkpoint_counter: int
+    """
+    Counter for checkpoint mode operations. Persisted across runs.
+    """
 
 
 class CallIdentifier(TypedDict):

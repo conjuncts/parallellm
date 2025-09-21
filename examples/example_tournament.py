@@ -12,8 +12,8 @@ load_dotenv()
 
 shutil.rmtree(".temp", ignore_errors=True)
 pllm = ParalleLLM.resume_directory(
-    # ".pllm",
-    ".temp",
+    ".pllm/nfl",
+    # ".temp",
     provider="openai",  #
     strategy="sync",
     log_level=logging.DEBUG,

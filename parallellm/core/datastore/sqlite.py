@@ -57,13 +57,6 @@ class SQLiteDatastore(Datastore):
                 )
             """)
 
-            # Add session_id column if it doesn't exist (for existing databases)
-            # try:
-            #     conn.execute("ALTER TABLE responses ADD COLUMN session_id INTEGER NOT NULL DEFAULT 0")
-            # except sqlite3.OperationalError:
-            #     # Column already exists, which is fine
-            #     pass
-
             # Create index for faster lookups
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_doc_hash ON responses(doc_hash)
@@ -71,9 +64,9 @@ class SQLiteDatastore(Datastore):
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_session_id ON responses(session_id)
             """)
-            # conn.execute("""
-            #     CREATE INDEX IF NOT EXISTS idx_seq_session ON responses(seq_id, session_id)
-            # """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_seq_id ON responses(seq_id)
+            """)
 
             conn.commit()
             connections[checkpoint] = conn

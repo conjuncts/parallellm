@@ -3,7 +3,7 @@ from typing import List, Optional, Union
 from colorama import Fore, Style, init
 from parallellm.core.backend import BaseBackend
 from parallellm.core.cast.fix_docs import cast_documents
-from parallellm.core.exception import NotAvailable, WrongCheckpoint
+from parallellm.core.exception import GotoCheckpoint, NotAvailable, WrongCheckpoint
 from parallellm.core.hash import compute_hash
 from parallellm.core.response import (
     LLMIdentity,
@@ -76,9 +76,9 @@ class ParalleLLMContext:
 
         if self._bm:
             # Exit their checkpoint if inside one
-            self._bm.active_checkpoint = None
+            self._bm._exit_checkpoint()
 
-        if exc_type in (NotAvailable, WrongCheckpoint):
+        if exc_type in (NotAvailable, WrongCheckpoint, GotoCheckpoint):
             return True
         return False
 
@@ -105,7 +105,8 @@ class BatchManager:
         self._fm = file_manager
         self._provider = provider
         self._logger = logger
-        self._current_seq = 0
+        self._anonymous_counter = 0  # Anonymous mode counter, always starts from 0
+        self._checkpoint_counter = None  # Initialized when entering checkpoint
 
         # Initialize the hash logger with display disabled by default
         self._dash_logger: DashboardLogger = dash_logger
@@ -154,18 +155,34 @@ class BatchManager:
         elif checkpoint_name != self.latest_checkpoint:
             raise WrongCheckpoint()
 
-        # Set it as active
+        # Set it as active and initialize local checkpoint counter
         self.active_checkpoint = checkpoint_name
+        # Initialize local counter from persisted metadata (or 0 if first time)
+        self._checkpoint_counter = self.metadata.get("checkpoint_counter", 0)
         self._logger.info(
             f"Entered checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
         )
 
     def goto_checkpoint(self, checkpoint_name):
-        # TODO: delay checkpoint change until after the task manager exits.
+        """
+        Nothing after this statement will be executed.
+        """
         self.metadata["latest_checkpoint"] = checkpoint_name
         self._logger.info(
             f"Switched to checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
         )
+        raise GotoCheckpoint(checkpoint_name)
+
+    def _exit_checkpoint(self):
+        """
+        Exit checkpoint context (called by context manager)
+        """
+        if self.active_checkpoint is not None:
+            # Persist local checkpoint counter to metadata when exiting
+            if self._checkpoint_counter is not None:
+                self.metadata["checkpoint_counter"] = self._checkpoint_counter
+            self.active_checkpoint = None
+            self._checkpoint_counter = None
 
     def save_userdata(self, key, value):
         """
@@ -242,8 +259,15 @@ class BatchManager:
         if isinstance(llm, str):
             llm = LLMIdentity(llm)
 
-        seq_id = self._current_seq
-        self._current_seq += 1
+        # Use dual counter system based on checkpoint mode
+        if self.active_checkpoint is not None:
+            # In checkpoint mode: use and increment local checkpoint counter
+            seq_id = self._checkpoint_counter
+            self._checkpoint_counter += 1
+        else:
+            # In anonymous mode: use and increment anonymous counter
+            seq_id = self._anonymous_counter
+            self._anonymous_counter += 1
 
         documents = cast_documents(documents, list(additional_documents))
 

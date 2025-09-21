@@ -10,9 +10,9 @@ from parallellm.core.response import LLMResponse
 start = time.time()
 load_dotenv()
 
-shutil.rmtree(".temp", ignore_errors=True)
+# shutil.rmtree(".temp", ignore_errors=True)
 pllm = ParalleLLM.resume_directory(
-    # ".pllm",
+    # ".pllm/enzy",
     ".temp",
     provider="openai",  #
     strategy="async",
@@ -23,7 +23,7 @@ pllm = ParalleLLM.resume_directory(
 with pllm.dashboard() as d:
     d.print("===Starting Tournament===")
     resp = pllm.ask_llm(
-        "Please name 32 enzymes. Place your final answer in a code block, separated by newlines.",
+        "Please name 8 enzymes. Place your final answer in a code block, separated by newlines.",
     )
 
     teams = [x for x in resp.resolve().split("```")[1].split("\n")[1:] if x]

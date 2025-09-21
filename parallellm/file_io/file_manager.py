@@ -33,6 +33,7 @@ class FileManager:
         if self.metadata is None:
             self.metadata = {}
         self.metadata.setdefault("latest_checkpoint", None)
+        self.metadata.setdefault("checkpoint_counter", 0)
 
         # session_counter: default to 0
         self.metadata["session_counter"] = self.metadata.get("session_counter", -1) + 1
