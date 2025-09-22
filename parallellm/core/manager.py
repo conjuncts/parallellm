@@ -69,7 +69,7 @@ class ParalleLLMContext:
 
     def __enter__(self):
         # Any setup logic can go here if needed
-        return self._bm
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         # Delegate to BatchManager's error handling logic
@@ -81,6 +81,14 @@ class ParalleLLMContext:
         if exc_type in (NotAvailable, WrongCheckpoint, GotoCheckpoint):
             return True
         return False
+
+    def print(self, *args, **kwargs):
+        """
+        Print to console above the dashboard output.
+        This ensures proper display ordering when the dashboard is active.
+        """
+        # Use the dashboard logger's coordinated print method
+        print(*args, **kwargs)
 
 
 class BatchManager:

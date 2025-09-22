@@ -65,6 +65,9 @@ class ParalleLLMGateway:
         logger.setLevel(log_level)
         logger.addHandler(parallellm_log_handler)
 
+        # Connect the dashboard logger with the logging handler for coordination
+        parallellm_log_handler.set_dash_logger(dash_logger)
+
         # Prevent propagation to root logger to avoid duplicate messages
         logger.propagate = False
 

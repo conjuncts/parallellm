@@ -16,10 +16,10 @@ pllm = ParalleLLM.resume_directory(
     log_level=logging.DEBUG,
 )
 
-# When code is deterministic, LLM calls be can directly
+# When code is deterministic, LLM calls be can directly cached.
 
 # However, some code will be non-deterministic (ie. API calls, random)
-# or might take a really long time.
+# or might take a really long time, leading to different outcomes.
 
 # In such a case, ParalleLLM introduces "checkpoints"
 
@@ -38,9 +38,10 @@ with pllm.checkpoint():
 
     pllm.goto_checkpoint("generate_recipe")
 
+
 with pllm.dashboard() as d:
     # pllm.dashboard() can be either non-checkpoint or checkpoint
-    # depending on whether when_checkpoint() is ever called
+    # depending on whether when_checkpoint() is called
     pllm.when_checkpoint("generate_recipe")
 
     random_num_steps = pllm.load_userdata("random_step/num_steps")

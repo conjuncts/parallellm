@@ -143,7 +143,7 @@ class DashboardLogger:
         if self._console_written:
             # Move cursor to beginning of line and clear the entire line, then print new content
             # Use ANSI escape sequence to clear the entire line
-            sys.stdout.write(f"\r\033[K{display_line}")
+            sys.stdout.write(f"\r\033[K{display_line}\r")
         else:
             # First time writing - just print normally
             sys.stdout.write(display_line)
