@@ -1,0 +1,191 @@
+"""
+Example usage of the simple ParalleLLM testing utilities
+
+This module demonstrates how to use the simple mock utilities
+to write effective tests for code that uses ParalleLLM with pytest.
+"""
+
+import shutil
+import tempfile
+import pytest
+from parallellm.core.gateway import ParalleLLM
+from parallellm.testing.simple_mock import (
+    mock_openai_calls,
+    create_response_map,
+    assert_call_count,
+)
+
+
+@pytest.fixture
+def temp_pllm():
+    """Pytest fixture that provides a temporary ParalleLLM instance"""
+    shutil.rmtree(".test.tmp", ignore_errors=True)
+    pllm = ParalleLLM.resume_directory(".test.tmp", provider="openai", strategy="sync")
+    yield pllm
+
+
+@pytest.fixture
+def async_temp_pllm():
+    """Pytest fixture that provides a temporary async ParalleLLM instance"""
+    shutil.rmtree(".atest.tmp", ignore_errors=True)
+    pllm = ParalleLLM.resume_directory(
+        ".atest.tmp", provider="openai", strategy="async"
+    )
+    yield pllm
+
+
+def test_simple_mock_responses(temp_pllm):
+    """Test with a simple list of mock responses"""
+    responses = ["First response", "Second response", "Third response"]
+
+    mock_client = mock_openai_calls(temp_pllm, responses=responses)
+
+    with temp_pllm.default():
+        resp1 = temp_pllm.ask_llm("First question")
+        resp2 = temp_pllm.ask_llm("Second question")
+        resp3 = temp_pllm.ask_llm("Third question")
+
+    # Check responses
+    assert resp1.resolve() == "First response"
+    assert resp2.resolve() == "Second response"
+    assert resp3.resolve() == "Third response"
+
+    # Check calls were recorded
+    assert_call_count(mock_client, 3)
+    # assert_call_made(mock_client, "First question")
+    # assert_call_made(mock_client, "Second question")
+    # assert_call_made(mock_client, "Third question")
+
+
+def test_pattern_based_responses(temp_pllm):
+    """Test with pattern-based response mapping"""
+    response_map = create_response_map(
+        calculate="The answer is 42",
+        weather="It's sunny today",
+        joke="Why did the chicken cross the road? To get to the other side!",
+    )
+
+    mock_client = mock_openai_calls(temp_pllm, response_map=response_map)
+
+    with temp_pllm.default():
+        # These should match patterns
+        calc_resp = temp_pllm.ask_llm("Please calculate 2 + 2")
+        weather_resp = temp_pllm.ask_llm("What's the weather like?")
+        joke_resp = temp_pllm.ask_llm("Tell me a joke")
+
+        # This won't match any pattern, so gets default response
+        other_resp = temp_pllm.ask_llm("Random question")
+
+    assert "42" in calc_resp.resolve()
+    assert "sunny" in weather_resp.resolve()
+    assert "chicken" in joke_resp.resolve()
+    assert "Random question" in other_resp.resolve()  # Default includes question
+
+    assert_call_count(mock_client, 4)
+
+
+def test_exact_instruction_matching(temp_pllm):
+    """Test with exact instruction matching"""
+    mock_client = mock_openai_calls(temp_pllm)
+
+    # Add exact matches
+    mock_client.add_response_pattern(
+        "What is the capital of France?", "The capital of France is Paris."
+    )
+    mock_client.add_response_pattern("What is 2 + 2?", "2 + 2 equals 4.")
+    mock_client.set_default_response("I don't know that.")
+
+    with temp_pllm.default():
+        resp1 = temp_pllm.ask_llm("What is the capital of France?")
+        resp2 = temp_pllm.ask_llm("What is 2 + 2?")
+        resp3 = temp_pllm.ask_llm("What is the meaning of life?")
+
+    assert "Paris" in resp1.resolve()
+    assert "equals 4" in resp2.resolve()
+    assert "don't know" in resp3.resolve()
+
+
+def test_async_provider(async_temp_pllm):
+    """Test with async provider"""
+    responses = ["Async response 1", "Async response 2"]
+
+    mock_client = mock_openai_calls(async_temp_pllm, responses=responses)
+
+    with async_temp_pllm.default():
+        resp1 = async_temp_pllm.ask_llm("First async question")
+        resp2 = async_temp_pllm.ask_llm("Second async question")
+
+    # Responses should resolve correctly
+    assert resp1.resolve() == "Async response 1"
+    assert resp2.resolve() == "Async response 2"
+
+    assert_call_count(mock_client, 2)
+
+
+def example_nfl_tournament_test():
+    """Example of testing the NFL tournament from the examples"""
+
+    # Set up responses for the tournament
+    responses = [
+        # Teams response
+        """Here are 8 NFL teams:
+```
+Patriots
+Cowboys  
+Packers
+49ers
+Chiefs
+Bills
+Ravens
+Steelers
+```""",
+        # Game predictions
+        "Patriots beat Cowboys 21-14",
+        "Packers defeat 49ers 28-21",
+        "Chiefs beat Bills 31-17",
+        "Ravens defeat Steelers 24-10",
+    ]
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        pllm = ParalleLLM.resume_directory(temp_dir, provider="openai", strategy="sync")
+        mock_client = mock_openai_calls(pllm, responses=responses)
+
+        with pllm.default():
+            # Get teams
+            resp = pllm.ask_llm(
+                "Please name 8 NFL teams. Place your final answer in a code block, separated by newlines."
+            )
+
+            teams = resp.resolve().split("```")[1].split("\n")[1:9]
+            print(f"Teams: {teams}")
+
+            # Run games
+            games = []
+            for i in range(0, len(teams), 2):
+                resp = pllm.ask_llm(
+                    f"Given a game between the {teams[i]} and the {teams[i + 1]}, simply predict the winner and the score."
+                )
+                games.append(resp)
+
+            # Get results
+            game_descriptions = []
+            for resp in games:
+                game_descriptions.append(resp.resolve())
+
+            print(f"Game results: {game_descriptions}")
+
+        # Verify the mock worked as expected
+        assert_call_count(mock_client, 5)  # 1 for teams + 4 for games
+        assert len(game_descriptions) == 4
+        assert "Patriots" in game_descriptions[0]
+        assert "Packers" in game_descriptions[1]
+
+
+if __name__ == "__main__":
+    # Run the example
+    print("Running NFL tournament test example...")
+    example_nfl_tournament_test()
+    print("✓ NFL tournament test completed successfully!")
+
+    # Run pytest tests
+    print("\nTo run all tests, use: pytest tests/examples.py -v")

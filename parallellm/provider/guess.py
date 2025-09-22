@@ -24,7 +24,7 @@ def guess_schema(inp: Union[BaseModel, dict]) -> tuple[str, str, dict]:
         elif hasattr(inp, "__dict__"):
             obj = inp.__dict__.copy()
         else:
-            raise ValueError("Invalid input type")
+            raise ValueError("Invalid input type", inp)
 
     # Try to extract response text from various possible fields
     resp_text = None
@@ -32,6 +32,9 @@ def guess_schema(inp: Union[BaseModel, dict]) -> tuple[str, str, dict]:
     # Try to get output_text as attribute ()
     if resp_text is None:
         resp_text = getattr(model, "output_text", None)
+
+    if resp_text is None:
+        resp_text = obj.get("output_text") or obj.get("content")
 
     # Extract response ID from various possible fields
     resp_id = (

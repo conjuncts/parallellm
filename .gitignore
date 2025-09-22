@@ -17,3 +17,6 @@ experiments/
 # PLLM outputs
 .pllm
 .temp
+*.tmp
+
+.vscode
