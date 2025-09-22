@@ -124,6 +124,13 @@ class BatchManager:
         """
         return ParalleLLMContext(self)
 
+    def checkpoint(self):
+        """
+        Begins a context where checkpoints can be used.
+        Usage: `with pllm.managed(): ...`
+        """
+        return ParalleLLMContext(self)
+
     def dashboard(self, log_k: int = 10):
         """
         Create a context manager for the status dashboard.
@@ -188,15 +195,13 @@ class BatchManager:
         """
         The intended way to let data persist across checkpoints
         """
-        if self.active_checkpoint:
-            raise NotAvailable("Cannot save userdata outside of a checkpoint.")
-        return self._fm.save_userdata(self.latest_checkpoint, key, value)
+        return self._fm.save_userdata(key, value)
 
-    def load_userdata(self, checkpoint, key):
+    def load_userdata(self, key):
         """
         The intended way to let data persist across checkpoints
         """
-        return self._fm.load_userdata(checkpoint, key)
+        return self._fm.load_userdata(key)
 
     def persist(self):
         """

@@ -11,6 +11,11 @@ class WorkingMetadata(TypedDict):
     Counter for checkpoint mode operations. Persisted across runs.
     """
 
+    session_counter: int
+    """
+    Numeric ID of session. Increments on each new BatchManager creation.
+    """
+
 
 class CallIdentifier(TypedDict):
     checkpoint: Optional[str]

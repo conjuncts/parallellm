@@ -13,3 +13,6 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 - [x] store session id
 - [ ] difference between checkpoint-control and non-checkpoint-control
 - [ ] different execution counters
+
+- Automatically persist upon pllm exit
+

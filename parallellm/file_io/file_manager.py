@@ -103,9 +103,7 @@ class FileManager:
         with open(self.metadata_file, "w") as f:
             json.dump(metadata, f, indent=2)
 
-    def save_userdata(
-        self, checkpoint: Optional[str], key: str, value, overwrite=False
-    ):
+    def save_userdata(self, key: str, value, overwrite=False):
         """
         Internally persist data across checkpoints
 
@@ -116,11 +114,12 @@ class FileManager:
         """
 
         # Create checkpoint directory
-        checkpoint_dir = self.directory / "userdata" / self._sanitize(checkpoint)
+        checkpoint_dir = self.directory / "userdata"
         checkpoint_dir.mkdir(exist_ok=True)
 
         # Save data using pickle for complex objects
-        data_file = checkpoint_dir / f"{key}.pkl"
+        fname = self._sanitize(key)
+        data_file = checkpoint_dir / f"{fname}.pkl"
 
         if data_file.exists() and not overwrite:
             return
@@ -128,17 +127,18 @@ class FileManager:
         with open(data_file, "wb") as f:
             pickle.dump(value, f)
 
-    def load_userdata(self, checkpoint: Optional[str], key: str):
+    def load_userdata(self, key: str):
         """
         Internally load data across checkpoints
 
-        :param checkpoint: The checkpoint name, or None for default checkpoint
         :param key: The data key to load
         :returns: The loaded data
         :raises FileNotFoundError: If the data file is not found
         """
-        checkpoint_dir = self.directory / "userdata" / self._sanitize(checkpoint)
-        data_file = checkpoint_dir / f"{key}.pkl"
+        checkpoint_dir = self.directory / "userdata"
+
+        fname = self._sanitize(key)
+        data_file = checkpoint_dir / f"{fname}.pkl"
 
         if not data_file.exists():
             raise FileNotFoundError(f"Data file not found: {data_file}")

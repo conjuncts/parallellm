@@ -67,13 +67,20 @@ class ParalleLLMGateway:
 
         # Prevent propagation to root logger to avoid duplicate messages
         logger.propagate = False
-        return BatchManager(
+
+        bm = BatchManager(
             file_manager=fm,
             backend=backend,
             provider=provider,
             logger=logger,
             dash_logger=dash_logger,
         )
+
+        logger.info(
+            f"Resuming with session_id={bm.metadata.get('session_counter')}"
+            + f" and latest_checkpoint={bm.metadata.get('latest_checkpoint')}"
+        )
+        return bm
 
 
 ParalleLLM = ParalleLLMGateway()
