@@ -3,11 +3,9 @@ from typing import Literal
 
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.sync_backend import SyncBackend
-from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.manager import BatchManager
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger
-from parallellm.provider.openai import AsyncOpenAIProvider, SyncOpenAIProvider
 from parallellm.logging.fancy import parallellm_log_handler
 
 
@@ -43,6 +41,11 @@ class ParalleLLMGateway:
             raise NotImplementedError(f"Strategy '{strategy}' is not implemented yet")
 
         if provider == "openai":
+            from parallellm.provider.openai import (
+                AsyncOpenAIProvider,
+                SyncOpenAIProvider,
+            )
+
             if strategy == "async":
                 from openai import AsyncOpenAI
 

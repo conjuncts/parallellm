@@ -1,8 +1,6 @@
-import asyncio
-from typing import List, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.sync_backend import SyncBackend
-from parallellm.core.hash import compute_hash
 from parallellm.core.response import (
     LLMDocument,
     LLMIdentity,
@@ -13,20 +11,21 @@ from parallellm.core.response import (
 from parallellm.provider.base import AsyncProvider, SyncProvider
 from parallellm.types import CallIdentifier
 
-from openai import OpenAI, AsyncOpenAI
-from openai.types.responses.response_input_param import Message
+if TYPE_CHECKING:
+    from openai import OpenAI, AsyncOpenAI
+    from openai.types.responses.response_input_param import Message
 
 # client = OpenAI()
 
 
 def _fix_docs_for_openai(
     documents: Union[LLMDocument, List[LLMDocument]],
-) -> List[Message]:
+) -> "List[Message]":
     """Ensure documents are in the correct format for OpenAI API"""
     if isinstance(documents, list):
         for i, doc in enumerate(documents):
             if isinstance(doc, str):
-                msg: Message = {
+                msg: "Message" = {
                     "role": "user",
                     "content": doc,
                 }
@@ -35,7 +34,7 @@ def _fix_docs_for_openai(
 
 
 class SyncOpenAIProvider(SyncProvider):
-    def __init__(self, client: OpenAI, backend: SyncBackend):
+    def __init__(self, client: "OpenAI", backend: SyncBackend):
         self.client = client
         self.backend = backend
 
@@ -71,7 +70,7 @@ class SyncOpenAIProvider(SyncProvider):
 
 
 class AsyncOpenAIProvider(AsyncProvider):
-    def __init__(self, client: AsyncOpenAI, backend: AsyncBackend):
+    def __init__(self, client: "AsyncOpenAI", backend: AsyncBackend):
         self.client = client
         self.backend = backend
 

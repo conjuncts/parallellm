@@ -4,13 +4,10 @@ from parallellm.core.gateway import ParalleLLM
 from dotenv import load_dotenv
 # from parallellm.core.manager import BatchManager
 
-
-print("Before")
-
 load_dotenv()
 
 pllm = ParalleLLM.resume_directory(
-    ".pllm/fsm",
+    ".pllm/recipe",
     provider="openai",  #
     strategy="sync",
     log_level=logging.DEBUG,
@@ -25,17 +22,17 @@ pllm = ParalleLLM.resume_directory(
 
 with pllm.default():
     # Non-checkpoint controlled: always executed
-    best_vegetable = pllm.ask_llm("What is the best vegetable?")
+    best_vegetable = pllm.ask_llm("What is the best vegetable? Enclose your answer in **double asterisks**.")
+    pllm.save_userdata("best_vegetable", best_vegetable) # save for later
 
 
 with pllm.checkpoint():
     # Non-deterministic step
-    pllm.when_checkpoint("random_step")
+    pllm.when_checkpoint("random")
     num_steps = random.randint(3, 5)
 
     # IMPORTANT: save to userdata for later retrieval
-    pllm.save_userdata("random_step/num_steps", num_steps)
-
+    pllm.save_userdata("random/num_steps", num_steps)
     pllm.goto_checkpoint("generate_recipe")
 
 
@@ -44,7 +41,8 @@ with pllm.dashboard() as d:
     # depending on whether when_checkpoint() is called
     pllm.when_checkpoint("generate_recipe")
 
-    random_num_steps = pllm.load_userdata("random_step/num_steps")
+    random_num_steps = pllm.load_userdata("random/num_steps")
+    best_vegetable = pllm.load_userdata("best_vegetable")
     recipe = pllm.ask_llm(
         f"Generate a recipe with {random_num_steps} steps using {best_vegetable.resolve()}.",
     )

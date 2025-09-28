@@ -9,6 +9,7 @@ from parallellm.core.response import (
     LLMIdentity,
     LLMDocument,
     LLMResponse,
+    PendingLLMResponse,
     ReadyLLMResponse,
 )
 from parallellm.provider.base import BaseProvider
@@ -209,7 +210,13 @@ class BatchManager:
         """
         The intended way to let data persist across checkpoints
         """
-        return self._fm.load_userdata(key)
+        data = self._fm.load_userdata(key)
+        
+        # If the loaded data is an LLMResponse, inject the backend
+        if isinstance(data, PendingLLMResponse):
+            data._backend = self._backend
+        
+        return data
 
     def persist(self):
         """
