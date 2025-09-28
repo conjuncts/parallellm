@@ -22,8 +22,10 @@ pllm = ParalleLLM.resume_directory(
 
 with pllm.default():
     # Non-checkpoint controlled: always executed
-    best_vegetable = pllm.ask_llm("What is the best vegetable? Enclose your answer in **double asterisks**.")
-    pllm.save_userdata("best_vegetable", best_vegetable) # save for later
+    best_vegetable = pllm.ask_llm(
+        "What is the best vegetable? Enclose your answer in **double asterisks**."
+    )
+    pllm.save_userdata("best_vegetable", best_vegetable)  # save for later
 
 
 with pllm.checkpoint():

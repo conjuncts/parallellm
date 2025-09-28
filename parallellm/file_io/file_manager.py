@@ -55,7 +55,9 @@ class FileManager:
 
         checkpoint_hash = hashlib.sha256(user_input.encode("utf-8")).hexdigest()[:8]
 
-        cleaned = "".join([c for c in user_input if c.isalnum() or c in " _-"])
+        cleaned = "".join(
+            [c if (c.isalnum() or c in " _-") else "_" for c in user_input]
+        )
 
         # Replace multiple spaces/underscores with single ones
         cleaned = re.sub(r"[_\s]+", "_", cleaned)
@@ -163,6 +165,39 @@ class FileManager:
         """
         if self.metadata is not None:
             self._save_metadata(self.metadata)
+
+    def log_checkpoint_event(
+        self, event_type: str, checkpoint_name: Optional[str], seq_id: Optional[int]
+    ):
+        """
+        Log checkpoint state change events to a TSV file
+
+        :param event_type: Type of event ('enter', 'exit', 'switch')
+        :param checkpoint_name: Name of the checkpoint
+        :param seq_id: Sequence ID at the time of the event
+        :param additional_info: Any additional information to log
+        """
+        log_dir = self.directory / "logs"
+        log_dir.mkdir(exist_ok=True)
+
+        log_file = log_dir / "checkpoint_events.tsv"
+
+        # Write header if file doesn't exist
+        if not log_file.exists():
+            with open(log_file, "w", encoding="utf-8") as f:
+                f.write("session_id\tevent_type\tcheckpoint\tseq_id\n")
+
+        session_id = self.metadata.get("session_counter", "unknown")
+        checkpoint_display = (
+            checkpoint_name if checkpoint_name is not None else "anonymous"
+        )
+
+        # Use tab-separated values
+        log_entry = f"{session_id}\t{event_type}\t{checkpoint_display}\t{seq_id}\n"
+
+        # Append to log file
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(log_entry)
 
     def is_locked(self):
         """

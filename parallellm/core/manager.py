@@ -18,49 +18,6 @@ from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 from parallellm.types import CallIdentifier
 
 
-class StatusDashboard:
-    """Context manager for the hash status dashboard"""
-
-    def __init__(self, batch_manager: "BatchManager", log_k: int):
-        self._batch_manager = batch_manager
-        self._was_displaying = False
-        self._log_k = log_k
-
-        # TODO: make log_k work (right now it works on the dash_logger level)
-
-    @property
-    def _dash_logger(self):
-        return self._batch_manager._dash_logger
-
-    def __enter__(self):
-        # Store current display state and enable display
-        print()
-        self._was_displaying = self._dash_logger.display
-        self._dash_logger.set_display(True)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        # Print final status of dashboard
-        self._dash_logger._update_console()
-
-        # Finalize the line and restore original display state
-        self._dash_logger.finalize_line()
-        self._dash_logger.set_display(self._was_displaying)
-        print()
-        # Handle exceptions like ParallellmContext
-        if exc_type in (NotAvailable, WrongCheckpoint):
-            return True
-        return False
-
-    def print(self, *args, **kwargs):
-        """
-        Print to console above the dashboard output.
-        This ensures proper display ordering when the dashboard is active.
-        """
-        # Use the dashboard logger's coordinated print method
-        self._dash_logger.coordinated_print(*args, **kwargs)
-
-
 # New context manager class for BatchManager
 class ParalleLLMContext:
     """Context manager for BatchManager lifecycle (default context)"""
@@ -90,6 +47,43 @@ class ParalleLLMContext:
         """
         # Use the dashboard logger's coordinated print method
         print(*args, **kwargs)
+
+
+class StatusDashboard(ParalleLLMContext):
+    """Context manager for the hash status dashboard"""
+
+    def __init__(self, batch_manager: "BatchManager", log_k: int):
+        super().__init__(batch_manager)
+        self._was_displaying = False
+        self._bm._dash_logger.k = log_k
+
+    @property
+    def _dash_logger(self):
+        return self._bm._dash_logger
+
+    def __enter__(self):
+        # Store current display state and enable display
+        self._was_displaying = self._dash_logger.display
+        self._dash_logger.set_display(True)
+        return super().__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Print final status of dashboard
+        self._dash_logger._update_console()
+
+        # Finalize the line and restore original display state
+        self._dash_logger.finalize_line()
+        self._dash_logger.set_display(self._was_displaying)
+        print()
+        return super().__exit__(exc_type, exc_val, exc_tb)
+
+    def print(self, *args, **kwargs):
+        """
+        Print to console above the dashboard output.
+        This ensures proper display ordering when the dashboard is active.
+        """
+        # Use the dashboard logger's coordinated print method
+        self._dash_logger.coordinated_print(*args, **kwargs)
 
 
 class BatchManager:
@@ -175,6 +169,12 @@ class BatchManager:
         self.active_checkpoint = checkpoint_name
         # Initialize local counter from persisted metadata (or 0 if first time)
         self._checkpoint_counter = self.metadata.get("checkpoint_counter", 0)
+
+        # Log checkpoint entry to file
+        # self._fm.log_checkpoint_event(
+        #     "enter", checkpoint_name, self._checkpoint_counter
+        # )
+
         self._logger.info(
             f"Entered checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
         )
@@ -183,7 +183,19 @@ class BatchManager:
         """
         Nothing after this statement will be executed.
         """
+        # Log the current seq_id before switching
+        current_seq_id = None
+        if self.active_checkpoint is not None:
+            current_seq_id = self._checkpoint_counter
+        else:
+            current_seq_id = self._anonymous_counter
+
+        # Revise metadata
         self.metadata["latest_checkpoint"] = checkpoint_name
+        self.metadata["checkpoint_counter"] = self._checkpoint_counter
+
+        # Logging
+        self._fm.log_checkpoint_event("switch", checkpoint_name, current_seq_id)
         self._logger.info(
             f"Switched to checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
         )
@@ -194,9 +206,16 @@ class BatchManager:
         Exit checkpoint context (called by context manager)
         """
         if self.active_checkpoint is not None:
-            # Persist local checkpoint counter to metadata when exiting
-            if self._checkpoint_counter is not None:
-                self.metadata["checkpoint_counter"] = self._checkpoint_counter
+            # Log the final seq_id before exiting
+            final_seq_id = (
+                self._checkpoint_counter if self._checkpoint_counter is not None else 0
+            )
+
+            # Log checkpoint exit to file
+            # self._fm.log_checkpoint_event("exit", self.active_checkpoint, final_seq_id)
+
+            # Do NOT persist local checkpoint counter
+            # (local checkpoint counter should only persist upon a goto)
             self.active_checkpoint = None
             self._checkpoint_counter = None
 
@@ -211,11 +230,13 @@ class BatchManager:
         The intended way to let data persist across checkpoints
         """
         data = self._fm.load_userdata(key)
-        
+
         # If the loaded data is an LLMResponse, inject the backend
         if isinstance(data, PendingLLMResponse):
             data._backend = self._backend
-        
+        elif isinstance(data, ReadyLLMResponse):
+            data.value = self._backend.retrieve(data.call_id)
+
         return data
 
     def persist(self):
