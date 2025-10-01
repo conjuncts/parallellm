@@ -320,6 +320,7 @@ class BatchManager:
             "doc_hash": hashed,
             "seq_id": seq_id,
             "session_id": self._fm.metadata["session_counter"],
+            "provider_type": self._provider.provider_type,
         }
         cached = self._backend.retrieve(call_id)
         if cached is not None:

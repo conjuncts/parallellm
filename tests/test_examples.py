@@ -19,17 +19,19 @@ from parallellm.testing.simple_mock import (
 @pytest.fixture
 def temp_pllm():
     """Pytest fixture that provides a temporary ParalleLLM instance"""
-    shutil.rmtree(".test.tmp", ignore_errors=True)
-    pllm = ParalleLLM.resume_directory(".test.tmp", provider="openai", strategy="sync")
+    shutil.rmtree(".pllm/test/sync", ignore_errors=True)
+    pllm = ParalleLLM.resume_directory(
+        ".pllm/test/sync", provider="openai", strategy="sync"
+    )
     yield pllm
 
 
 @pytest.fixture
 def async_temp_pllm():
     """Pytest fixture that provides a temporary async ParalleLLM instance"""
-    shutil.rmtree(".atest.tmp", ignore_errors=True)
+    shutil.rmtree(".pllm/test/async", ignore_errors=True)
     pllm = ParalleLLM.resume_directory(
-        ".atest.tmp", provider="openai", strategy="async"
+        ".pllm/test/async", provider="openai", strategy="async"
     )
     yield pllm
 

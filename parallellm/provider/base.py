@@ -5,6 +5,9 @@ from parallellm.types import CallIdentifier
 
 
 class BaseProvider:
+    provider_type: Optional[str] = None
+    """Must be set by subclasses to identify the provider type."""
+
     def submit_query_to_provider(
         self,
         instructions,
@@ -28,3 +31,7 @@ class AsyncProvider(BaseProvider):
 
 class BatchProvider(BaseProvider):
     pass
+
+
+class OpenAIProvider(BaseProvider):
+    provider_type: str = "openai"

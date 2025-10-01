@@ -201,6 +201,8 @@ class AsyncBackend(BaseBackend):
             except Exception as e:
                 print(f"Warning: Failed to wait for pending tasks: {e}")
 
+        self._async_ds.persist()
+
     def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
         """Synchronous retrieve that uses the backend's event loop"""
         return self._run_coroutine(self.aretrieve(call_id))

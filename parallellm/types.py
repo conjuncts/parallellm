@@ -23,3 +23,6 @@ class CallIdentifier(TypedDict):
     seq_id: int
     session_id: int
     """Numeric ID of session. For tracking/metadata purposes only."""
+
+    provider_type: Optional[str]
+    """Specific provider type (ie. openai, anthropic, etc)"""

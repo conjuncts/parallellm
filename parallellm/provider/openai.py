@@ -8,7 +8,7 @@ from parallellm.core.response import (
     PendingLLMResponse,
     ReadyLLMResponse,
 )
-from parallellm.provider.base import AsyncProvider, SyncProvider
+from parallellm.provider.base import AsyncProvider, OpenAIProvider, SyncProvider
 from parallellm.types import CallIdentifier
 
 if TYPE_CHECKING:
@@ -33,7 +33,7 @@ def _fix_docs_for_openai(
     return documents
 
 
-class SyncOpenAIProvider(SyncProvider):
+class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
     def __init__(self, client: "OpenAI", backend: SyncBackend):
         self.client = client
         self.backend = backend
@@ -69,7 +69,7 @@ class SyncOpenAIProvider(SyncProvider):
         return ReadyLLMResponse(call_id=call_id, value=resp_text)
 
 
-class AsyncOpenAIProvider(AsyncProvider):
+class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
     def __init__(self, client: "AsyncOpenAI", backend: AsyncBackend):
         self.client = client
         self.backend = backend
