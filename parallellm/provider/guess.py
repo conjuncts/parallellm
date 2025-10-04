@@ -3,7 +3,9 @@ from pydantic import BaseModel
 import sys
 
 
-def guess_schema(inp: Union[BaseModel, dict]) -> tuple[str, str, dict]:
+def guess_schema(
+    inp: Union[BaseModel, dict], provider_type: str = None
+) -> tuple[str, str, dict]:
     """
 
     Guess the schema of the given object and convert it to a dictionary.

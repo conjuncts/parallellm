@@ -26,6 +26,7 @@ class SyncBackend(BaseBackend):
         checkpoint = call_id["checkpoint"] or ""
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
+        provider_type = call_id.get("provider_type", None)
 
         try:
             if self._dash_logger is not None:
@@ -35,7 +36,9 @@ class SyncBackend(BaseBackend):
                 self._dash_logger.update_hash(doc_hash, HashStatus.RECEIVED)
 
             # Process and store the result
-            resp_text, resp_id, resp_metadata = guess_schema(result)
+            resp_text, resp_id, resp_metadata = guess_schema(
+                result, provider_type=provider_type
+            )
             self._ds.store(call_id, resp_text, resp_id)
             self._ds.store_metadata(call_id, resp_id, resp_metadata)
 

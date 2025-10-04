@@ -72,6 +72,9 @@ class SQLiteDatastore(Datastore):
                 )
             """)
 
+            # Migrate existing schema if needed
+            self._migrate_schema(conn)
+
             # Create index for faster lookups
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_doc_hash ON responses(doc_hash)
@@ -94,9 +97,6 @@ class SQLiteDatastore(Datastore):
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_metadata_provider_type ON metadata(provider_type)
             """)
-
-            # Migrate existing schema if needed
-            self._migrate_schema(conn)
 
             conn.commit()
             connections[checkpoint] = conn

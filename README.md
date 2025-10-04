@@ -11,8 +11,10 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 
 - [x] fix if checkpoint name is invalid name for folder
 - [x] store session id
-- [ ] difference between checkpoint-control and non-checkpoint-control
-- [ ] different execution counters
+- [x] difference between checkpoint-control and non-checkpoint-control
+- [x] different execution counters
+- [ ] condition_hash
+- [ ] batch api
 
 - Automatically persist upon pllm exit
 
