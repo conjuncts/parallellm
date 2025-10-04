@@ -3,7 +3,7 @@ from typing import Literal
 
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.sync_backend import SyncBackend
-from parallellm.core.manager import BatchManager
+from parallellm.core.manager import AgentOrchestrator
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger
 from parallellm.logging.fancy import parallellm_log_handler
@@ -74,7 +74,7 @@ class ParalleLLMGateway:
         # Prevent propagation to root logger to avoid duplicate messages
         logger.propagate = False
 
-        bm = BatchManager(
+        bm = AgentOrchestrator(
             file_manager=fm,
             backend=backend,
             provider=provider,
@@ -83,8 +83,8 @@ class ParalleLLMGateway:
         )
 
         logger.info(
-            f"Resuming with session_id={bm.metadata.get('session_counter')}"
-            + f" and latest_checkpoint={bm.metadata.get('latest_checkpoint')}"
+            f"Resuming with session_id={bm._fm.metadata.get('session_counter')}"
+            + f" and latest_checkpoint={bm._fm.metadata.get('latest_checkpoint')}"
         )
         return bm
 

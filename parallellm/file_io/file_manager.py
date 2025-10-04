@@ -6,9 +6,7 @@ import atexit
 import re
 import hashlib
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple
-
-import polars as pl
+from typing import Optional
 
 from parallellm.types import WorkingMetadata
 

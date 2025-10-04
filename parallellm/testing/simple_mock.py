@@ -5,7 +5,7 @@ from typing import List, Union, Optional, Dict, Any
 from unittest.mock import Mock, patch
 import asyncio
 
-from parallellm.core.manager import BatchManager
+from parallellm.core.manager import AgentOrchestrator
 
 from .fixtures import MockResponse, MockResponseQueue, MockResponseMap
 
@@ -139,7 +139,7 @@ class MockAsyncOpenAIClient(MockOpenAIClient):
 
 
 def mock_openai_calls(
-    batch_manager: BatchManager,
+    batch_manager: AgentOrchestrator,
     responses: Optional[List[Union[str, MockResponse]]] = None,
     response_map: Optional[MockResponseMap] = None,
 ) -> Union[MockOpenAIClient, MockAsyncOpenAIClient]:

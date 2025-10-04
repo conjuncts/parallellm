@@ -12,15 +12,15 @@ load_dotenv()
 
 # shutil.rmtree(".temp", ignore_errors=True)
 pllm = ParalleLLM.resume_directory(
-    # ".pllm/enzy",
-    ".temp",
+    ".pllm/enzy",
+    # ".temp",
     provider="openai",  #
     strategy="async",
     log_level=logging.DEBUG,
 )
 
 # with pllm.default():
-with pllm.dashboard() as d:
+with pllm.agent(dashboard=True) as d:
     d.print("===Starting Tournament===")
     resp = pllm.ask_llm(
         "Please name 8 enzymes. Place your final answer in a code block, separated by newlines.",

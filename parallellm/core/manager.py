@@ -18,11 +18,12 @@ from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 from parallellm.types import CallIdentifier
 
 
-# New context manager class for BatchManager
-class ParalleLLMContext:
-    """Context manager for BatchManager lifecycle (default context)"""
+# New context manager class for Agent
+class AgentContext:
+    """Context manager for Agent lifecycle (default context)"""
 
-    def __init__(self, batch_manager: "BatchManager"):
+    def __init__(self, agent_name, batch_manager: "AgentOrchestrator"):
+        self.agent_name = agent_name
         self._bm = batch_manager
 
     def __enter__(self):
@@ -49,11 +50,11 @@ class ParalleLLMContext:
         print(*args, **kwargs)
 
 
-class StatusDashboard(ParalleLLMContext):
+class AgentDashboardContext(AgentContext):
     """Context manager for the hash status dashboard"""
 
-    def __init__(self, batch_manager: "BatchManager", log_k: int):
-        super().__init__(batch_manager)
+    def __init__(self, agent_name, batch_manager: "AgentOrchestrator", log_k: int):
+        super().__init__(agent_name, batch_manager)
         self._was_displaying = False
         self._bm._dash_logger.k = log_k
 
@@ -86,7 +87,7 @@ class StatusDashboard(ParalleLLMContext):
         self._dash_logger.coordinated_print(*args, **kwargs)
 
 
-class BatchManager:
+class AgentOrchestrator:
     def __init__(
         self,
         file_manager: FileManager,
@@ -119,47 +120,20 @@ class BatchManager:
         Active checkpoint: if we are inside a checkpoint context.
         Either a checkpoint or None (if anonymous).
         """
-
-    def default(self):
-        """
-        Begins a 'default' checkpoint.
-        Usage: `with pllm.default(): ...`
-        """
-        return ParalleLLMContext(self)
-
-    def checkpoint(self):
-        """
-        Begins a context where checkpoints can be used.
-        Usage: `with pllm.managed(): ...`
-        """
-        return ParalleLLMContext(self)
-
-    def dashboard(self, log_k: int = 10):
-        """
-        Create a context manager for the status dashboard.
-
-        :param log_k: Number of hashes to display in the dashboard (default 10)
-        :returns: StatusDashboard context manager with print() method for clean console output
-        """
-        # TODO implement log_k
-        return StatusDashboard(self, log_k=log_k)
+    
+    def agent(self, name: str=None, *, dashboard=False):
+        if dashboard:
+            return AgentDashboardContext(name, self, log_k=10)
+        return AgentContext(name, self)
 
     @property
     def latest_checkpoint(self):
-        return self.metadata["latest_checkpoint"]
-
-    @property
-    def metadata(self):
-        return self._fm.metadata
-
-    @metadata.setter
-    def metadata(self, value):
-        self._fm.metadata = value
+        return self._fm.metadata["latest_checkpoint"]
 
     def when_checkpoint(self, checkpoint_name):
         # Always allow enter if no checkpoints yet
         if self.latest_checkpoint is None:
-            self.metadata["latest_checkpoint"] = checkpoint_name
+            self._fm.metadata["latest_checkpoint"] = checkpoint_name
 
         # But generally, only enter if it is the latest
         elif checkpoint_name != self.latest_checkpoint:
@@ -168,12 +142,7 @@ class BatchManager:
         # Set it as active and initialize local checkpoint counter
         self.active_checkpoint = checkpoint_name
         # Initialize local counter from persisted metadata (or 0 if first time)
-        self._checkpoint_counter = self.metadata.get("checkpoint_counter", 0)
-
-        # Log checkpoint entry to file
-        # self._fm.log_checkpoint_event(
-        #     "enter", checkpoint_name, self._checkpoint_counter
-        # )
+        self._checkpoint_counter = self._fm.metadata.get("checkpoint_counter", 0)
 
         self._logger.info(
             f"Entered checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
@@ -191,8 +160,8 @@ class BatchManager:
             current_seq_id = self._anonymous_counter
 
         # Revise metadata
-        self.metadata["latest_checkpoint"] = checkpoint_name
-        self.metadata["checkpoint_counter"] = self._checkpoint_counter
+        self._fm.metadata["latest_checkpoint"] = checkpoint_name
+        self._fm.metadata["checkpoint_counter"] = self._checkpoint_counter
 
         # Logging
         self._fm.log_checkpoint_event("switch", checkpoint_name, current_seq_id)

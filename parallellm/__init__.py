@@ -1,1 +1,1 @@
-from parallellm.core.manager import BatchManager
+from parallellm.core.manager import AgentOrchestrator

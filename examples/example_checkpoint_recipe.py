@@ -19,8 +19,9 @@ pllm = ParalleLLM.resume_directory(
 # or might take a really long time, leading to different outcomes.
 
 # In such a case, ParalleLLM introduces "checkpoints"
+agent = pllm.agent("main_agent")
 
-with pllm.default():
+with agent:
     # Non-checkpoint controlled: always executed
     best_vegetable = pllm.ask_llm(
         "What is the best vegetable? Enclose your answer in **double asterisks**."
@@ -28,7 +29,7 @@ with pllm.default():
     pllm.save_userdata("best_vegetable", best_vegetable)  # save for later
 
 
-with pllm.checkpoint():
+with agent:
     # Non-deterministic step
     pllm.when_checkpoint("random")
     num_steps = random.randint(3, 5)
@@ -38,7 +39,7 @@ with pllm.checkpoint():
     pllm.goto_checkpoint("generate_recipe")
 
 
-with pllm.dashboard() as d:
+with pllm.agent("main_agent", dashboard=True) as d:
     # pllm.dashboard() can be either non-checkpoint or checkpoint
     # depending on whether when_checkpoint() is called
     pllm.when_checkpoint("generate_recipe")

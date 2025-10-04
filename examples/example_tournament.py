@@ -20,8 +20,8 @@ pllm = ParalleLLM.resume_directory(
 )
 
 # with pllm.default():
-with pllm.dashboard() as d:
-    d.print("This will always be executed")
+with pllm.agent(dashboard=True) as dash:
+    dash.print("This will always be executed")
 
     resp = pllm.ask_llm(
         "Please name 8 NFL teams. Place your final answer in a code block, separated by newlines.",
@@ -29,14 +29,14 @@ with pllm.dashboard() as d:
 
     teams = resp.resolve().split("```")[1].split("\n")[1:9]
 
-    d.print(f"Got teams: {teams}")
+    dash.print(f"Got teams: {teams}")
 
     games = []
     for i in range(0, len(teams), 2):
         resp = pllm.ask_llm(
             f"Given a game between the {teams[i]} and the {teams[i + 1]}, simply predict the winner and the score.",
         )
-        d.print("Asked!")
+        dash.print("Asked!")
         # do NOT call resp.resolve() in the hot loop
         games.append(resp)
 
@@ -45,7 +45,7 @@ with pllm.dashboard() as d:
     for resp in games:
         game_descriptions.append(resp.resolve())
 
-    d.print("Descriptions:", [x[:70] for x in game_descriptions])
+    dash.print("Descriptions:", [x[:70] for x in game_descriptions])
     # Finalize hash logger display before checkpoint change
 
 

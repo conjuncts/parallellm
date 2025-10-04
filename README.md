@@ -13,7 +13,7 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 - [x] store session id
 - [x] difference between checkpoint-control and non-checkpoint-control
 - [x] different execution counters
-- [ ] condition_hash
+- [ ] condition_hash (salt-by)
 - [ ] batch api
 
 - Automatically persist upon pllm exit

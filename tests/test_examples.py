@@ -152,7 +152,7 @@ Steelers
         pllm = ParalleLLM.resume_directory(temp_dir, provider="openai", strategy="sync")
         mock_client = mock_openai_calls(pllm, responses=responses)
 
-        with pllm.default():
+        with pllm.agent():
             # Get teams
             resp = pllm.ask_llm(
                 "Please name 8 NFL teams. Place your final answer in a code block, separated by newlines."
