@@ -23,7 +23,7 @@ pllm = ParalleLLM.resume_directory(
 with pllm.agent(dashboard=True) as dash:
     dash.print("This will always be executed")
 
-    resp = pllm.ask_llm(
+    resp = dash.ask_llm(
         "Please name 8 NFL teams. Place your final answer in a code block, separated by newlines.",
     )
 
@@ -33,7 +33,7 @@ with pllm.agent(dashboard=True) as dash:
 
     games = []
     for i in range(0, len(teams), 2):
-        resp = pllm.ask_llm(
+        resp = dash.ask_llm(
             f"Given a game between the {teams[i]} and the {teams[i + 1]}, simply predict the winner and the score.",
         )
         dash.print("Asked!")

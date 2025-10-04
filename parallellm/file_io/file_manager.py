@@ -30,13 +30,22 @@ class FileManager:
         self.metadata = self._load_metadata()
         if self.metadata is None:
             self.metadata = {}
-        self.metadata.setdefault("latest_checkpoint", None)
-        self.metadata.setdefault("checkpoint_counter", 0)
+        self.metadata.setdefault(
+            "agents",
+            {
+                "default-agent": {
+                    "latest_checkpoint": None,
+                    "checkpoint_counter": 0,
+                }
+            },
+        )
 
         # session_counter: default to 0
         self.metadata["session_counter"] = self.metadata.get("session_counter", -1) + 1
 
-    def _sanitize(self, user_input: Optional[str]) -> str:
+    def _sanitize(
+        self, user_input: Optional[str], *, default="default", add_hash=True
+    ) -> str:
         """
         Sanitize user input to be safe for use as directory name.
         Uses format: <first_64_chars>-<8_letter_hash> for non-None checkpoints.
@@ -46,12 +55,10 @@ class FileManager:
         :returns: Sanitized checkpoint name ("default" for None)
         """
         if user_input is None:
-            return "default"
+            return default
 
         if not isinstance(user_input, str):
             user_input = str(user_input)
-
-        checkpoint_hash = hashlib.sha256(user_input.encode("utf-8")).hexdigest()[:8]
 
         cleaned = "".join(
             [c if (c.isalnum() or c in " _-") else "_" for c in user_input]
@@ -71,6 +78,10 @@ class FileManager:
             cleaned = "checkpoint"
 
         # Return format: chk-<first_64_chars>-<8_letter_hash>
+        if not add_hash:
+            return cleaned
+
+        checkpoint_hash = hashlib.sha256(user_input.encode("utf-8")).hexdigest()[:8]
         return f"{cleaned}-{checkpoint_hash}"
 
     def _create_lock(self):
@@ -146,14 +157,19 @@ class FileManager:
         with open(data_file, "rb") as f:
             return pickle.load(f)
 
-    def allocate_datastore(self, checkpoint: Optional[str]) -> Path:
+    def allocate_datastore(self, agent_name: str, checkpoint: Optional[str]) -> Path:
         """
         Allocate directory for a checkpoint's datastore
 
         :param checkpoint: The checkpoint name, or None for default checkpoint
         :returns: Path to the checkpoint directory
         """
-        checkpoint_dir = self.directory / "datastore" / self._sanitize(checkpoint)
+        checkpoint_dir = (
+            self.directory
+            / "datastore"
+            / self._sanitize(agent_name, default="default-agent", add_hash=False)
+            / self._sanitize(checkpoint)
+        )
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
         return checkpoint_dir
 
@@ -165,7 +181,11 @@ class FileManager:
             self._save_metadata(self.metadata)
 
     def log_checkpoint_event(
-        self, event_type: str, checkpoint_name: Optional[str], seq_id: Optional[int]
+        self,
+        event_type: str,
+        agent_name: Optional[str],
+        checkpoint_name: Optional[str],
+        seq_id: Optional[int],
     ):
         """
         Log checkpoint state change events to a TSV file
@@ -183,7 +203,7 @@ class FileManager:
         # Write header if file doesn't exist
         if not log_file.exists():
             with open(log_file, "w", encoding="utf-8") as f:
-                f.write("session_id\tevent_type\tcheckpoint\tseq_id\n")
+                f.write("session_id\tevent_type\tagent_name\tcheckpoint\tseq_id\n")
 
         session_id = self.metadata.get("session_counter", "unknown")
         checkpoint_display = (
@@ -191,7 +211,7 @@ class FileManager:
         )
 
         # Use tab-separated values
-        log_entry = f"{session_id}\t{event_type}\t{checkpoint_display}\t{seq_id}\n"
+        log_entry = f"{session_id}\t{event_type}\t{agent_name}\t{checkpoint_display}\t{seq_id}\n"
 
         # Append to log file
         with open(log_file, "a", encoding="utf-8") as f:

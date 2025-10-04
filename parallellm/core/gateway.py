@@ -82,10 +82,7 @@ class ParalleLLMGateway:
             dash_logger=dash_logger,
         )
 
-        logger.info(
-            f"Resuming with session_id={bm._fm.metadata.get('session_counter')}"
-            + f" and latest_checkpoint={bm._fm.metadata.get('latest_checkpoint')}"
-        )
+        logger.info(f"Resuming with session_id={bm.get_session_counter()}")
         return bm
 
 

@@ -1,6 +1,4 @@
 import logging
-import os
-import shutil
 import time
 from parallellm.core.gateway import ParalleLLM
 from dotenv import load_dotenv
@@ -12,17 +10,16 @@ load_dotenv()
 
 # shutil.rmtree(".temp", ignore_errors=True)
 pllm = ParalleLLM.resume_directory(
-    ".pllm/enzy",
+    ".pllm/tournament-enzy",
     # ".temp",
     provider="openai",  #
     strategy="async",
     log_level=logging.DEBUG,
 )
 
-# with pllm.default():
 with pllm.agent(dashboard=True) as d:
     d.print("===Starting Tournament===")
-    resp = pllm.ask_llm(
+    resp = d.ask_llm(
         "Please name 8 enzymes. Place your final answer in a code block, separated by newlines.",
     )
 
@@ -36,7 +33,7 @@ with pllm.agent(dashboard=True) as d:
         responses = []
         for i in range(0, len(teams), 2):
             if i + 1 < len(teams):
-                resp = pllm.ask_llm(
+                resp = d.ask_llm(
                     f"Given two enzymes, choose the one you like more. Only respond with the name of the enzyme.",
                     teams[i],
                     teams[i + 1],

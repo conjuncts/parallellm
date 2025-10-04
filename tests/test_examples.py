@@ -42,10 +42,10 @@ def test_simple_mock_responses(temp_pllm):
 
     mock_client = mock_openai_calls(temp_pllm, responses=responses)
 
-    with temp_pllm.default():
-        resp1 = temp_pllm.ask_llm("First question")
-        resp2 = temp_pllm.ask_llm("Second question")
-        resp3 = temp_pllm.ask_llm("Third question")
+    with temp_pllm.agent() as a:
+        resp1 = a.ask_llm("First question")
+        resp2 = a.ask_llm("Second question")
+        resp3 = a.ask_llm("Third question")
 
     # Check responses
     assert resp1.resolve() == "First response"
@@ -69,14 +69,14 @@ def test_pattern_based_responses(temp_pllm):
 
     mock_client = mock_openai_calls(temp_pllm, response_map=response_map)
 
-    with temp_pllm.default():
+    with temp_pllm.agent() as a:
         # These should match patterns
-        calc_resp = temp_pllm.ask_llm("Please calculate 2 + 2")
-        weather_resp = temp_pllm.ask_llm("What's the weather like?")
-        joke_resp = temp_pllm.ask_llm("Tell me a joke")
+        calc_resp = a.ask_llm("Please calculate 2 + 2")
+        weather_resp = a.ask_llm("What's the weather like?")
+        joke_resp = a.ask_llm("Tell me a joke")
 
         # This won't match any pattern, so gets default response
-        other_resp = temp_pllm.ask_llm("Random question")
+        other_resp = a.ask_llm("Random question")
 
     assert "42" in calc_resp.resolve()
     assert "sunny" in weather_resp.resolve()
@@ -97,10 +97,10 @@ def test_exact_instruction_matching(temp_pllm):
     mock_client.add_response_pattern("What is 2 + 2?", "2 + 2 equals 4.")
     mock_client.set_default_response("I don't know that.")
 
-    with temp_pllm.default():
-        resp1 = temp_pllm.ask_llm("What is the capital of France?")
-        resp2 = temp_pllm.ask_llm("What is 2 + 2?")
-        resp3 = temp_pllm.ask_llm("What is the meaning of life?")
+    with temp_pllm.agent() as a:
+        resp1 = a.ask_llm("What is the capital of France?")
+        resp2 = a.ask_llm("What is 2 + 2?")
+        resp3 = a.ask_llm("What is the meaning of life?")
 
     assert "Paris" in resp1.resolve()
     assert "equals 4" in resp2.resolve()
@@ -113,9 +113,9 @@ def test_async_provider(async_temp_pllm):
 
     mock_client = mock_openai_calls(async_temp_pllm, responses=responses)
 
-    with async_temp_pllm.default():
-        resp1 = async_temp_pllm.ask_llm("First async question")
-        resp2 = async_temp_pllm.ask_llm("Second async question")
+    with async_temp_pllm.agent() as a:
+        resp1 = a.ask_llm("First async question")
+        resp2 = a.ask_llm("Second async question")
 
     # Responses should resolve correctly
     assert resp1.resolve() == "Async response 1"
@@ -152,9 +152,9 @@ Steelers
         pllm = ParalleLLM.resume_directory(temp_dir, provider="openai", strategy="sync")
         mock_client = mock_openai_calls(pllm, responses=responses)
 
-        with pllm.agent():
+        with pllm.agent() as a:
             # Get teams
-            resp = pllm.ask_llm(
+            resp = a.ask_llm(
                 "Please name 8 NFL teams. Place your final answer in a code block, separated by newlines."
             )
 
@@ -164,7 +164,7 @@ Steelers
             # Run games
             games = []
             for i in range(0, len(teams), 2):
-                resp = pllm.ask_llm(
+                resp = a.ask_llm(
                     f"Given a game between the {teams[i]} and the {teams[i + 1]}, simply predict the winner and the score."
                 )
                 games.append(resp)

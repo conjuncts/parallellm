@@ -66,10 +66,8 @@ class Datastore(ABC):
         """
         raise NotImplementedError
 
-    def persist(self, checkpoint: Optional[str] = None) -> None:
+    def persist(self) -> None:
         """
         Persist changes to file(s).
-
-        :param checkpoint: The checkpoint to persist (if None, persist all checkpoints with changes).
         """
         raise NotImplementedError

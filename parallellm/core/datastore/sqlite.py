@@ -34,13 +34,15 @@ class SQLiteDatastore(Datastore):
             self._local.connections = {}
         return self._local.connections
 
-    def _get_connection(self, checkpoint: Optional[str]) -> sqlite3.Connection:
+    def _get_connection(
+        self, agent_name: Optional[str], checkpoint: Optional[str]
+    ) -> sqlite3.Connection:
         """Get or create SQLite connection for a checkpoint in the current thread"""
         connections = self._get_connections()
 
         if checkpoint not in connections:
             # Create database file using file manager
-            directory = self.file_manager.allocate_datastore(checkpoint)
+            directory = self.file_manager.allocate_datastore(agent_name, checkpoint)
             db_path = directory / "datastore.db"
 
             # Create connection
@@ -101,7 +103,7 @@ class SQLiteDatastore(Datastore):
             conn.commit()
             connections[checkpoint] = conn
 
-        self._dirty_checkpoints.add(checkpoint)
+        self._dirty_checkpoints.add((agent_name, checkpoint))
         return connections[checkpoint]
 
     def _migrate_schema(self, conn: sqlite3.Connection) -> None:
@@ -144,9 +146,10 @@ class SQLiteDatastore(Datastore):
         checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
+        agent_name = call_id["agent_name"]
         # session_id NOT relevant for lookup
 
-        conn = self._get_connection(checkpoint)
+        conn = self._get_connection(agent_name, checkpoint)
 
         # Try direct lookup using seq_id and doc_hash
         cursor = conn.execute(
@@ -174,8 +177,9 @@ class SQLiteDatastore(Datastore):
         checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
+        agent_name = call_id["agent_name"]
 
-        conn = self._get_connection(checkpoint)
+        conn = self._get_connection(agent_name, checkpoint)
 
         # First get the response_id from the responses table
         cursor = conn.execute(
@@ -225,9 +229,10 @@ class SQLiteDatastore(Datastore):
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
         session_id = call_id["session_id"]
+        agent_name = call_id["agent_name"]
         provider_type = call_id.get("provider_type")
 
-        conn = self._get_connection(checkpoint)
+        conn = self._get_connection(agent_name, checkpoint)
 
         try:
             # Check if doc_hash already exists
@@ -287,8 +292,9 @@ class SQLiteDatastore(Datastore):
         :param metadata: The metadata to store.
         :param provider_type: The name of the provider (e.g., "openai").
         """
+        agent_name = call_id["agent_name"]
         checkpoint = call_id["checkpoint"]
-        conn = self._get_connection(checkpoint)
+        conn = self._get_connection(agent_name, checkpoint)
 
         provider_type = call_id.get("provider_type", None)
 
@@ -310,7 +316,9 @@ class SQLiteDatastore(Datastore):
             conn.rollback()
             raise RuntimeError(f"SQLite error while storing metadata: {e}")
 
-    def _transfer_metadata_to_parquet(self, checkpoint: Optional[str]) -> None:
+    def _transfer_metadata_to_parquet(
+        self, agent_name: Optional[str], checkpoint: Optional[str]
+    ) -> None:
         """
         Transfer OpenAI metadata from SQLite to Parquet files.
 
@@ -323,7 +331,7 @@ class SQLiteDatastore(Datastore):
 
         :param checkpoint: The checkpoint to transfer metadata for
         """
-        conn = self._get_connection(checkpoint)
+        conn = self._get_connection(agent_name, checkpoint)
 
         try:
             # Get all OpenAI metadata from the database
@@ -361,7 +369,7 @@ class SQLiteDatastore(Datastore):
                 return  # No data to save
 
             # Create metadata directory
-            datastore_dir = self.file_manager.allocate_datastore(checkpoint)
+            datastore_dir = self.file_manager.allocate_datastore(agent_name, checkpoint)
             metadata_dir = datastore_dir / "apimeta"
             metadata_dir.mkdir(exist_ok=True)
 
@@ -439,23 +447,21 @@ class SQLiteDatastore(Datastore):
         except sqlite3.Error as e:
             raise RuntimeError(f"SQLite error during metadata transfer: {e}")
 
-    def persist(self, checkpoint: Optional[str] = None) -> None:
+    def persist(self) -> None:
         """
         Persist (commit) changes to SQLite database(s) and transfer metadata to Parquet files.
 
         This method now also transfers OpenAI metadata from SQLite to Parquet files
         for better storage efficiency.
-
-        :param checkpoint: The checkpoint to persist (if None, process all active checkpoints).
         """
-        for active_checkpoint in self._dirty_checkpoints:
+        for agent_name, checkpoint in self._dirty_checkpoints:
             try:
                 pass
-                self._transfer_metadata_to_parquet(active_checkpoint)
+                self._transfer_metadata_to_parquet(agent_name, checkpoint)
             except Exception as e:
                 # Log the error but don't fail the persist operation
                 print(
-                    f"Warning: Failed to transfer metadata to Parquet for checkpoint '{active_checkpoint}': {e}"
+                    f"Warning: Failed to transfer metadata to Parquet for checkpoint '{checkpoint}': {e}"
                 )
 
         # Note: SQLite implementation always commits immediately, so this is a no-op

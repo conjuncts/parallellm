@@ -15,6 +15,8 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 - [x] different execution counters
 - [ ] condition_hash (salt-by)
 - [ ] batch api
+- [ ] allow LLM to change on a per-`ask_llm` level
+    - concoct a "multi-provider" that routes based on `provider_type`
 
 - Automatically persist upon pllm exit
 

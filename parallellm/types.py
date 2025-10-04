@@ -1,15 +1,20 @@
 from typing import TypedDict, Optional
 
 
-class WorkingMetadata(TypedDict):
-    latest_checkpoint: Optional[str]
-    """
-    Latest checkpoint is that which has last been reached
-    """
+class AgentMetadata(TypedDict):
     checkpoint_counter: int
     """
     Counter for checkpoint mode operations. Persisted across runs.
     """
+
+    latest_checkpoint: Optional[str]
+    """
+    Latest checkpoint is that which has last been reached
+    """
+
+
+class WorkingMetadata(TypedDict):
+    agents: dict[str, AgentMetadata]
 
     session_counter: int
     """
@@ -18,6 +23,8 @@ class WorkingMetadata(TypedDict):
 
 
 class CallIdentifier(TypedDict):
+    agent_name: Optional[str]
+    """Name of the agent (if any, otherwise default) making the call."""
     checkpoint: Optional[str]
     doc_hash: str
     seq_id: int
