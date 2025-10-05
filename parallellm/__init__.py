@@ -1,1 +1,1 @@
-from parallellm.core.manager import AgentOrchestrator
+from parallellm.core.agent.orchestrator import AgentOrchestrator

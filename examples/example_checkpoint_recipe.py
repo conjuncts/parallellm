@@ -8,7 +8,7 @@ load_dotenv()
 
 pllm = ParalleLLM.resume_directory(
     ".pllm/recipe",
-    provider="openai",  #
+    provider="openai",
     strategy="sync",
     log_level=logging.DEBUG,
 )

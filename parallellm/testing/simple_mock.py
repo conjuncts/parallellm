@@ -5,7 +5,7 @@ from typing import List, Union, Optional, Dict, Any
 from unittest.mock import Mock, patch
 import asyncio
 
-from parallellm.core.manager import AgentOrchestrator
+from parallellm.core.agent.orchestrator import AgentOrchestrator
 
 from .fixtures import MockResponse, MockResponseQueue, MockResponseMap
 

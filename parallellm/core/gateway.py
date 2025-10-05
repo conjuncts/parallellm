@@ -1,7 +1,7 @@
 import logging
 from typing import Literal
 
-from parallellm.core.manager import AgentOrchestrator
+from parallellm.core.agent.orchestrator import AgentOrchestrator
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger
 from parallellm.logging.fancy import parallellm_log_handler
@@ -33,7 +33,7 @@ class ParalleLLMGateway:
         logger.setLevel(log_level)
         logger.addHandler(parallellm_log_handler)
 
-        logger.debug("Resuming directory")
+        # logger.debug("Resuming directory")
 
         dash_logger = DashboardLogger(k=10, display=False)
         parallellm_log_handler.set_dash_logger(dash_logger)
@@ -44,7 +44,7 @@ class ParalleLLMGateway:
         # 3. Setup components
         fm = FileManager(directory)
 
-        logger.debug("Creating backend")
+        # logger.debug("Creating backend")
         if strategy == "async":
             from parallellm.core.backend.async_backend import AsyncBackend
 
@@ -56,7 +56,7 @@ class ParalleLLMGateway:
         else:
             raise NotImplementedError(f"Strategy '{strategy}' is not implemented yet")
 
-        logger.debug("Creating provider")
+        # logger.debug("Creating provider")
         if provider == "openai":
             from parallellm.provider.openai import (
                 AsyncOpenAIProvider,

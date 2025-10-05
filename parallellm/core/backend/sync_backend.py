@@ -31,6 +31,8 @@ class SyncBackend(BaseBackend):
         try:
             if self._dash_logger is not None:
                 self._dash_logger.update_hash(doc_hash, HashStatus.SENT)
+
+            # The below function typically calls the LLM
             result = sync_function(*args, **kwargs)
             if self._dash_logger is not None:
                 self._dash_logger.update_hash(doc_hash, HashStatus.RECEIVED)
