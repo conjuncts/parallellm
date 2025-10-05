@@ -1,0 +1,44 @@
+from pathlib import Path
+import tempfile
+from unittest.mock import Mock
+import pytest
+from parallellm.core.response import ReadyLLMResponse
+
+
+@pytest.fixture(scope="module")
+def temp_integration_dir():
+    """Create a temporary directory for integration tests"""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        yield Path(temp_dir)
+
+
+@pytest.fixture
+def mock_orchestrator():
+    """Create a mock orchestrator with proper responses for testing"""
+    mock_orch = Mock()
+    mock_orch.get_session_counter.return_value = 1
+    mock_orch._provider.provider_type = "openai"
+    mock_orch._backend.retrieve.return_value = None  # No cache by default
+
+    # Set up the metadata dictionary structure that my_metadata property expects
+    mock_orch._fm.metadata = {"agents": {}}
+
+    # Mock the logging method that's called during checkpoint operations
+    mock_orch._fm.log_checkpoint_event = Mock()
+    mock_orch._logger.info = Mock()
+
+    # Create a mock call ID for responses
+    mock_call_id = {
+        "agent_name": "test_agent",
+        "checkpoint": None,
+        "doc_hash": "test_hash",
+        "seq_id": 0,
+        "session_id": 1,
+        "provider_type": "openai",
+    }
+
+    mock_orch._provider.submit_query_to_provider.return_value = ReadyLLMResponse(
+        call_id=mock_call_id, value="Mock response"
+    )
+
+    yield mock_orch

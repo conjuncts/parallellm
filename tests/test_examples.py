@@ -3,6 +3,10 @@ Example usage of the simple ParalleLLM testing utilities
 
 This module demonstrates how to use the simple mock utilities
 to write effective tests for code that uses ParalleLLM with pytest.
+
+For more comprehensive examples testing real ParalleLLM functionality:
+- test_tournament_examples.py: Tests tournament logic, persistence, and caching
+- test_checkpoint_examples.py: Tests checkpoint functionality and userdata persistence
 """
 
 import shutil
@@ -63,11 +67,13 @@ def test_pattern_based_responses(temp_pllm):
     mock_client = mock_openai_calls(temp_pllm)
 
     # Add patterns using the convenient dict method
-    mock_client.add_patterns({
-        "calculate": "The answer is 42",
-        "weather": "It's sunny today", 
-        "joke": "Why did the chicken cross the road? To get to the other side!"
-    })
+    mock_client.add_patterns(
+        {
+            "calculate": "The answer is 42",
+            "weather": "It's sunny today",
+            "joke": "Why did the chicken cross the road? To get to the other side!",
+        }
+    )
     mock_client.set_default("Mock response for unknown question")
 
     with temp_pllm.agent() as a:
@@ -92,10 +98,13 @@ def test_exact_instruction_matching(temp_pllm):
     mock_client = mock_openai_calls(temp_pllm)
 
     # Add exact matches using the dict method with literal=True
-    mock_client.add_patterns({
-        "What is the capital of France?": "The capital of France is Paris.",
-        "What is 2 + 2?": "2 + 2 equals 4."
-    }, literal=True)
+    mock_client.add_patterns(
+        {
+            "What is the capital of France?": "The capital of France is Paris.",
+            "What is 2 + 2?": "2 + 2 equals 4.",
+        },
+        literal=True,
+    )
     mock_client.set_default("I don't know that.")
 
     with temp_pllm.agent() as a:
@@ -113,20 +122,19 @@ def test_mixed_pattern_methods(temp_pllm):
     mock_client = mock_openai_calls(temp_pllm)
 
     # Add batch patterns first
-    mock_client.add_patterns({
-        "math|calculate": "Math result: 42",
-        "weather": "It's sunny"
-    })
-    
+    mock_client.add_patterns(
+        {"math|calculate": "Math result: 42", "weather": "It's sunny"}
+    )
+
     # Add individual pattern
     mock_client.add_pattern("greeting|hello", "Hello there!")
-    
+
     # Set default
     mock_client.set_default("Default response")
 
     with temp_pllm.agent() as a:
         math_resp = a.ask_llm("Calculate 2+2")
-        weather_resp = a.ask_llm("What's the weather?") 
+        weather_resp = a.ask_llm("What's the weather?")
         greeting_resp = a.ask_llm("Hello world")
         other_resp = a.ask_llm("Random question")
 

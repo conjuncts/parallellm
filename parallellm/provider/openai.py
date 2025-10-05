@@ -21,14 +21,17 @@ def _fix_docs_for_openai(
     documents: Union[LLMDocument, List[LLMDocument]],
 ) -> "List[Message]":
     """Ensure documents are in the correct format for OpenAI API"""
-    if isinstance(documents, list):
-        for i, doc in enumerate(documents):
-            if isinstance(doc, str):
-                msg: "Message" = {
-                    "role": "user",
-                    "content": doc,
-                }
-                documents[i] = msg
+    if not isinstance(documents, list):
+        documents = [documents]
+
+    documents = documents.copy()
+    for i, doc in enumerate(documents):
+        if isinstance(doc, str):
+            msg: "Message" = {
+                "role": "user",
+                "content": doc,
+            }
+            documents[i] = msg
     return documents
 
 

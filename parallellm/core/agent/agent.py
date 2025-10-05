@@ -202,7 +202,7 @@ class AgentContext:
 class AgentDashboardContext(AgentContext):
     """Context manager for the hash status dashboard"""
 
-    def __init__(self, agent_name, batch_manager: "AgentOrchestrator", log_k: int):
+    def __init__(self, agent_name, batch_manager: "AgentOrchestrator", log_k: int = 10):
         super().__init__(agent_name, batch_manager)
         self._was_displaying = False
         self._bm._dash_logger.k = log_k
