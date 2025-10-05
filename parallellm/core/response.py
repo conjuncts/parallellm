@@ -1,19 +1,22 @@
-from typing import TYPE_CHECKING, Literal, Union
-from PIL import Image
+from typing import Literal, Optional, Union
 
 from parallellm.core.backend import BaseBackend
+from parallellm.provider.guess import guess_provider
 from parallellm.types import CallIdentifier
-
-# Type alias for documents that can be either text or images
-LLMDocument = Union[str, Image.Image]
 
 
 class LLMIdentity:
-    def __init__(self, identity: str):
+    def __init__(self, identity: str, provider: Optional[str] = None):
         """
         Identify a specific LLM agent.
         """
         self.identity = identity
+
+        if provider is None:
+            # do some guessing
+            provider = guess_provider(identity)
+
+        self.provider = provider
 
     def to_str(self, provider: Union[Literal["openai"], None] = None) -> str:
         """
@@ -21,10 +24,15 @@ class LLMIdentity:
 
         :param provider: A specific provider (ie. openai)
         """
-        if provider == "openai":
-            if self.identity is None:
+        if provider is None:
+            provider = self.provider
+
+        if self.identity is None:
+            # Provide sensible defaults
+
+            if provider == "openai":
                 return "gpt-4.1-nano"
-            return self.identity
+
         return self.identity
 
 

@@ -1,7 +1,7 @@
 from typing import List, Optional, Union
 
-from parallellm.core.response import LLMDocument, LLMIdentity
-from parallellm.types import CallIdentifier
+from parallellm.core.response import LLMIdentity
+from parallellm.types import CallIdentifier, LLMDocument
 
 
 class BaseProvider:

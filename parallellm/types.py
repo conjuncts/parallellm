@@ -1,4 +1,6 @@
-from typing import TypedDict, Optional
+from typing import TypedDict, Optional, Union
+
+from PIL import Image
 
 
 class AgentMetadata(TypedDict):
@@ -33,3 +35,7 @@ class CallIdentifier(TypedDict):
 
     provider_type: Optional[str]
     """Specific provider type (ie. openai, anthropic, etc)"""
+
+
+# Type alias for documents that can be either text or images
+LLMDocument = Union[str, Image.Image]

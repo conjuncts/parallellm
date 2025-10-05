@@ -1,6 +1,21 @@
-from typing import Union
+from typing import Optional, Union
 from pydantic import BaseModel
-import sys
+
+
+def guess_provider(identity: str) -> Optional[str]:
+    """
+    Guess the provider type from the identity string.
+
+    :param identity: The identity string to guess the provider from.
+    :returns: The guessed provider type (ie. openai) or None if not identifiable.
+    """
+    if identity is None:
+        return None
+
+    if identity.startswith("gpt-"):
+        return "openai"
+
+    return None
 
 
 def guess_schema(

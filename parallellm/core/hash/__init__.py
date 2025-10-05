@@ -3,7 +3,7 @@ from typing import List, Optional
 from io import BytesIO
 from PIL import Image
 
-from parallellm.core.response import LLMDocument
+from parallellm.types import LLMDocument
 
 
 def compute_hash(instructions: Optional[str], documents: List[LLMDocument]) -> str:

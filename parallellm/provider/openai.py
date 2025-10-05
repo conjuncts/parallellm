@@ -2,14 +2,13 @@ from typing import TYPE_CHECKING, List, Optional, Union
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.response import (
-    LLMDocument,
     LLMIdentity,
     LLMResponse,
     PendingLLMResponse,
     ReadyLLMResponse,
 )
 from parallellm.provider.base import AsyncProvider, OpenAIProvider, SyncProvider
-from parallellm.types import CallIdentifier
+from parallellm.types import CallIdentifier, LLMDocument
 
 if TYPE_CHECKING:
     from openai import OpenAI, AsyncOpenAI

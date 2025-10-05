@@ -1,4 +1,3 @@
-import logging
 from typing import List, Optional, Union
 from colorama import Fore, Style, init
 from parallellm.core.backend import BaseBackend
@@ -7,7 +6,6 @@ from parallellm.core.exception import GotoCheckpoint, NotAvailable, WrongCheckpo
 from parallellm.core.hash import compute_hash
 from parallellm.core.response import (
     LLMIdentity,
-    LLMDocument,
     LLMResponse,
     PendingLLMResponse,
     ReadyLLMResponse,
@@ -15,7 +13,7 @@ from parallellm.core.response import (
 from parallellm.provider.base import BaseProvider
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
-from parallellm.types import CallIdentifier
+from parallellm.types import CallIdentifier, LLMDocument
 
 
 # New context manager class for Agent

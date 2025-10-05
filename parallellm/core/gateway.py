@@ -1,8 +1,6 @@
 import logging
 from typing import Literal
 
-from parallellm.core.backend.async_backend import AsyncBackend
-from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.manager import AgentOrchestrator
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger
@@ -22,6 +20,7 @@ class ParalleLLMGateway:
         """
         Resume a BatchManager from a given directory.
         """
+
         # Logic to resume from the specified directory
         # 1. Validation
         if strategy not in ["sync", "async", "batch", "hybrid"]:
@@ -29,17 +28,35 @@ class ParalleLLMGateway:
         if dry_run:
             raise NotImplementedError("Dry run is not implemented yet")
 
-        # 2. Setup components
-        fm = FileManager(directory)
-        dash_logger = DashboardLogger(k=10, display=False)
+        # 2. Setup logger
+        logger = logging.getLogger("parallellm")
+        logger.setLevel(log_level)
+        logger.addHandler(parallellm_log_handler)
 
+        logger.debug("Resuming directory")
+
+        dash_logger = DashboardLogger(k=10, display=False)
+        parallellm_log_handler.set_dash_logger(dash_logger)
+
+        # Prevent propagation to root logger to avoid duplicate messages
+        logger.propagate = False
+
+        # 3. Setup components
+        fm = FileManager(directory)
+
+        logger.debug("Creating backend")
         if strategy == "async":
+            from parallellm.core.backend.async_backend import AsyncBackend
+
             backend = AsyncBackend(fm, dash_logger=dash_logger)
         elif strategy == "sync":
+            from parallellm.core.backend.sync_backend import SyncBackend
+
             backend = SyncBackend(fm, dash_logger=dash_logger)
         else:
             raise NotImplementedError(f"Strategy '{strategy}' is not implemented yet")
 
+        logger.debug("Creating provider")
         if provider == "openai":
             from parallellm.provider.openai import (
                 AsyncOpenAIProvider,
@@ -63,17 +80,7 @@ class ParalleLLMGateway:
                 client = AsyncOpenAI()
                 provider = AsyncOpenAIProvider(client=client, backend=backend)
 
-        # Get the parallellm logger and configure it specifically
-        logger = logging.getLogger("parallellm")
-        logger.setLevel(log_level)
-        logger.addHandler(parallellm_log_handler)
-
-        # Connect the dashboard logger with the logging handler for coordination
-        parallellm_log_handler.set_dash_logger(dash_logger)
-
-        # Prevent propagation to root logger to avoid duplicate messages
-        logger.propagate = False
-
+        logger.debug("Creating AgentOrchestrator")
         bm = AgentOrchestrator(
             file_manager=fm,
             backend=backend,

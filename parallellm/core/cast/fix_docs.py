@@ -1,6 +1,6 @@
 from typing import List, Optional, Union
 
-from parallellm.core.response import LLMDocument
+from parallellm.types import LLMDocument
 
 
 def cast_documents(
