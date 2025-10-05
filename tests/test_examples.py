@@ -11,8 +11,7 @@ import pytest
 from parallellm.core.gateway import ParalleLLM
 from parallellm.testing.simple_mock import (
     mock_openai_calls,
-    create_response_map,
-    assert_call_count,
+    assert_call_made,
 )
 
 
@@ -53,21 +52,23 @@ def test_simple_mock_responses(temp_pllm):
     assert resp3.resolve() == "Third response"
 
     # Check calls were recorded
-    assert_call_count(mock_client, 3)
-    # assert_call_made(mock_client, "First question")
-    # assert_call_made(mock_client, "Second question")
-    # assert_call_made(mock_client, "Third question")
+    assert len(mock_client.calls) == 3
+    assert_call_made(mock_client, "First question")
+    assert_call_made(mock_client, "Second question")
+    assert_call_made(mock_client, "Third question")
 
 
 def test_pattern_based_responses(temp_pllm):
     """Test with pattern-based response mapping"""
-    response_map = create_response_map(
-        calculate="The answer is 42",
-        weather="It's sunny today",
-        joke="Why did the chicken cross the road? To get to the other side!",
-    )
+    mock_client = mock_openai_calls(temp_pllm)
 
-    mock_client = mock_openai_calls(temp_pllm, response_map=response_map)
+    # Add patterns using the convenient dict method
+    mock_client.add_patterns({
+        "calculate": "The answer is 42",
+        "weather": "It's sunny today", 
+        "joke": "Why did the chicken cross the road? To get to the other side!"
+    })
+    mock_client.set_default("Mock response for unknown question")
 
     with temp_pllm.agent() as a:
         # These should match patterns
@@ -81,21 +82,21 @@ def test_pattern_based_responses(temp_pllm):
     assert "42" in calc_resp.resolve()
     assert "sunny" in weather_resp.resolve()
     assert "chicken" in joke_resp.resolve()
-    assert "Random question" in other_resp.resolve()  # Default includes question
+    assert "Mock response" in other_resp.resolve()  # Default response
 
-    assert_call_count(mock_client, 4)
+    assert len(mock_client.calls) == 4
 
 
 def test_exact_instruction_matching(temp_pllm):
     """Test with exact instruction matching"""
     mock_client = mock_openai_calls(temp_pllm)
 
-    # Add exact matches
-    mock_client.add_response_pattern(
-        "What is the capital of France?", "The capital of France is Paris."
-    )
-    mock_client.add_response_pattern("What is 2 + 2?", "2 + 2 equals 4.")
-    mock_client.set_default_response("I don't know that.")
+    # Add exact matches using the dict method with literal=True
+    mock_client.add_patterns({
+        "What is the capital of France?": "The capital of France is Paris.",
+        "What is 2 + 2?": "2 + 2 equals 4."
+    }, literal=True)
+    mock_client.set_default("I don't know that.")
 
     with temp_pllm.agent() as a:
         resp1 = a.ask_llm("What is the capital of France?")
@@ -105,6 +106,36 @@ def test_exact_instruction_matching(temp_pllm):
     assert "Paris" in resp1.resolve()
     assert "equals 4" in resp2.resolve()
     assert "don't know" in resp3.resolve()
+
+
+def test_mixed_pattern_methods(temp_pllm):
+    """Test mixing individual add_pattern and batch add_patterns"""
+    mock_client = mock_openai_calls(temp_pllm)
+
+    # Add batch patterns first
+    mock_client.add_patterns({
+        "math|calculate": "Math result: 42",
+        "weather": "It's sunny"
+    })
+    
+    # Add individual pattern
+    mock_client.add_pattern("greeting|hello", "Hello there!")
+    
+    # Set default
+    mock_client.set_default("Default response")
+
+    with temp_pllm.agent() as a:
+        math_resp = a.ask_llm("Calculate 2+2")
+        weather_resp = a.ask_llm("What's the weather?") 
+        greeting_resp = a.ask_llm("Hello world")
+        other_resp = a.ask_llm("Random question")
+
+    assert "Math result: 42" in math_resp.resolve()
+    assert "sunny" in weather_resp.resolve()
+    assert "Hello there!" in greeting_resp.resolve()
+    assert "Default response" in other_resp.resolve()
+
+    assert len(mock_client.calls) == 4
 
 
 def test_async_provider(async_temp_pllm):
@@ -121,7 +152,7 @@ def test_async_provider(async_temp_pllm):
     assert resp1.resolve() == "Async response 1"
     assert resp2.resolve() == "Async response 2"
 
-    assert_call_count(mock_client, 2)
+    assert len(mock_client.calls) == 2
 
 
 def example_nfl_tournament_test():
@@ -177,7 +208,7 @@ Steelers
             print(f"Game results: {game_descriptions}")
 
         # Verify the mock worked as expected
-        assert_call_count(mock_client, 5)  # 1 for teams + 4 for games
+        assert len(mock_client.calls) == 5  # 1 for teams + 4 for games
         assert len(game_descriptions) == 4
         assert "Patriots" in game_descriptions[0]
         assert "Packers" in game_descriptions[1]
