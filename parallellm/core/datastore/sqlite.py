@@ -451,6 +451,8 @@ class SQLiteDatastore(Datastore):
         """
         Persist (commit) changes to SQLite database(s) and transfer metadata to Parquet files.
 
+        Closes remaining SQLite connections.
+
         This method now also transfers OpenAI metadata from SQLite to Parquet files
         for better storage efficiency.
         """
@@ -466,6 +468,9 @@ class SQLiteDatastore(Datastore):
 
         # Note: SQLite implementation always commits immediately, so this is a no-op
         # for the actual database persistence
+
+        # Close all connections to ensure proper cleanup, especially important on Windows
+        self.close()
 
     def close(self, checkpoint: Optional[str] = None) -> None:
         """

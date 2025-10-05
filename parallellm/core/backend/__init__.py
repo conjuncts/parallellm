@@ -14,6 +14,7 @@ class BaseBackend:
         raise NotImplementedError
 
     def persist(self):
+        """Persist data and clean up resources"""
         pass
 
     def retrieve(self, call_id: CallIdentifier) -> Optional[str]:

@@ -64,7 +64,8 @@ class AgentOrchestrator:
 
     def persist(self):
         """
-        Ensure that everything is properly saved
+        Ensure that everything is properly saved.
+        Cleans up resources.
         """
         self._backend.persist()
 

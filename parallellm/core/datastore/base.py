@@ -68,6 +68,6 @@ class Datastore(ABC):
 
     def persist(self) -> None:
         """
-        Persist changes to file(s).
+        Persist changes to file(s). Cleans up resources.
         """
         raise NotImplementedError

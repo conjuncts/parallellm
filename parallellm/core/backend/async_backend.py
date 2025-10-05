@@ -189,7 +189,10 @@ class AsyncBackend(BaseBackend):
         return self._async_ds.retrieve(call_id)
 
     def persist(self, timeout=30.0):
-        """Synchronous persist that uses the backend's event loop"""
+        """
+        Synchronous persist that uses the backend's event loop. 
+        Cleans up any datastore resources.
+        """
         # SQLite commits immediately
 
         # but we DO want to wait for all pending tasks to complete
@@ -204,6 +207,9 @@ class AsyncBackend(BaseBackend):
                 print(f"Warning: Failed to wait for pending tasks: {e}")
 
         self._async_ds.persist()
+
+        # Close datastore connections to ensure proper cleanup, especially important on Windows
+        self.cleanup_datastore_sync()
 
     def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
         """Synchronous retrieve that uses the backend's event loop"""
