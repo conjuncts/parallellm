@@ -1,4 +1,4 @@
-from typing import TypedDict, Optional, Union
+from typing import List, Literal, TypedDict, Optional, Union
 
 from PIL import Image
 
@@ -35,6 +35,12 @@ class CallIdentifier(TypedDict):
 
     provider_type: Optional[str]
     """Specific provider type (ie. openai, anthropic, etc)"""
+
+
+class AskParameters(TypedDict):
+    """Parameters for ask_llm()."""
+
+    salt_by: Optional[List[Literal["llm"]]]
 
 
 # Type alias for documents that can be either text or images

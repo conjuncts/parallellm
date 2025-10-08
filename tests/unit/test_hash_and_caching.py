@@ -14,7 +14,7 @@ import hashlib
 from io import BytesIO
 from PIL import Image
 from parallellm.core.hash import compute_hash
-from parallellm.logging.dash_logger import DashboardLogger, HashStatus, HashEntry
+from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 from parallellm.core.backend import _call_matches
 from parallellm.types import CallIdentifier
 

@@ -190,7 +190,7 @@ class AsyncBackend(BaseBackend):
 
     def persist(self, timeout=30.0):
         """
-        Synchronous persist that uses the backend's event loop. 
+        Synchronous persist that uses the backend's event loop.
         Cleans up any datastore resources.
         """
         # SQLite commits immediately

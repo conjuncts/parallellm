@@ -26,4 +26,5 @@ def compute_hash(instructions: Optional[str], documents: List[LLMDocument]) -> s
                 hasher.update(img_buffer.getvalue())
         else:
             raise ValueError(f"Unsupported document type: {type(doc)}")
+
     return hasher.hexdigest()

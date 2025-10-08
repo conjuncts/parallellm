@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, List, Literal, Optional, Union
 from colorama import Fore, Style, init
 from parallellm.core.cast.fix_docs import cast_documents
 from parallellm.core.exception import GotoCheckpoint, NotAvailable, WrongCheckpoint
@@ -9,7 +9,7 @@ from parallellm.core.response import (
     ReadyLLMResponse,
 )
 from parallellm.logging.dash_logger import HashStatus
-from parallellm.types import CallIdentifier, LLMDocument
+from parallellm.types import AskParameters, CallIdentifier, LLMDocument
 
 if TYPE_CHECKING:
     from parallellm.core.agent.orchestrator import AgentOrchestrator
@@ -18,12 +18,21 @@ if TYPE_CHECKING:
 class AgentContext:
     """Context manager for Agent lifecycle (default context)"""
 
-    def __init__(self, agent_name, batch_manager: "AgentOrchestrator"):
+    def __init__(
+        self,
+        agent_name,
+        batch_manager: "AgentOrchestrator",
+        *,
+        ask_params: Optional[AskParameters] = None,
+    ):
         self.agent_name = agent_name
         self._bm = batch_manager
 
         self._anonymous_counter = 0  # Anonymous mode counter, always starts from 0
         self._checkpoint_counter = None  # Initialized when entering checkpoint
+
+        self.ask_params = ask_params or {}
+
         self.active_checkpoint: Optional[str] = None
         """
         Active checkpoint: if we are inside a checkpoint context.
@@ -132,6 +141,8 @@ class AgentContext:
         *additional_documents: LLMDocument,
         instructions: Optional[str] = None,
         llm: Union[LLMIdentity, str, None] = None,
+        salt: Optional[str] = None,
+        salt_by: Optional[List[Literal["llm"]]] = None,
         _hoist_images=None,
         **kwargs,
     ) -> LLMResponse:
@@ -143,11 +154,19 @@ class AgentContext:
         :param instructions: The system prompt to use.
         :param llm: The identity of the LLM to use.
             Can be helpful multi-agent or multi-model scenarios.
+        :param salt: A value to include in the hash for differentiation.
+        :param salt_by: The names of additional terms to include in the hash for differentiation.
+            Example: "llm" will also include the LLM name.
         :param _hoist_images: Gemini recommends that images be hoisted to the front of the message.
             Set to True/False to explicitly enforce/disable.
         :returns: A LLMResponse. The value is **lazy loaded**: for best efficiency,
             it should not be resolved until you actually need it.
         """
+
+        # load ask_params defaults
+        for k, v in self.ask_params.items():
+            if k == "salt_by" and salt_by is None:
+                salt_by = v
 
         if isinstance(llm, str):
             llm = LLMIdentity(llm)
@@ -164,8 +183,15 @@ class AgentContext:
 
         documents = cast_documents(documents, list(additional_documents))
 
-        # Cache using datastore
-        hashed = compute_hash(instructions, documents)
+        # Compute salt
+        salt_terms = []
+        if salt is not None:
+            salt_terms.append(salt)
+        if salt_by is not None:
+            for term in salt_by:
+                if term == "llm" and llm is not None:
+                    salt_terms.append(llm.identity)
+        hashed = compute_hash(instructions, documents + salt_terms)
 
         call_id: CallIdentifier = {
             "agent_name": self.agent_name,
@@ -175,6 +201,8 @@ class AgentContext:
             "session_id": self._bm.get_session_counter(),
             "provider_type": self._bm._provider.provider_type,
         }
+
+        # Cache using datastore
         cached = self._bm._backend.retrieve(call_id)
         if cached is not None:
             self.update_hash_status(hashed, HashStatus.CACHED)
@@ -202,8 +230,15 @@ class AgentContext:
 class AgentDashboardContext(AgentContext):
     """Context manager for the hash status dashboard"""
 
-    def __init__(self, agent_name, batch_manager: "AgentOrchestrator", log_k: int = 10):
-        super().__init__(agent_name, batch_manager)
+    def __init__(
+        self,
+        agent_name,
+        batch_manager: "AgentOrchestrator",
+        *,
+        log_k: int = 10,
+        ask_params: Optional[AskParameters] = None,
+    ):
+        super().__init__(agent_name, batch_manager, ask_params=ask_params)
         self._was_displaying = False
         self._bm._dash_logger.k = log_k
 

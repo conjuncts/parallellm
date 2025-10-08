@@ -9,6 +9,7 @@ from parallellm.core.response import (
 from parallellm.provider.base import BaseProvider
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger
+from parallellm.types import AskParameters
 
 
 class AgentOrchestrator:
@@ -20,6 +21,7 @@ class AgentOrchestrator:
         *,
         logger,
         dash_logger,
+        ask_params: Optional[AskParameters] = None,
     ):
         """
         channel: str, optional
@@ -28,6 +30,8 @@ class AgentOrchestrator:
             specify a channel name.
         dash_logger_k: int, optional
             Number of hashes to display in the hash logger (default 10)
+        ask_params: Optional[AskParameters], optional
+            Default parameters for ask_llm() calls.
         """
         self._backend = backend
         self._fm = file_manager
@@ -37,10 +41,21 @@ class AgentOrchestrator:
         # Initialize the hash logger with display disabled by default
         self._dash_logger: DashboardLogger = dash_logger
 
-    def agent(self, name: str = None, *, dashboard=False):
+        self.ask_params = ask_params or {}
+
+    def agent(
+        self,
+        name: str = None,
+        *,
+        dashboard=False,
+        ask_params: Optional[AskParameters] = None,
+    ):
+        if ask_params is None:
+            ask_params = self.ask_params
+
         if dashboard:
-            return AgentDashboardContext(name, self, log_k=10)
-        return AgentContext(name, self)
+            return AgentDashboardContext(name, self, log_k=10, ask_params=ask_params)
+        return AgentContext(name, self, ask_params=ask_params)
 
     def save_userdata(self, key, value):
         """
