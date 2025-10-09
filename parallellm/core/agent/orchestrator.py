@@ -45,7 +45,7 @@ class AgentOrchestrator:
 
     def agent(
         self,
-        name: str = None,
+        name: str = "default-agent",
         *,
         dashboard=False,
         ask_params: Optional[AskParameters] = None,

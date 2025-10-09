@@ -1,5 +1,5 @@
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from parallellm.file_io.file_manager import FileManager
 from pathlib import Path
 
@@ -16,35 +16,65 @@ if TYPE_CHECKING:
     from parallellm.core.datastore.sqlite import SQLiteDatastore
 
 
-def migrate_old_directory_structure(file_manager: FileManager) -> None:
+def _tmp_migrate_datastores(fm: FileManager) -> None:
     """
-    Migrate old directory-based SQLite structure to new unified database.
+    Migrate from old datastore.db structure to new table-based structure.
 
-    Old structure: datastore/{agent_name}/{checkpoint}/datastore.db
-    New structure: datastore/datastore.db (with agent_name and checkpoint columns)
+    This handles the transition from the old unified structure to the new structure
+    with separate anon_responses and chk_responses tables in the same database.
 
-    This function:
-    1. Scans the datastore directory for old agent/checkpoint subdirectories
-    2. Reads data from each old database
-    3. Inserts it into the new unified database with agent_name and checkpoint columns
-    4. Optionally backs up old databases before deletion
-
-    :param file_manager: FileManager instance to handle file I/O operations
+    :param fm: FileManager instance to handle file I/O operations
     """
-    datastore_dir = file_manager.allocate_datastore()
-    new_db_path = datastore_dir / "datastore.db"
+    datastore_dir = fm.allocate_datastore()
+    db_path = datastore_dir / "datastore.db"
 
-    # Create new database connection
-    new_conn = sqlite3.connect(str(new_db_path))
-    new_conn.row_factory = sqlite3.Row
+    # Check if database exists
+    if not db_path.exists():
+        print("No datastore.db found - nothing to migrate")
+        return
+
+    print(f"Migrating datastore.db to new table structure...")
+
+    # Connect to database
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
 
     try:
-        # Create tables if they don't exist (in case this is a fresh database)
-        new_conn.execute("""
-            CREATE TABLE IF NOT EXISTS responses (
+        # Check if new table structure already exists
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row[0] for row in cursor.fetchall()]
+
+        if "anon_responses" in tables and "chk_responses" in tables:
+            print("New table structure already exists - skipping migration")
+            return
+
+        # Check if old responses table exists
+        if "responses" not in tables:
+            print("No responses table found - nothing to migrate")
+            return
+
+        # Create new table structure
+        # Anonymous responses table: no checkpoint column, agent_name can be NULL
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS anon_responses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                agent_name TEXT NOT NULL,
-                checkpoint TEXT,
+                agent_name TEXT,
+                seq_id INTEGER NOT NULL,
+                session_id INTEGER NOT NULL,
+                doc_hash TEXT NOT NULL,
+                response TEXT NOT NULL,
+                response_id TEXT,
+                provider_type TEXT,
+                UNIQUE(agent_name, doc_hash)
+            )
+        """)
+
+        # Checkpoint responses table: checkpoint is NOT NULL
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS chk_responses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent_name TEXT,
+                checkpoint TEXT NOT NULL,
                 seq_id INTEGER NOT NULL,
                 session_id INTEGER NOT NULL,
                 doc_hash TEXT NOT NULL,
@@ -55,195 +85,93 @@ def migrate_old_directory_structure(file_manager: FileManager) -> None:
             )
         """)
 
-        new_conn.execute("""
-            CREATE TABLE IF NOT EXISTS metadata (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                response_id TEXT NOT NULL,
-                metadata TEXT NOT NULL,
-                provider_type TEXT,
-                UNIQUE(response_id)
-            )
-        """)
-        new_conn.commit()
+        conn.commit()
 
-        # Track migration statistics
-        total_responses = 0
-        total_metadata = 0
-        migrated_dbs = []
-        total_parquet_responses = 0
-        total_parquet_messages = 0
+        # Check if checkpoint column exists in old responses table
+        cursor = conn.execute("PRAGMA table_info(responses)")
+        columns = [row[1] for row in cursor.fetchall()]
+        has_checkpoint = "checkpoint" in columns
 
-        # Setup new apimeta directory at the top level
-        new_apimeta_dir = datastore_dir / "apimeta"
-        new_apimeta_dir.mkdir(exist_ok=True)
-        new_responses_parquet = new_apimeta_dir / "responses.parquet"
-        new_messages_parquet = new_apimeta_dir / "messages.parquet"
+        # Migrate responses using simple SQL queries
+        if has_checkpoint:
+            # ANON_RESPONSES = SELECT * FROM responses WHERE checkpoint IS NULL OR checkpoint = ''
+            anon_cursor = conn.execute("""
+                SELECT agent_name, seq_id, session_id, doc_hash, response, response_id, provider_type
+                FROM responses 
+                WHERE checkpoint IS NULL OR checkpoint = '' OR checkpoint = 'default'
+            """)
+            anon_rows = anon_cursor.fetchall()
 
-        # Scan for old database files in agent/checkpoint subdirectories
-        # Pattern: datastore/{agent_name}/{checkpoint_hash}/datastore.db
-        targets = []
-        for agent_dir in datastore_dir.iterdir():
-            if not agent_dir.is_dir():
-                continue
+            # CHK_RESPONSES = SELECT * FROM responses WHERE checkpoint IS NOT NULL AND checkpoint != ''
+            chk_cursor = conn.execute("""
+                SELECT agent_name, checkpoint, seq_id, session_id, doc_hash, response, response_id, provider_type
+                FROM responses 
+                WHERE checkpoint IS NOT NULL AND checkpoint != '' AND checkpoint != 'default'
+            """)
+            chk_rows = chk_cursor.fetchall()
+        else:
+            # No checkpoint column - all responses go to anonymous table
+            anon_cursor = conn.execute("""
+                SELECT agent_name, seq_id, session_id, doc_hash, response, response_id, provider_type
+                FROM responses
+            """)
+            anon_rows = anon_cursor.fetchall()
+            chk_rows = []
 
-            # Skip the new database file and apimeta directory
-            if agent_dir.name in ["datastore.db", "apimeta", "datastore.db-journal"]:
-                continue
-
-            agent_name = agent_dir.name
-
-            # Look for checkpoint subdirectories
-            for checkpoint_dir in agent_dir.iterdir():
-                if not checkpoint_dir.is_dir():
-                    continue
-
-                old_db_path = checkpoint_dir / "datastore.db"
-
-                if not old_db_path.exists():
-                    continue
-
-                # Extract checkpoint name from directory (remove hash suffix if present)
-                checkpoint_name = checkpoint_dir.name.split("-")[
-                    0
-                ]  # Take part before hash
-                targets.append((agent_name, checkpoint_name, old_db_path))
-
-        for agent_name, checkpoint_name, old_db_path in targets:
-            print(
-                f"Migrating: agent='{agent_name}', "
-                f"checkpoint='{checkpoint_name}' "
-                f"from {old_db_path}"
-            )
-
-            # Connect to old database
-            old_conn = sqlite3.connect(str(old_db_path))
-            old_conn.row_factory = sqlite3.Row
-
+        # Insert into anonymous responses table
+        anon_count = 0
+        for row in anon_rows:
             try:
-                # Migrate responses table
-                cursor = old_conn.execute("SELECT * FROM responses")
-                responses = cursor.fetchall()
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO anon_responses 
+                    (agent_name, seq_id, session_id, doc_hash, response, response_id, provider_type)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    tuple(row),
+                )
+                anon_count += 1
+            except sqlite3.IntegrityError as e:
+                print(f"  Warning: Skipping duplicate in anon_responses: {e}")
 
-                for row in responses:
-                    # Insert into new database with agent_name and checkpoint
-                    try:
-                        new_conn.execute(
-                            """
-                            INSERT OR REPLACE INTO responses 
-                            (agent_name, checkpoint, seq_id, session_id, doc_hash, response, response_id, provider_type)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                            (
-                                agent_name,
-                                checkpoint_name,
-                                row["seq_id"],
-                                row["session_id"],
-                                row["doc_hash"],
-                                row["response"],
-                                row["response_id"],
-                                row["provider_type"],
-                            ),
-                        )
-                        total_responses += 1
-                    except sqlite3.IntegrityError as e:
-                        print(f"  Warning: Skipping duplicate response: {e}")
+        # Insert into checkpoint responses table
+        chk_count = 0
+        for row in chk_rows:
+            try:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO chk_responses 
+                    (agent_name, checkpoint, seq_id, session_id, doc_hash, response, response_id, provider_type)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    tuple(row),
+                )
+                chk_count += 1
+            except sqlite3.IntegrityError as e:
+                print(f"  Warning: Skipping duplicate in chk_responses: {e}")
 
-                # Migrate metadata table if it exists
-                try:
-                    cursor = old_conn.execute("SELECT * FROM metadata")
-                    metadata_rows = cursor.fetchall()
+        conn.commit()
 
-                    for row in metadata_rows:
-                        # Insert into new database
-                        try:
-                            new_conn.execute(
-                                """
-                                INSERT OR REPLACE INTO metadata 
-                                (response_id, metadata, provider_type)
-                                VALUES (?, ?, ?)
-                            """,
-                                (
-                                    row["response_id"],
-                                    row["metadata"],
-                                    row["provider_type"],
-                                ),
-                            )
-                            total_metadata += 1
-                        except sqlite3.IntegrityError as e:
-                            print(f"  Warning: Skipping duplicate metadata: {e}")
-                except sqlite3.OperationalError:
-                    # Metadata table doesn't exist in old database
-                    pass
+        print(f"  ✓ Migrated {anon_count} responses to anon_responses table")
+        print(f"  ✓ Migrated {chk_count} responses to chk_responses table")
 
-                new_conn.commit()
-                migrated_dbs.append(old_db_path)
-                print(f"  ✓ Migrated {len(responses)} responses")
-
-                # Migrate parquet files if they exist
-                old_apimeta_dir = checkpoint_dir / "apimeta"
-                if not old_apimeta_dir.exists() or HAS_POLARS:
-                    old_responses_parquet = old_apimeta_dir / "responses.parquet"
-                    old_messages_parquet = old_apimeta_dir / "messages.parquet"
-
-                    # Migrate responses.parquet
-                    if old_responses_parquet.exists():
-                        try:
-                            old_df = pl.read_parquet(old_responses_parquet)
-
-                            # Merge with existing new parquet file if it exists
-                            if new_responses_parquet.exists():
-                                existing_df = pl.read_parquet(new_responses_parquet)
-                                merged_df = pl.concat([existing_df, old_df]).unique()
-                            else:
-                                merged_df = old_df
-
-                            merged_df.write_parquet(new_responses_parquet)
-                            total_parquet_responses += len(old_df)
-                            print(f"  ✓ Migrated {len(old_df)} parquet responses")
-                        except Exception as e:
-                            print(
-                                f"  Warning: Failed to migrate responses.parquet: {e}"
-                            )
-
-                    # Migrate messages.parquet
-                    if old_messages_parquet.exists():
-                        try:
-                            old_df = pl.read_parquet(old_messages_parquet)
-
-                            # Merge with existing new parquet file if it exists
-                            if new_messages_parquet.exists():
-                                existing_df = pl.read_parquet(new_messages_parquet)
-                                merged_df = pl.concat([existing_df, old_df]).unique()
-                            else:
-                                merged_df = old_df
-
-                            merged_df.write_parquet(new_messages_parquet)
-                            total_parquet_messages += len(old_df)
-                            print(f"  ✓ Migrated {len(old_df)} parquet messages")
-                        except Exception as e:
-                            print(f"  Warning: Failed to migrate messages.parquet: {e}")
-
-            finally:
-                old_conn.close()
+        # Check if we should drop the old responses table
+        if anon_count + chk_count > 0:
+            print(
+                f"  ✓ Migration successful - you can now safely drop the old 'responses' table"
+            )
+            # Optionally rename the old table instead of dropping it
+            try:
+                conn.execute("ALTER TABLE responses RENAME TO responses_old_backup")
+                conn.commit()
+                print(f"  ✓ Old 'responses' table renamed to 'responses_old_backup'")
+            except sqlite3.Error as e:
+                print(f"  Warning: Could not rename old table: {e}")
 
         print(f"\nMigration complete!")
-        print(f"  Total responses migrated: {total_responses}")
-        print(f"  Total metadata migrated: {total_metadata}")
-        print(f"  Total parquet responses migrated: {total_parquet_responses}")
-        print(f"  Total parquet messages migrated: {total_parquet_messages}")
-        print(f"  Databases migrated: {len(migrated_dbs)}")
-
-        # Ask user if they want to remove old databases
-        if migrated_dbs:
-            print("\nOld database files:")
-            for db_path in migrated_dbs:
-                print(f"  {db_path}")
-            print(
-                "\nYou can safely delete the old agent/checkpoint subdirectories if migration was successful."
-            )
 
     finally:
-        new_conn.close()
+        conn.close()
 
 
 def _check_and_migrate(ds: "SQLiteDatastore") -> None:
@@ -252,16 +180,21 @@ def _check_and_migrate(ds: "SQLiteDatastore") -> None:
     Only runs once per datastore directory.
     """
     datastore_dir = ds.file_manager.allocate_datastore()
-    migration_marker = datastore_dir / ".migrated"
+    # migration_marker = datastore_dir / ".migrated"
 
-    # Skip if already migrated
-    if migration_marker.exists():
-        return
+    # # Skip if already migrated
+    # if migration_marker.exists():
+    #     return
 
     # Check if there are old-style subdirectories
     has_old_structure = False
     for item in datastore_dir.iterdir():
-        if item.is_dir() and item.name not in ["apimeta", ".migrated"]:
+        if item.is_dir() and item.name not in [
+            "apimeta",
+            ".migrated",
+            "anon-datastore.db",
+            "chk-datastore.db",
+        ]:
             # Check if it contains checkpoint subdirectories with databases
             for subitem in item.iterdir():
                 if subitem.is_dir() and (subitem / "datastore.db").exists():
@@ -270,64 +203,153 @@ def _check_and_migrate(ds: "SQLiteDatastore") -> None:
             if has_old_structure:
                 break
 
-    if has_old_structure:
-        print("Detected old directory-based database structure. Starting migration...")
-        migrate_old_directory_structure(ds.file_manager)
-        # Create marker file to prevent re-migration
-        migration_marker.touch()
-        print("Migration marker created.")
-    else:
-        # No old structure, just create the marker
-        migration_marker.touch()
+    # if has_old_structure:
+    #     print("Detected old directory-based database structure. Starting migration...")
+    #     migrate_old_directory_structure(ds.file_manager)
+    #     # Create marker file to prevent re-migration
+    #     migration_marker.touch()
+    #     print("Migration marker created.")
+    # else:
+    # No old structure, just create the marker
+    # migration_marker.touch()
 
 
-def _migrate_sql_schema(conn: sqlite3.Connection) -> None:
+def _migrate_sql_schema(conn: sqlite3.Connection, db_name: Optional[str]) -> None:
+    """
+    Migrate SQL schema for a database.
+
+    :param conn: SQLite connection to migrate
+    :param db_name: Name of the database (None for main database, or custom names for additional databases)
+    """
     try:
-        # Check if old schema exists (responses table without agent_name/checkpoint columns)
-        cursor = conn.execute("PRAGMA table_info(responses)")
-        columns = [row[1] for row in cursor.fetchall()]
+        # For main database (db_name is None), check both response tables
+        if db_name is None:
+            # Check if anon_responses table exists and migrate
+            try:
+                cursor = conn.execute("PRAGMA table_info(anon_responses)")
+                columns = [row[1] for row in cursor.fetchall()]
 
-        # Add agent_name column if it doesn't exist
-        if "agent_name" not in columns:
-            print("Migrating SQLite schema: adding agent_name column...")
-            conn.execute("ALTER TABLE responses ADD COLUMN agent_name TEXT NOT NULL")
-            conn.commit()
+                # Add agent_name column if it doesn't exist
+                if "agent_name" not in columns:
+                    print(
+                        "Migrating SQLite schema: adding agent_name column to anon_responses..."
+                    )
+                    conn.execute(
+                        "ALTER TABLE anon_responses ADD COLUMN agent_name TEXT"
+                    )
+                    conn.commit()
 
-        # Add checkpoint column if it doesn't exist
-        if "checkpoint" not in columns:
-            print("Migrating SQLite schema: adding checkpoint column...")
-            conn.execute("ALTER TABLE responses ADD COLUMN checkpoint TEXT")
-            conn.commit()
+                # Add provider_type column if it doesn't exist
+                if "provider_type" not in columns:
+                    print(
+                        "Migrating SQLite schema: adding provider_type column to anon_responses..."
+                    )
+                    conn.execute(
+                        "ALTER TABLE anon_responses ADD COLUMN provider_type TEXT"
+                    )
+                    conn.execute(
+                        "UPDATE anon_responses SET provider_type = 'openai' WHERE provider_type IS NULL"
+                    )
+                    conn.commit()
+            except sqlite3.OperationalError:
+                # Table doesn't exist yet, skip
+                pass
 
-        # Add provider_type column if it doesn't exist
-        if "provider_type" not in columns:
-            print("Migrating SQLite schema: adding provider_type column...")
-            conn.execute("ALTER TABLE responses ADD COLUMN provider_type TEXT")
-            conn.execute(
-                "UPDATE responses SET provider_type = 'openai' WHERE provider_type IS NULL"
-            )
-            conn.commit()
+            # Check if chk_responses table exists and migrate
+            try:
+                cursor = conn.execute("PRAGMA table_info(chk_responses)")
+                columns = [row[1] for row in cursor.fetchall()]
 
-        # Check metadata table
-        cursor = conn.execute("PRAGMA table_info(metadata)")
-        metadata_columns = [row[1] for row in cursor.fetchall()]
+                # Add agent_name column if it doesn't exist
+                if "agent_name" not in columns:
+                    print(
+                        "Migrating SQLite schema: adding agent_name column to chk_responses..."
+                    )
+                    conn.execute("ALTER TABLE chk_responses ADD COLUMN agent_name TEXT")
+                    conn.commit()
 
-        # Add provider_type column to metadata if it doesn't exist
-        if "provider_type" not in metadata_columns:
-            print("Migrating SQLite schema: adding provider_type to metadata...")
-            conn.execute("ALTER TABLE metadata ADD COLUMN provider_type TEXT")
-            conn.execute(
-                "UPDATE metadata SET provider_type = 'openai' WHERE provider_type IS NULL"
-            )
-            conn.commit()
+                # Add checkpoint column if it doesn't exist
+                if "checkpoint" not in columns:
+                    print(
+                        "Migrating SQLite schema: adding checkpoint column to chk_responses..."
+                    )
+                    conn.execute(
+                        "ALTER TABLE chk_responses ADD COLUMN checkpoint TEXT NOT NULL DEFAULT ''"
+                    )
+                    conn.commit()
+
+                # Add provider_type column if it doesn't exist
+                if "provider_type" not in columns:
+                    print(
+                        "Migrating SQLite schema: adding provider_type column to chk_responses..."
+                    )
+                    conn.execute(
+                        "ALTER TABLE chk_responses ADD COLUMN provider_type TEXT"
+                    )
+                    conn.execute(
+                        "UPDATE chk_responses SET provider_type = 'openai' WHERE provider_type IS NULL"
+                    )
+                    conn.commit()
+            except sqlite3.OperationalError:
+                # Table doesn't exist yet, skip
+                pass
+
+        else:
+            # For custom named databases, check legacy responses table
+            try:
+                cursor = conn.execute("PRAGMA table_info(responses)")
+                columns = [row[1] for row in cursor.fetchall()]
+
+                # Add agent_name column if it doesn't exist
+                if "agent_name" not in columns:
+                    print(
+                        f"Migrating {db_name} SQLite schema: adding agent_name column..."
+                    )
+                    conn.execute("ALTER TABLE responses ADD COLUMN agent_name TEXT")
+                    conn.commit()
+
+                # Add provider_type column if it doesn't exist
+                if "provider_type" not in columns:
+                    print(
+                        f"Migrating {db_name} SQLite schema: adding provider_type column..."
+                    )
+                    conn.execute("ALTER TABLE responses ADD COLUMN provider_type TEXT")
+                    conn.execute(
+                        "UPDATE responses SET provider_type = 'openai' WHERE provider_type IS NULL"
+                    )
+                    conn.commit()
+            except sqlite3.OperationalError:
+                # Table doesn't exist yet, skip
+                pass
+
+        # Check metadata table (exists in all databases)
+        try:
+            cursor = conn.execute("PRAGMA table_info(metadata)")
+            metadata_columns = [row[1] for row in cursor.fetchall()]
+
+            # Add provider_type column to metadata if it doesn't exist
+            if "provider_type" not in metadata_columns:
+                db_label = "main database" if db_name is None else f"{db_name} database"
+                print(
+                    f"Migrating {db_label} SQLite schema: adding provider_type to metadata..."
+                )
+                conn.execute("ALTER TABLE metadata ADD COLUMN provider_type TEXT")
+                conn.execute(
+                    "UPDATE metadata SET provider_type = 'openai' WHERE provider_type IS NULL"
+                )
+                conn.commit()
+        except sqlite3.OperationalError:
+            # Metadata table doesn't exist yet, skip
+            pass
 
     except sqlite3.Error as e:
         # If migration fails, continue - tables will be created fresh
-        print(f"Warning: Schema migration failed: {e}")
+        db_label = "main database" if db_name is None else f"{db_name} database"
+        print(f"Warning: Schema migration failed for {db_label}: {e}")
         pass
 
 
 if __name__ == "__main__":
     for subdir in os.listdir(".pllm"):
         fm = FileManager(f".pllm/{subdir}")
-        migrate_old_directory_structure(fm)
+        _tmp_migrate_datastores(fm)

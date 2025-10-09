@@ -247,48 +247,31 @@ class TestDatastoreAllocation:
     """Test datastore directory allocation"""
 
     def test_allocate_datastore_basic(self):
-        """Test basic datastore allocation"""
+        """Test basic datastore directory retrieval"""
         with tempfile.TemporaryDirectory() as temp_dir:
             fm = FileManager(temp_dir)
 
-            path = fm.allocate_datastore("test_agent", "test_checkpoint")
+            path = fm.allocate_datastore()
 
-            # Should create nested directory structure
-            expected_path = (
-                Path(temp_dir)
-                / "datastore"
-                / "test_agent"
-                / fm._sanitize("test_checkpoint")
-            )
+            # Should create base datastore directory
+            expected_path = Path(temp_dir) / "datastore"
 
             assert path.exists()
             assert path.is_dir()
-            assert str(path).startswith(
-                str(expected_path).split("-")[0]
-            )  # Account for hash
+            assert path == expected_path
 
-    def test_allocate_datastore_none_checkpoint(self):
-        """Test datastore allocation with None checkpoint"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            fm = FileManager(temp_dir)
-
-            path = fm.allocate_datastore("test_agent", None)
-
-            # Should use default checkpoint name
-            assert path.exists()
-            assert "default" in str(path)
-
-    def test_allocate_datastore_creates_parents(self):
-        """Test that allocate_datastore creates parent directories"""
+    def test_get_datastore_directory_creates_parents(self):
+        """Test that get_datastore_directory creates the directory if it doesn't exist"""
         with tempfile.TemporaryDirectory() as temp_dir:
             fm = FileManager(temp_dir)
 
             datastore_base = Path(temp_dir) / "datastore"
             assert not datastore_base.exists()
 
-            fm.allocate_datastore("agent1", "checkpoint1")
+            path = fm.allocate_datastore()
 
             assert datastore_base.exists()
+            assert path == datastore_base
 
 
 class TestAgentOrchestratorIntegration:

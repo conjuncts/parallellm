@@ -8,6 +8,10 @@ import polars as pl
 
 from parallellm.core.datastore.base import Datastore
 from parallellm.core.datalake.metadata_sinks import openai_metadata_sinker
+from parallellm.core.datastore.sql_migrate import (
+    _check_and_migrate,
+    _migrate_sql_schema,
+)
 from parallellm.file_io.file_manager import FileManager
 from parallellm.types import CallIdentifier
 
@@ -26,7 +30,17 @@ class SQLiteDatastore(Datastore):
         self.file_manager = file_manager
         # Use threading.local to ensure each thread has its own connections
         self._local = threading.local()
-        self._dirty_checkpoints = set()
+        self._is_dirty = False
+
+        # Check if migration is needed (only on first initialization)
+        self._check_and_migrate()
+
+    def _check_and_migrate(self) -> None:
+        """
+        Check if old directory-based structure exists and migrate if needed.
+        Only runs once per datastore directory.
+        """
+        return _check_and_migrate(self)
 
     def _get_connections(self) -> dict[str, sqlite3.Connection]:
         """Get the connections dictionary for the current thread"""
@@ -34,107 +48,156 @@ class SQLiteDatastore(Datastore):
             self._local.connections = {}
         return self._local.connections
 
-    def _get_connection(
-        self, agent_name: Optional[str], checkpoint: Optional[str]
-    ) -> sqlite3.Connection:
-        """Get or create SQLite connection for a checkpoint in the current thread"""
+    def _get_connection(self, db_name: Optional[str] = None) -> sqlite3.Connection:
+        """
+        Get or create SQLite connection for a database.
+
+        :param db_name: Name identifier for the connection (None for main database, or custom names for additional connections)
+        :returns: SQLite connection for the specified database
+        """
         connections = self._get_connections()
 
-        if checkpoint not in connections:
-            # Create database file using file manager
-            directory = self.file_manager.allocate_datastore(agent_name, checkpoint)
-            db_path = directory / "datastore.db"
+        # Use "main" as key for None db_name
+        connection_key = db_name if db_name is not None else "main"
+
+        if connection_key not in connections:
+            # Get the base datastore directory
+            datastore_dir = self.file_manager.allocate_datastore()
+
+            # Use main datastore file for None/main, or custom named files for others
+            if db_name is None:
+                db_path = datastore_dir / "datastore.db"
+            else:
+                db_path = datastore_dir / f"{db_name}-datastore.db"
 
             # Create connection
             conn = sqlite3.connect(str(db_path))
             conn.row_factory = sqlite3.Row  # Enable dict-like access to rows
 
-            # Create table if it doesn't exist
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS responses (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    seq_id INTEGER NOT NULL,
-                    session_id INTEGER NOT NULL,
-                    doc_hash TEXT NOT NULL,
-                    response TEXT NOT NULL,
-                    response_id TEXT,
-                    provider_type TEXT,
-                    UNIQUE(doc_hash)
-                )
-            """)
+            # For main database (db_name is None), create both tables
+            if db_name is None:
+                # Anonymous responses table: no checkpoint column, agent_name can be NULL
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS anon_responses (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        agent_name TEXT,
+                        seq_id INTEGER NOT NULL,
+                        session_id INTEGER NOT NULL,
+                        doc_hash TEXT NOT NULL,
+                        response TEXT NOT NULL,
+                        response_id TEXT,
+                        provider_type TEXT,
+                        UNIQUE(agent_name, doc_hash)
+                    )
+                """)
 
-            # Create metadata table with response_id as join key
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS metadata (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    response_id TEXT NOT NULL,
-                    metadata TEXT NOT NULL,
-                    provider_type TEXT,
-                    UNIQUE(response_id)
-                )
-            """)
+                # Checkpoint responses table: checkpoint is NOT NULL
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS chk_responses (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        agent_name TEXT,
+                        checkpoint TEXT NOT NULL,
+                        seq_id INTEGER NOT NULL,
+                        session_id INTEGER NOT NULL,
+                        doc_hash TEXT NOT NULL,
+                        response TEXT NOT NULL,
+                        response_id TEXT,
+                        provider_type TEXT,
+                        UNIQUE(agent_name, checkpoint, doc_hash)
+                    )
+                """)
 
-            # Migrate existing schema if needed
-            self._migrate_schema(conn)
+                # Create metadata table (shared between both response tables)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS metadata (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        response_id TEXT NOT NULL,
+                        metadata TEXT NOT NULL,
+                        provider_type TEXT,
+                        UNIQUE(response_id)
+                    )
+                """)
 
-            # Create index for faster lookups
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_doc_hash ON responses(doc_hash)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_session_id ON responses(session_id)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_seq_id ON responses(seq_id)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_response_id ON responses(response_id)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_provider_type ON responses(provider_type)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_metadata_response_id ON metadata(response_id)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_metadata_provider_type ON metadata(provider_type)
-            """)
+                # Migrate existing schema if needed
+                _migrate_sql_schema(conn, None)
+
+                # Create indexes for anon_responses table
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_anon_agent_name ON anon_responses(agent_name)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_anon_agent_doc_hash ON anon_responses(agent_name, doc_hash)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_anon_doc_hash ON anon_responses(doc_hash)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_anon_session_id ON anon_responses(session_id)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_anon_seq_id ON anon_responses(seq_id)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_anon_response_id ON anon_responses(response_id)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_anon_provider_type ON anon_responses(provider_type)
+                """)
+
+                # Create indexes for chk_responses table
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_chk_agent_checkpoint ON chk_responses(agent_name, checkpoint)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_chk_agent_checkpoint_doc_hash ON chk_responses(agent_name, checkpoint, doc_hash)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_chk_doc_hash ON chk_responses(doc_hash)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_chk_session_id ON chk_responses(session_id)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_chk_seq_id ON chk_responses(seq_id)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_chk_response_id ON chk_responses(response_id)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_chk_provider_type ON chk_responses(provider_type)
+                """)
+
+                # Create indexes for metadata table
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_metadata_response_id ON metadata(response_id)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_metadata_provider_type ON metadata(provider_type)
+                """)
+            else:
+                # For custom named databases, create a simple responses table (legacy support)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS responses (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        agent_name TEXT,
+                        seq_id INTEGER NOT NULL,
+                        session_id INTEGER NOT NULL,
+                        doc_hash TEXT NOT NULL,
+                        response TEXT NOT NULL,
+                        response_id TEXT,
+                        provider_type TEXT,
+                        UNIQUE(agent_name, doc_hash)
+                    )
+                """)
+
+                # Migrate existing schema if needed
+                _migrate_sql_schema(conn, db_name)
 
             conn.commit()
-            connections[checkpoint] = conn
+            connections[connection_key] = conn
 
-        self._dirty_checkpoints.add((agent_name, checkpoint))
-        return connections[checkpoint]
-
-    def _migrate_schema(self, conn: sqlite3.Connection) -> None:
-        """
-        Migrate database schema from old format to new format.
-
-        Moves metadata from responses table to separate metadata table.
-        """
-        try:
-            # Check if old schema exists (responses table with metadata column)
-            cursor = conn.execute("PRAGMA table_info(responses)")
-            columns = [row[1] for row in cursor.fetchall()]
-
-            if "provider_type" not in columns:
-                print("Migrating SQLite...")
-                # Add provider_type column to responses table (default "openai")
-                conn.execute("ALTER TABLE responses ADD COLUMN provider_type TEXT")
-                conn.execute(
-                    "UPDATE responses SET provider_type = 'openai' WHERE provider_type IS NULL"
-                )
-
-                # Add provider_type column to metadata table
-                conn.execute("ALTER TABLE metadata ADD COLUMN provider_type TEXT")
-                conn.execute(
-                    "UPDATE metadata SET provider_type = 'openai' WHERE provider_type IS NULL"
-                )
-                conn.commit()
-
-        except sqlite3.Error:
-            # If migration fails, continue - tables will be created fresh
-            pass
+        self._is_dirty = True
+        return connections[connection_key]
 
     def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
         """
@@ -149,20 +212,43 @@ class SQLiteDatastore(Datastore):
         agent_name = call_id["agent_name"]
         # session_id NOT relevant for lookup
 
-        conn = self._get_connection(agent_name, checkpoint)
+        # Get main database connection
+        conn = self._get_connection(None)
 
-        # Try direct lookup using seq_id and doc_hash
+        # Determine table and build WHERE clause components
+        table_name = "chk_responses" if checkpoint is not None else "anon_responses"
+
+        # Base WHERE conditions (always present)
+        where_conditions = ["doc_hash = ?"]
+        params = [doc_hash]
+
+        # Add agent_name condition
+        if agent_name is not None:
+            where_conditions.append("agent_name = ?")
+            params.append(agent_name)
+        else:
+            where_conditions.append("agent_name IS NULL")
+
+        # Add checkpoint condition if using checkpoint table
+        if checkpoint is not None:
+            where_conditions.append("checkpoint = ?")
+            params.append(checkpoint)
+
+        # Try with seq_id first (most specific)
+        full_where = " AND ".join(where_conditions + ["seq_id = ?"])
+        full_params = params + [seq_id]
+
         cursor = conn.execute(
-            "SELECT response FROM responses WHERE seq_id = ? AND doc_hash = ?",
-            (seq_id, doc_hash),
+            f"SELECT response FROM {table_name} WHERE {full_where}", full_params
         )
         row = cursor.fetchone()
         if row:
             return row["response"]
 
-        # Fallback to doc_hash lookup
+        # Fallback: try without seq_id (less specific)
+        base_where = " AND ".join(where_conditions)
         cursor = conn.execute(
-            "SELECT response FROM responses WHERE doc_hash = ?", (doc_hash,)
+            f"SELECT response FROM {table_name} WHERE {base_where}", params
         )
         row = cursor.fetchone()
         return row["response"] if row else None
@@ -179,27 +265,51 @@ class SQLiteDatastore(Datastore):
         seq_id = call_id["seq_id"]
         agent_name = call_id["agent_name"]
 
-        conn = self._get_connection(agent_name, checkpoint)
+        # Get main database connection
+        conn = self._get_connection(None)
 
-        # First get the response_id from the responses table
+        # Determine table and build WHERE clause components
+        table_name = "chk_responses" if checkpoint is not None else "anon_responses"
+
+        # Base WHERE conditions (always present)
+        where_conditions = ["doc_hash = ?"]
+        params = [doc_hash]
+
+        # Add agent_name condition
+        if agent_name is not None:
+            where_conditions.append("agent_name = ?")
+            params.append(agent_name)
+        else:
+            where_conditions.append("agent_name IS NULL")
+
+        # Add checkpoint condition if using checkpoint table
+        if checkpoint is not None:
+            where_conditions.append("checkpoint = ?")
+            params.append(checkpoint)
+
+        # Try with seq_id first (most specific)
+        full_where = " AND ".join(where_conditions + ["seq_id = ?"])
+        full_params = params + [seq_id]
+
         cursor = conn.execute(
-            "SELECT response_id FROM responses WHERE seq_id = ? AND doc_hash = ?",
-            (seq_id, doc_hash),
+            f"SELECT response_id FROM {table_name} WHERE {full_where}", full_params
         )
         row = cursor.fetchone()
 
+        # If not found, try without seq_id (less specific)
         if not row or not row["response_id"]:
-            # Fallback to doc_hash lookup for response_id
+            base_where = " AND ".join(where_conditions)
             cursor = conn.execute(
-                "SELECT response_id FROM responses WHERE doc_hash = ?", (doc_hash,)
+                f"SELECT response_id FROM {table_name} WHERE {base_where}", params
             )
             row = cursor.fetchone()
 
+        # If we have a response_id, get the metadata
         if row and row["response_id"]:
             response_id = row["response_id"]
-            # Now get metadata using response_id
             cursor = conn.execute(
-                "SELECT metadata FROM metadata WHERE response_id = ?", (response_id,)
+                "SELECT metadata FROM metadata WHERE response_id = ?",
+                (response_id,),
             )
             metadata_row = cursor.fetchone()
             if metadata_row and metadata_row["metadata"]:
@@ -208,12 +318,7 @@ class SQLiteDatastore(Datastore):
         return None
 
     def store(
-        self,
-        call_id: CallIdentifier,
-        response: str,
-        response_id: str,
-        *,
-        save_to_file: bool = True,
+        self, call_id: CallIdentifier, response: str, response_id: str
     ) -> Optional[int]:
         """
         Store a response in SQLite.
@@ -221,8 +326,6 @@ class SQLiteDatastore(Datastore):
         :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
         :param response: The response content to store.
         :param response_id: The response ID to store.
-        :param provider_type: The name of the provider (e.g., "openai").
-        :param save_to_file: Whether to commit the transaction immediately (ignored - always commits).
         :returns: The seq_id where the response was stored.
         """
         checkpoint = call_id["checkpoint"]
@@ -232,47 +335,75 @@ class SQLiteDatastore(Datastore):
         agent_name = call_id["agent_name"]
         provider_type = call_id.get("provider_type")
 
-        conn = self._get_connection(agent_name, checkpoint)
+        # Get main database connection
+        conn = self._get_connection(None)
+
+        # Determine table and build WHERE/INSERT clause components
+        table_name = "chk_responses" if checkpoint is not None else "anon_responses"
+
+        # Build WHERE conditions for checking existing records
+        where_conditions = ["doc_hash = ?"]
+        where_params = [doc_hash]
+
+        # Add agent_name condition
+        if agent_name is not None:
+            where_conditions.append("agent_name = ?")
+            where_params.append(agent_name)
+        else:
+            where_conditions.append("agent_name IS NULL")
+
+        # Add checkpoint condition if using checkpoint table
+        if checkpoint is not None:
+            where_conditions.append("checkpoint = ?")
+            where_params.append(checkpoint)
+
+        where_clause = " AND ".join(where_conditions)
 
         try:
-            # Check if doc_hash already exists
+            # Check if record already exists
             cursor = conn.execute(
-                "SELECT seq_id FROM responses WHERE doc_hash = ?", (doc_hash,)
+                f"SELECT seq_id FROM {table_name} WHERE {where_clause}", where_params
             )
             existing = cursor.fetchone()
 
+            # Prepare column names and values for INSERT/UPDATE
+            columns = [
+                "agent_name",
+                "seq_id",
+                "session_id",
+                "doc_hash",
+                "response",
+                "response_id",
+                "provider_type",
+            ]
+            values = [
+                agent_name,
+                seq_id,
+                session_id,
+                doc_hash,
+                response,
+                response_id,
+                provider_type,
+            ]
+
+            if checkpoint is not None:
+                columns.insert(1, "checkpoint")  # Insert after agent_name
+                values.insert(1, checkpoint)
+
             if existing:
-                # Update existing record, setting seq_id and session_id if provided
-                conn.execute(
-                    "UPDATE responses SET response = ?, response_id = ?, seq_id = ?, session_id = ?, provider_type = ? WHERE doc_hash = ?",
-                    (
-                        response,
-                        response_id,
-                        seq_id,
-                        session_id,
-                        provider_type,
-                        doc_hash,
-                    ),
-                )
-                actual_seq_id = seq_id
+                # Update existing record
+                set_clauses = [f"{col} = ?" for col in columns]
+                update_sql = f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {where_clause}"
+                conn.execute(update_sql, values + where_params)
             else:
-                # Insert new record with seq_id and session_id
-                cursor = conn.execute(
-                    "INSERT INTO responses (seq_id, session_id, doc_hash, response, response_id, provider_type) VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        seq_id,
-                        session_id,
-                        doc_hash,
-                        response,
-                        response_id,
-                        provider_type,
-                    ),
-                )
-                actual_seq_id = seq_id
+                # Insert new record
+                placeholders = ", ".join(["?" for _ in columns])
+                insert_sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+                conn.execute(insert_sql, values)
 
             # Always commit immediately for thread safety
             conn.commit()
-            return actual_seq_id
+            return seq_id
 
         except sqlite3.Error as e:
             conn.rollback()
@@ -290,20 +421,18 @@ class SQLiteDatastore(Datastore):
         :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
         :param response_id: The response ID to store.
         :param metadata: The metadata to store.
-        :param provider_type: The name of the provider (e.g., "openai").
         """
-        agent_name = call_id["agent_name"]
-        checkpoint = call_id["checkpoint"]
-        conn = self._get_connection(agent_name, checkpoint)
-
         provider_type = call_id.get("provider_type", None)
+
+        # Get main database connection
+        conn = self._get_connection(None)
 
         try:
             # Serialize metadata to JSON
             metadata_json = json.dumps(metadata) if metadata else None
 
             if metadata_json:
-                # Insert or replace metadata for this response_id
+                # Insert or replace metadata for this response_id (response_id is unique UUID)
                 conn.execute(
                     "INSERT OR REPLACE INTO metadata (response_id, metadata, provider_type) VALUES (?, ?, ?)",
                     (response_id, metadata_json, provider_type),
@@ -316,9 +445,7 @@ class SQLiteDatastore(Datastore):
             conn.rollback()
             raise RuntimeError(f"SQLite error while storing metadata: {e}")
 
-    def _transfer_metadata_to_parquet(
-        self, agent_name: Optional[str], checkpoint: Optional[str]
-    ) -> None:
+    def _transfer_metadata_to_parquet(self) -> None:
         """
         Transfer OpenAI metadata from SQLite to Parquet files.
 
@@ -331,7 +458,7 @@ class SQLiteDatastore(Datastore):
 
         :param checkpoint: The checkpoint to transfer metadata for
         """
-        conn = self._get_connection(agent_name, checkpoint)
+        conn = self._get_connection(None)
 
         try:
             # Get all OpenAI metadata from the database
@@ -369,9 +496,9 @@ class SQLiteDatastore(Datastore):
                 return  # No data to save
 
             # Create metadata directory
-            datastore_dir = self.file_manager.allocate_datastore(agent_name, checkpoint)
+            datastore_dir = self.file_manager.allocate_datastore()
             metadata_dir = datastore_dir / "apimeta"
-            metadata_dir.mkdir(exist_ok=True)
+            metadata_dir.mkdir(parents=True, exist_ok=True)
 
             # Define file paths
             responses_parquet = metadata_dir / "responses.parquet"
@@ -449,22 +576,18 @@ class SQLiteDatastore(Datastore):
 
     def persist(self) -> None:
         """
-        Persist (commit) changes to SQLite database(s) and transfer metadata to Parquet files.
+        Persist (commit) changes to SQLite database and transfer metadata to Parquet files.
 
-        Closes remaining SQLite connections.
-
-        This method now also transfers OpenAI metadata from SQLite to Parquet files
+        This method transfers OpenAI metadata from SQLite to Parquet files
         for better storage efficiency.
         """
-        for agent_name, checkpoint in self._dirty_checkpoints:
+        # Transfer all metadata to parquet
+        if hasattr(self, "_local") and hasattr(self._local, "connections"):
             try:
-                pass
-                self._transfer_metadata_to_parquet(agent_name, checkpoint)
+                self._transfer_metadata_to_parquet()
             except Exception as e:
                 # Log the error but don't fail the persist operation
-                print(
-                    f"Warning: Failed to transfer metadata to Parquet for checkpoint '{checkpoint}': {e}"
-                )
+                print(f"Warning: Failed to transfer metadata to Parquet: {e}")
 
         # Note: SQLite implementation always commits immediately, so this is a no-op
         # for the actual database persistence

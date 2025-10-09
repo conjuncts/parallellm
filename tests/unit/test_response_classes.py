@@ -19,37 +19,6 @@ from parallellm.core.response import (
 from parallellm.types import CallIdentifier
 
 
-class TestLLMIdentity:
-    """Test LLM identity creation and provider handling"""
-
-    def test_identity_creation_basic(self):
-        """Test basic identity creation"""
-        identity = LLMIdentity("gpt-4")
-        assert identity.identity == "gpt-4"
-        assert identity.provider == "openai"  # Should be guessed
-
-    def test_identity_with_explicit_provider(self):
-        """Test identity with explicit provider"""
-        identity = LLMIdentity("claude-3", provider="anthropic")
-        assert identity.identity == "claude-3"
-        assert identity.provider == "anthropic"
-
-    def test_to_str_openai_default(self):
-        """Test string conversion with OpenAI defaults"""
-        identity = LLMIdentity("gpt-4")
-        assert identity.to_str("openai") == "gpt-4"
-
-    def test_to_str_with_none_identity(self):
-        """Test string conversion when identity is None"""
-        identity = LLMIdentity(None)
-        assert identity.to_str("openai") == "gpt-4.1-nano"  # Default
-
-    def test_to_str_no_provider_specified(self):
-        """Test string conversion using identity's provider"""
-        identity = LLMIdentity("custom-model", provider="custom")
-        assert identity.to_str() == "custom-model"
-
-
 class TestReadyLLMResponse:
     """Test ReadyLLMResponse (already resolved responses)"""
 

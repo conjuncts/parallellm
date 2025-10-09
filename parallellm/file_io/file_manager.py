@@ -157,21 +157,15 @@ class FileManager:
         with open(data_file, "rb") as f:
             return pickle.load(f)
 
-    def allocate_datastore(self, agent_name: str, checkpoint: Optional[str]) -> Path:
+    def allocate_datastore(self) -> Path:
         """
-        Allocate directory for a checkpoint's datastore
+        Get the base datastore directory.
 
-        :param checkpoint: The checkpoint name, or None for default checkpoint
-        :returns: Path to the checkpoint directory
+        :returns: Path to the datastore directory
         """
-        checkpoint_dir = (
-            self.directory
-            / "datastore"
-            / self._sanitize(agent_name, default="default-agent", add_hash=False)
-            / self._sanitize(checkpoint)
-        )
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        return checkpoint_dir
+        datastore_dir = self.directory / "datastore"
+        datastore_dir.mkdir(parents=True, exist_ok=True)
+        return datastore_dir
 
     def persist(self):
         """

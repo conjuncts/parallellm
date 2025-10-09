@@ -25,7 +25,7 @@ class WorkingMetadata(TypedDict):
 
 
 class CallIdentifier(TypedDict):
-    agent_name: Optional[str]
+    agent_name: str
     """Name of the agent (if any, otherwise default) making the call."""
     checkpoint: Optional[str]
     doc_hash: str

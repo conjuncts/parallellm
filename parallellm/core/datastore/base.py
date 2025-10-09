@@ -37,8 +37,6 @@ class Datastore(ABC):
         call_id: CallIdentifier,
         response: str,
         response_id: str,
-        *,
-        save_to_file: bool = True,
     ) -> Optional[int]:
         """
         Store a response in the backend.
@@ -46,7 +44,6 @@ class Datastore(ABC):
         :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
         :param response: The response content to store.
         :param response_id: The response ID to store.
-        :param save_to_file: Whether to save the updated data back to the file.
         :returns: The seq_id where the response was stored (if applicable).
         """
         raise NotImplementedError

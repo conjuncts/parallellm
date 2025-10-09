@@ -20,7 +20,7 @@ class AgentContext:
 
     def __init__(
         self,
-        agent_name,
+        agent_name: str,
         batch_manager: "AgentOrchestrator",
         *,
         ask_params: Optional[AskParameters] = None,
@@ -239,7 +239,7 @@ class AgentDashboardContext(AgentContext):
 
     def __init__(
         self,
-        agent_name,
+        agent_name: str,
         batch_manager: "AgentOrchestrator",
         *,
         log_k: int = 10,
