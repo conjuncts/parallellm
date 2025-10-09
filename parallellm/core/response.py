@@ -1,39 +1,5 @@
-from typing import Literal, Optional, Union
-
 from parallellm.core.backend import BaseBackend
-from parallellm.provider.guess import guess_provider
 from parallellm.types import CallIdentifier
-
-
-class LLMIdentity:
-    def __init__(self, identity: str, provider: Optional[str] = None):
-        """
-        Identify a specific LLM agent.
-        """
-        self.identity = identity
-
-        if provider is None:
-            # do some guessing
-            provider = guess_provider(identity)
-
-        self.provider = provider
-
-    def to_str(self, provider: Union[Literal["openai"], None] = None) -> str:
-        """
-        Convert to a string representation for a specific provider.
-
-        :param provider: A specific provider (ie. openai)
-        """
-        if provider is None:
-            provider = self.provider
-
-        if self.identity is None:
-            # Provide sensible defaults
-
-            if provider == "openai":
-                return "gpt-4.1-nano"
-
-        return self.identity
 
 
 class LLMResponse:

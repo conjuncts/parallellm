@@ -45,3 +45,6 @@ class AskParameters(TypedDict):
 
 # Type alias for documents that can be either text or images
 LLMDocument = Union[str, Image.Image]
+
+
+ProviderType = Literal["openai", "anthropic", "google"]

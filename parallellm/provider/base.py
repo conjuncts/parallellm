@@ -1,11 +1,11 @@
 from typing import List, Optional, Union
 
-from parallellm.core.response import LLMIdentity
-from parallellm.types import CallIdentifier, LLMDocument
+from parallellm.core.identity import LLMIdentity
+from parallellm.types import CallIdentifier, LLMDocument, ProviderType
 
 
 class BaseProvider:
-    provider_type: Optional[str] = None
+    provider_type: Optional[ProviderType] = None
     """Must be set by subclasses to identify the provider type."""
 
     def submit_query_to_provider(
@@ -19,6 +19,10 @@ class BaseProvider:
         **kwargs,
     ):
         raise NotImplementedError
+
+    def is_compatible(self, other: ProviderType) -> bool:
+        """Returns whether this provider accepts the given provider type."""
+        return other is None or self.provider_type == other
 
 
 class SyncProvider(BaseProvider):

@@ -13,6 +13,7 @@ import pytest
 from unittest.mock import Mock, AsyncMock, patch
 import asyncio
 from typing import Callable, Any, Tuple, Dict
+from parallellm.core.identity import LLMIdentity
 from parallellm.provider.openai import (
     SyncOpenAIProvider,
     AsyncOpenAIProvider,
@@ -20,7 +21,7 @@ from parallellm.provider.openai import (
 )
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.backend.async_backend import AsyncBackend
-from parallellm.core.response import LLMIdentity, PendingLLMResponse, ReadyLLMResponse
+from parallellm.core.response import PendingLLMResponse, ReadyLLMResponse
 from parallellm.types import CallIdentifier, LLMDocument
 from parallellm.testing.simple_mock import MockOpenAIClient, MockAsyncOpenAIClient
 from PIL import Image

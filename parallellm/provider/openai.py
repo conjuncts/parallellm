@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING, List, Optional, Union
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.sync_backend import SyncBackend
+from parallellm.core.identity import LLMIdentity
 from parallellm.core.response import (
-    LLMIdentity,
     LLMResponse,
     PendingLLMResponse,
     ReadyLLMResponse,
@@ -56,7 +56,7 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
 
         def sync_openai_call():
             return self.client.responses.create(
-                model=llm.to_str("openai") if llm else "gpt-4.1-nano",
+                model=llm.model_name if llm else "gpt-4.1-nano",
                 instructions=instructions,
                 input=documents,
                 **kwargs,
@@ -89,7 +89,7 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
         documents = _fix_docs_for_openai(documents)
 
         coro = self.client.responses.create(
-            model=llm.to_str("openai") if llm else "gpt-4.1-nano",
+            model=llm.model_name if llm else "gpt-4.1-nano",
             instructions=instructions,
             input=documents,
             **kwargs,

@@ -16,6 +16,8 @@ include = ["parallellm*"]
 
 [dependency-groups]
 dev = [
+    "anthropic>=0.69.0",
+    "google-genai>=1.41.0",
     "pandas>=2.3.2",
     "pyarrow>=21.0.0",
     "pytest>=8.4.2",

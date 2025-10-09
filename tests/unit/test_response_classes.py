@@ -10,8 +10,8 @@ Tests the LLMResponse hierarchy including:
 
 import pytest
 from unittest.mock import Mock, MagicMock
+from parallellm.core.identity import LLMIdentity
 from parallellm.core.response import (
-    LLMIdentity,
     LLMResponse,
     PendingLLMResponse,
     ReadyLLMResponse,

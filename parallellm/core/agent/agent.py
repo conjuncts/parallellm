@@ -3,8 +3,8 @@ from colorama import Fore, Style, init
 from parallellm.core.cast.fix_docs import cast_documents
 from parallellm.core.exception import GotoCheckpoint, NotAvailable, WrongCheckpoint
 from parallellm.core.hash import compute_hash
+from parallellm.core.identity import LLMIdentity
 from parallellm.core.response import (
-    LLMIdentity,
     LLMResponse,
     ReadyLLMResponse,
 )
@@ -209,6 +209,13 @@ class AgentContext:
             return ReadyLLMResponse(
                 call_id=call_id,
                 value=cached,
+            )
+
+        # Make sure the LLM is compatible with the provider
+        if llm is not None and not self._bm._provider.is_compatible(llm.provider):
+            raise ValueError(
+                f"LLM {llm.identity} is not compatible"
+                + f" with provider {self._bm._provider.provider_type}"
             )
 
         # Not cached, submit to provider

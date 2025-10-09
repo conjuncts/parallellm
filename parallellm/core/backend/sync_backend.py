@@ -3,7 +3,7 @@ from parallellm.core.backend import BaseBackend
 from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
-from parallellm.provider.guess import guess_schema
+from parallellm.provider.schemas import guess_schema
 from parallellm.types import CallIdentifier
 
 
