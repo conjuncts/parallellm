@@ -7,13 +7,38 @@ from pathlib import Path
 import polars as pl
 
 from parallellm.core.datastore.base import Datastore
-from parallellm.core.datalake.metadata_sinks import openai_metadata_sinker
 from parallellm.core.datastore.sql_migrate import (
     _check_and_migrate,
     _migrate_sql_schema,
 )
+from parallellm.core.lake.sequester import sequester_openai_metadata
 from parallellm.file_io.file_manager import FileManager
 from parallellm.types import CallIdentifier
+
+
+def _sql_table_to_dataframe(
+    conn: sqlite3.Connection, sql_query: str, params: tuple = ()
+) -> Optional[pl.DataFrame]:
+    """
+    Extract data from a SQL query and convert to a Polars DataFrame.
+
+    :param conn: SQLite connection
+    :param sql_query: SQL query to execute
+    :param params: Parameters for the SQL query
+    :returns: Polars DataFrame with the query results, or None if no data
+    """
+    cursor = conn.execute(sql_query, params)
+    rows = cursor.fetchall()
+
+    if not rows:
+        return None
+
+    # Convert to DataFrame
+    columns = [description[0] for description in cursor.description]
+    data = [dict(zip(columns, row)) for row in rows]
+    df = pl.DataFrame(data)
+
+    return df if not df.is_empty() else None
 
 
 class SQLiteDatastore(Datastore):
@@ -471,106 +496,18 @@ class SQLiteDatastore(Datastore):
 
             if not metadata_rows:
                 return  # Nothing to transfer
+            sequestered = sequester_openai_metadata(metadata_rows, self.file_manager)
+            if sequestered:
+                placeholders = ",".join(["?" for _ in sequestered])
+                conn.execute(
+                    f"DELETE FROM metadata WHERE response_id IN ({placeholders})",
+                    sequestered,
+                )
+                conn.commit()
 
-            # Extract metadata strings for processing
-            metadata_strings = []
-            response_ids_to_delete = []
-
-            for row in metadata_rows:
-                response_id = row["response_id"]
-                metadata_json = row["metadata"]
-
-                if metadata_json:
-                    metadata_strings.append(metadata_json)
-                    response_ids_to_delete.append(response_id)
-
-            if not metadata_strings:
-                return  # No valid metadata to transfer
-
-            # Process metadata using the existing sinker function
-            processed_data = openai_metadata_sinker(metadata_strings)
-            responses_df = processed_data["responses"]
-            messages_df = processed_data["messages"]
-
-            if responses_df.is_empty() and messages_df.is_empty():
-                return  # No data to save
-
-            # Create metadata directory
-            datastore_dir = self.file_manager.allocate_datastore()
-            metadata_dir = datastore_dir / "apimeta"
-            metadata_dir.mkdir(parents=True, exist_ok=True)
-
-            # Define file paths
-            responses_parquet = metadata_dir / "responses.parquet"
-            messages_parquet = metadata_dir / "messages.parquet"
-            responses_tmp = metadata_dir / "responses.parquet.tmp"
-            messages_tmp = metadata_dir / "messages.parquet.tmp"
-
-            try:
-                # Handle responses dataframe
-                if not responses_df.is_empty():
-                    final_responses_df = responses_df
-
-                    # Merge with existing responses data if file exists
-                    if responses_parquet.exists():
-                        existing_responses = pl.read_parquet(responses_parquet)
-                        # Concatenate and deduplicate based on all columns
-                        final_responses_df = pl.concat(
-                            [existing_responses, responses_df]
-                        ).unique()
-
-                    # Write to temporary file
-                    final_responses_df.write_parquet(responses_tmp)
-
-                # Handle messages dataframe
-                if not messages_df.is_empty():
-                    final_messages_df = messages_df
-
-                    # Merge with existing messages data if file exists
-                    if messages_parquet.exists():
-                        existing_messages = pl.read_parquet(messages_parquet)
-                        # Concatenate and deduplicate based on all columns
-                        final_messages_df = pl.concat(
-                            [existing_messages, messages_df]
-                        ).unique()
-
-                    # Write to temporary file
-                    final_messages_df.write_parquet(messages_tmp)
-
-                # Atomic swap: move temporary files to final locations
-                if responses_tmp.exists():
-                    if responses_parquet.exists():
-                        responses_parquet.unlink()  # Remove old file
-                    responses_tmp.rename(responses_parquet)
-
-                if messages_tmp.exists():
-                    if messages_parquet.exists():
-                        messages_parquet.unlink()  # Remove old file
-                    messages_tmp.rename(messages_parquet)
-
-                # Success! Now remove the transferred metadata from SQLite
-                if response_ids_to_delete:
-                    placeholders = ",".join(["?" for _ in response_ids_to_delete])
-                    conn.execute(
-                        f"DELETE FROM metadata WHERE response_id IN ({placeholders})",
-                        response_ids_to_delete,
-                    )
-                    conn.commit()
-
-                    # VACUUM database for debugging (reclaim space after deletion)
-                    # print(f"Debug: VACUUMing database for checkpoint '{checkpoint}' after deleting {len(response_ids_to_delete)} metadata records")
-                    # conn.execute("VACUUM")
-
-            except Exception as e:
-                # Clean up temporary files on error
-                for tmp_file in [responses_tmp, messages_tmp]:
-                    if tmp_file.exists():
-                        try:
-                            tmp_file.unlink()
-                        except Exception:
-                            pass  # Ignore cleanup errors
-                raise RuntimeError(f"Error transferring metadata to Parquet: {e}")
-
+                # VACUUM database for debugging (reclaim space after deletion)
+                # print(f"Debug: VACUUMing database for checkpoint '{checkpoint}' after deleting {len(succeeded)} metadata records")
+                # conn.execute("VACUUM")
         except sqlite3.Error as e:
             raise RuntimeError(f"SQLite error during metadata transfer: {e}")
 

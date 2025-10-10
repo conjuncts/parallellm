@@ -349,7 +349,24 @@ def _migrate_sql_schema(conn: sqlite3.Connection, db_name: Optional[str]) -> Non
         pass
 
 
+def _tmp_migrate_apimeta(fm: FileManager):
+    path = fm.allocate_datastore() / "apimeta"
+
+    num_moved = 0
+    if (path / "responses.parquet").exists():
+        # move to (path / "openai-responses.parquet")
+        (path / "responses.parquet").rename(path / "openai-responses.parquet")
+        num_moved += 1
+    if (path / "messages.parquet").exists():
+        (path / "messages.parquet").rename(path / "openai-messages.parquet")
+        num_moved += 1
+    if num_moved > 0:
+        print(f"Migrated {num_moved} apimeta files")
+
+
 if __name__ == "__main__":
-    for subdir in os.listdir(".pllm"):
-        fm = FileManager(f".pllm/{subdir}")
-        _tmp_migrate_datastores(fm)
+    root = ".pllm"
+    for subdir in os.listdir(root):
+        fm = FileManager(f"{root}/{subdir}")
+        # _tmp_migrate_datastores(fm)
+        _tmp_migrate_apimeta(fm)

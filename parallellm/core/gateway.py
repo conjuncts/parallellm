@@ -14,6 +14,7 @@ class ParalleLLMGateway:
         *,
         strategy: Literal["sync", "async", "batch", "hybrid"] = "async",
         provider: Literal["openai", None] = None,
+        datastore: Literal["sqlite", "sqlite_parquet"] = "sqlite",
         dry_run=False,
         log_level=logging.INFO,
     ):
@@ -45,14 +46,27 @@ class ParalleLLMGateway:
         fm = FileManager(directory)
 
         # logger.debug("Creating backend")
+        if datastore == "sqlite":
+            datastore_cls = None  # default
+        elif datastore == "sqlite_parquet":
+            from parallellm.core.datastore.semi_sql_parquet import (
+                SQLiteParquetDatastore,
+            )
+
+            datastore_cls = SQLiteParquetDatastore
+
         if strategy == "async":
             from parallellm.core.backend.async_backend import AsyncBackend
 
-            backend = AsyncBackend(fm, dash_logger=dash_logger)
+            backend = AsyncBackend(
+                fm, dash_logger=dash_logger, datastore_cls=datastore_cls
+            )
         elif strategy == "sync":
             from parallellm.core.backend.sync_backend import SyncBackend
 
-            backend = SyncBackend(fm, dash_logger=dash_logger)
+            backend = SyncBackend(
+                fm, dash_logger=dash_logger, datastore_cls=datastore_cls
+            )
         else:
             raise NotImplementedError(f"Strategy '{strategy}' is not implemented yet")
 

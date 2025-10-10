@@ -14,6 +14,7 @@ pllm = ParalleLLM.resume_directory(
     # ".temp",
     provider="openai",  #
     strategy="async",
+    datastore="sqlite",
     log_level=logging.DEBUG,
 )
 

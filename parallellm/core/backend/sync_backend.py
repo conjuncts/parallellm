@@ -13,9 +13,19 @@ class SyncBackend(BaseBackend):
     This backend is simpler and more straightforward for synchronous workflows.
     """
 
-    def __init__(self, fm: FileManager, dash_logger: Optional[DashboardLogger] = None):
+    def __init__(
+        self,
+        fm: FileManager,
+        dash_logger: Optional[DashboardLogger] = None,
+        *,
+        datastore_cls=None,
+    ):
         self._fm = fm
-        self._ds = SQLiteDatastore(self._fm)
+
+        if datastore_cls is None:
+            self._ds = SQLiteDatastore(self._fm)
+        else:
+            self._ds = datastore_cls(self._fm)
         self._dash_logger = dash_logger
 
         # Store results directly instead of managing async tasks

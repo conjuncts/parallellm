@@ -20,7 +20,13 @@ class AsyncBackend(BaseBackend):
     The Datastore
     """
 
-    def __init__(self, fm: FileManager, dash_logger: Optional[DashboardLogger] = None):
+    def __init__(
+        self,
+        fm: FileManager,
+        dash_logger: Optional[DashboardLogger] = None,
+        *,
+        datastore_cls=None,
+    ):
         self._fm = fm
         self._dash_logger = dash_logger
 
@@ -32,7 +38,7 @@ class AsyncBackend(BaseBackend):
         self._loop_ready_event = threading.Event()
 
         # Start the event loop in a separate thread
-        # self._ds = SQLiteDatastore(self._fm)
+        self.datastore_cls = datastore_cls
         self._async_ds: Optional[SQLiteDatastore] = None
         self._start_event_loop()
 
@@ -47,7 +53,10 @@ class AsyncBackend(BaseBackend):
             asyncio.set_event_loop(self._loop)
 
             # Initialize the datastore now that the loop is running
-            self._async_ds = SQLiteDatastore(self._fm)
+            if self.datastore_cls is None:
+                self._async_ds = SQLiteDatastore(self._fm)
+            else:
+                self._async_ds = self.datastore_cls(self._fm)
 
             # Signal that the loop is ready
             self._loop_ready_event.set()
