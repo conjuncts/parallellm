@@ -1,3 +1,4 @@
+import re
 from typing import TYPE_CHECKING, List, Literal, Optional, Union
 from colorama import Fore, Style, init
 from parallellm.core.cast.fix_docs import cast_documents
@@ -76,7 +77,15 @@ class AgentContext:
         )
 
     def when_checkpoint(self, checkpoint_name):
-        # Always allow enter if no checkpoints yet
+        """
+        Declares a checkpoint.
+
+        This permits non-deterministic/expensive operations to be skipped
+        and allows code to be resumed.
+
+        :param checkpoint_name: Only execute subsequent code if the agent
+            is at this checkpoint.
+        """
         if self.my_metadata["latest_checkpoint"] is None:
             self.my_metadata["latest_checkpoint"] = checkpoint_name
 
@@ -92,6 +101,20 @@ class AgentContext:
         self._bm._logger.info(
             f"Entered checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
         )
+
+    def when_checkpoint_pattern(self, checkpoint_pattern):
+        """
+        Declares a checkpoint based on a regex pattern.
+
+        :param checkpoint_pattern: Regex pattern to match the checkpoint name.
+        """
+
+        curr_checkpoint = self.my_metadata["latest_checkpoint"]
+        if curr_checkpoint is None:
+            raise WrongCheckpoint()
+
+        if re.match(checkpoint_pattern, curr_checkpoint):
+            self.when_checkpoint(curr_checkpoint)
 
     def goto_checkpoint(self, checkpoint_name):
         """

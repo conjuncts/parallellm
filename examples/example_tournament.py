@@ -3,7 +3,6 @@ import os
 import shutil
 from parallellm.core.gateway import ParalleLLM
 from dotenv import load_dotenv
-# from parallellm.core.manager import BatchManager
 
 
 print("Before")

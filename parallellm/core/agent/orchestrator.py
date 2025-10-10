@@ -1,3 +1,4 @@
+from logging import Logger
 from typing import List, Optional, Union
 from parallellm.core.agent.agent import AgentContext, AgentDashboardContext
 from parallellm.core.backend import BaseBackend
@@ -19,7 +20,7 @@ class AgentOrchestrator:
         backend: BaseBackend,
         provider: BaseProvider,
         *,
-        logger,
+        logger: Logger,
         dash_logger,
         ask_params: Optional[AskParameters] = None,
     ):

@@ -2,7 +2,6 @@ import logging
 import random
 from parallellm.core.gateway import ParalleLLM
 from dotenv import load_dotenv
-# from parallellm.core.manager import BatchManager
 
 load_dotenv()
 
