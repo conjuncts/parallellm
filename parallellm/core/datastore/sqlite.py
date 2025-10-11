@@ -517,7 +517,7 @@ class SQLiteDatastore(Datastore):
         """
         Persist (commit) changes to SQLite database and transfer metadata to Parquet files.
 
-        And closes all connections. After this call, the datastore is still usable, 
+        And closes all connections. After this call, the datastore is still usable,
         but current connections are closed (connections will be recreated on demand).
 
         Also, OpenAI metadata is transferred from SQLite to Parquet files

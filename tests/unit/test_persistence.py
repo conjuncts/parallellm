@@ -218,12 +218,12 @@ class TestUserdataPersistence:
             # Save initial data
             fm.save_userdata("test_key", "original_value")
 
-            # Try to save without overwrite (should not change)
+            # No overwrite (should not change)
             fm.save_userdata("test_key", "new_value", overwrite=False)
             loaded_value = fm.load_userdata("test_key")
             assert loaded_value == "original_value"
 
-            # Save with overwrite (should change)
+            # Overwrite (should change)
             fm.save_userdata("test_key", "new_value", overwrite=True)
             loaded_value = fm.load_userdata("test_key")
             assert loaded_value == "new_value"
@@ -280,7 +280,6 @@ class TestAgentOrchestratorIntegration:
     def test_orchestrator_userdata_operations(self):
         """Test userdata operations through AgentOrchestrator"""
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Create mock components
             fm = FileManager(temp_dir)
             mock_backend = Mock()
             mock_provider = Mock()
@@ -319,7 +318,6 @@ class TestAgentOrchestratorIntegration:
                 dash_logger=mock_dash_logger,
             )
 
-            # Create mock responses
             call_id = self._create_mock_call_id()
             pending_response = PendingLLMResponse(call_id=call_id, backend=None)
             ready_response = ReadyLLMResponse(call_id=call_id, value="test_value")
@@ -336,13 +334,11 @@ class TestAgentOrchestratorIntegration:
             assert loaded_pending._backend == mock_backend
 
             assert isinstance(loaded_ready, ReadyLLMResponse)
-            # ReadyLLMResponse should call backend.retrieve
             mock_backend.retrieve.assert_called_with(ready_response.call_id)
 
     def test_orchestrator_ignore_cache_parameter(self):
         """Test that ignore_cache parameter works correctly"""
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Create mock components
             fm = FileManager(temp_dir)
             mock_backend = Mock()
             mock_provider = Mock()
@@ -352,7 +348,6 @@ class TestAgentOrchestratorIntegration:
             # Set up mock backend to return cached response
             mock_backend.retrieve.return_value = "cached_response"
 
-            # Set up mock provider to return a new response
             mock_call_id = self._create_mock_call_id()
             mock_provider.submit_query_to_provider.return_value = ReadyLLMResponse(
                 call_id=mock_call_id, value="fresh_response"
@@ -368,14 +363,12 @@ class TestAgentOrchestratorIntegration:
                 ignore_cache=True,
             )
 
-            # Test that cache is ignored when ignore_cache=True
             with orchestrator.agent() as agent:
                 response = agent.ask_llm("Test prompt")
 
                 # Backend retrieve should NOT be called
                 mock_backend.retrieve.assert_not_called()
 
-                # Provider should be called directly
                 mock_provider.submit_query_to_provider.assert_called_once()
 
     def _create_mock_call_id(self) -> CallIdentifier:
@@ -398,10 +391,8 @@ class TestCheckpointLogging:
         with tempfile.TemporaryDirectory() as temp_dir:
             fm = FileManager(temp_dir)
 
-            # Log a checkpoint event
             fm.log_checkpoint_event("enter", "test_agent", "test_checkpoint", 5)
 
-            # Check log file was created
             log_file = fm.directory / "logs" / "checkpoint_events.tsv"
             assert log_file.exists()
 
@@ -454,7 +445,6 @@ class TestFileManagerPersistence:
                 "checkpoint_counter": 10,
             }
 
-            # Persist changes
             fm.persist()
 
             # Verify metadata file contains changes

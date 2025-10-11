@@ -32,12 +32,12 @@ class TestAgentContextBasics:
         """Test __exit__ handles ParalleLLM exceptions correctly"""
         agent = AgentContext("test_agent", mock_orchestrator)
 
-        # These exceptions should be suppressed (return True)
         suppressed_exceptions = [NotAvailable, WrongCheckpoint, GotoCheckpoint]
 
         for exc_type in suppressed_exceptions:
             with agent:
                 raise exc_type("test exception")
+        # Exceptions should have been suppressed
 
     def test_exit_with_other_exceptions(self, mock_orchestrator):
         """Test __exit__ doesn't suppress other exceptions"""
@@ -57,13 +57,12 @@ def test_counter_independence(mock_orchestrator):
     """Test that anonymous and checkpoint counters are independent"""
     agent = AgentContext("test_agent", mock_orchestrator)
 
-    # Anonymous calls in context
     with agent:
         agent.ask_llm("anonymous 1")
         agent.ask_llm("anonymous 2")
         assert agent._anonymous_counter == 2
 
-    # Switch to checkpoint mode in new context
+    # Switch to checkpoint mode
     with agent:
         agent.when_checkpoint("checkpoint_1")
         agent.ask_llm("checkpoint 1")
@@ -149,7 +148,6 @@ class TestAskLLMMethod:
         """Test that context manager properly cleans up checkpoint state"""
         agent = AgentContext("test_agent", mock_orchestrator)
 
-        # Use context manager with checkpoint
         with agent:
             agent.when_checkpoint("test_checkpoint")
             agent.ask_llm("checkpoint prompt")
@@ -166,7 +164,6 @@ class TestAskLLMMethod:
         """Test that context manager preserves anonymous counter across contexts"""
         agent = AgentContext("test_agent", mock_orchestrator)
 
-        # First context block
         with agent:
             agent.ask_llm("first call")
             agent.ask_llm("second call")

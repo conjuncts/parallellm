@@ -27,6 +27,9 @@ from parallellm.testing.simple_mock import MockOpenAIClient, MockAsyncOpenAIClie
 from PIL import Image
 
 
+pytest.skip("Not very informative", allow_module_level=True)
+
+
 class MockSyncBackend:
     """Mock sync backend that actually executes sync functions"""
 

@@ -79,17 +79,14 @@ class TestGeminiProviders:
             {},
         )
 
-        # Create provider
         provider = SyncGeminiProvider(client=mock_client, backend=mock_backend)
 
-        # Submit query
         response = provider.submit_query_to_provider(
             instructions="Test instructions",
             documents=["Test document"],
             call_id=call_id,
         )
 
-        # Verify response
         assert isinstance(response, ReadyLLMResponse)
         assert response.call_id == call_id
         assert response.value == "Test response from Gemini"

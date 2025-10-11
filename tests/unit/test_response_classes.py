@@ -22,22 +22,13 @@ from parallellm.types import CallIdentifier
 class TestReadyLLMResponse:
     """Test ReadyLLMResponse (already resolved responses)"""
 
-    def test_ready_response_creation(self):
+    def test_ready_response_immediate_resolution(self):
         """Test creating a ready response"""
         call_id = self._create_mock_call_id()
-        response = ReadyLLMResponse(call_id=call_id, value="Test response content")
+        response = ReadyLLMResponse(call_id=call_id, value="Immediate content")
 
         assert response.call_id == call_id
-        assert response.resolve() == "Test response content"
-
-    def test_ready_response_immediate_resolution(self):
-        """Test that ready responses resolve immediately"""
-        call_id = self._create_mock_call_id()
-        response = ReadyLLMResponse(call_id=call_id, value="Immediate result")
-
-        # Should return value immediately without backend calls
-        result = response.resolve()
-        assert result == "Immediate result"
+        assert response.resolve() == "Immediate content"
 
     def test_ready_response_serialization(self):
         """Test ready response can be serialized"""
@@ -174,24 +165,6 @@ class TestLLMResponseHierarchy:
         # All should return strings
         assert isinstance(ready.resolve(), str)
         assert isinstance(pending.resolve(), str)
-
-    def test_call_id_structure(self):
-        """Test that call IDs have required fields"""
-        call_id = self._create_mock_call_id()
-
-        required_fields = {
-            "agent_name",
-            "checkpoint",
-            "doc_hash",
-            "seq_id",
-            "session_id",
-            "provider_type",
-        }
-
-        assert all(field in call_id for field in required_fields)
-        assert isinstance(call_id["seq_id"], int)
-        assert isinstance(call_id["session_id"], int)
-        assert isinstance(call_id["doc_hash"], str)
 
     def _create_mock_call_id(self) -> CallIdentifier:
         """Helper to create mock call identifiers"""

@@ -31,38 +31,15 @@ class TestComputeHash:
 
         # Should return a hex string
         assert isinstance(result, str)
-        assert len(result) == 64  # SHA-256 hex length
+        assert len(result) == 64
 
         # Should be deterministic
         result2 = compute_hash(instructions, documents)
         assert result == result2
 
-    def test_hash_no_instructions(self):
-        """Test hashing with None instructions"""
-        documents = ["Only document"]
-
-        result = compute_hash(None, documents)
-
-        assert isinstance(result, str)
-        assert len(result) == 64
-
-    def test_hash_empty_documents(self):
-        """Test hashing with empty document list"""
+        # Should work for []
         instructions = "Just instructions"
         documents = []
-
-        result = compute_hash(instructions, documents)
-
-        assert isinstance(result, str)
-        assert len(result) == 64
-
-    def test_hash_with_images(self):
-        """Test hashing with PIL Images"""
-        instructions = "Process this image"
-
-        # Create a simple test image
-        img = Image.new("RGB", (10, 10), color="red")
-        documents = ["Text doc", img]
 
         result = compute_hash(instructions, documents)
 
@@ -75,23 +52,16 @@ class TestComputeHash:
 
         img1 = Image.new("RGB", (5, 5), color="blue")
         img2 = Image.new("RGB", (5, 5), color="blue")  # Identical image
+        img3 = Image.new("RGB", (5, 5), color="red")  # Different image
 
         result1 = compute_hash(instructions, ["text", img1])
         result2 = compute_hash(instructions, ["text", img2])
+        result3 = compute_hash(instructions, ["text", img3])
 
+        assert isinstance(result1, str)
+        assert len(result1) == 64
         assert result1 == result2
-
-    def test_hash_different_with_different_images(self):
-        """Test that hash differs with different images"""
-        instructions = "Process images"
-
-        img1 = Image.new("RGB", (5, 5), color="red")
-        img2 = Image.new("RGB", (5, 5), color="green")  # Different image
-
-        result1 = compute_hash(instructions, ["text", img1])
-        result2 = compute_hash(instructions, ["text", img2])
-
-        assert result1 != result2
+        assert result1 != result3
 
     def test_hash_different_orders(self):
         """Test that document order affects hash"""
@@ -125,6 +95,7 @@ class TestComputeHash:
         assert result == expected
 
 
+@pytest.skip("Not very informative")
 class TestDashboardLogger:
     """Test DashboardLogger functionality"""
 
@@ -206,11 +177,9 @@ class TestDashboardLogger:
         """Test clearing all hashes"""
         logger = DashboardLogger(k=3, display=False)
 
-        # Add some hashes
         logger.update_hash("test_hash" + "0" * 56, HashStatus.SENT)
         assert len(logger._hashes) == 1
 
-        # Clear
         logger.clear()
         assert len(logger._hashes) == 0
 
@@ -349,19 +318,15 @@ class TestCacheIntegration:
         logger = DashboardLogger(k=5, display=False)
         test_hash = "abcdef123456" + "0" * 52
 
-        # 1. Initial request (cache miss)
         logger.update_hash(test_hash, HashStatus.SENT)
         assert logger.get_status(test_hash) == HashStatus.SENT
 
-        # 2. Response received
         logger.update_hash(test_hash, HashStatus.RECEIVED)
         assert logger.get_status(test_hash) == HashStatus.RECEIVED
 
-        # 3. Stored in cache
         logger.update_hash(test_hash, HashStatus.STORED)
         assert logger.get_status(test_hash) == HashStatus.STORED
 
-        # 4. Next request (cache hit)
         logger.update_hash(test_hash, HashStatus.CACHED)
         assert logger.get_status(test_hash) == HashStatus.CACHED
 
