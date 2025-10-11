@@ -339,6 +339,45 @@ class TestAgentOrchestratorIntegration:
             # ReadyLLMResponse should call backend.retrieve
             mock_backend.retrieve.assert_called_with(ready_response.call_id)
 
+    def test_orchestrator_ignore_cache_parameter(self):
+        """Test that ignore_cache parameter works correctly"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create mock components
+            fm = FileManager(temp_dir)
+            mock_backend = Mock()
+            mock_provider = Mock()
+            mock_logger = Mock()
+            mock_dash_logger = Mock()
+
+            # Set up mock backend to return cached response
+            mock_backend.retrieve.return_value = "cached_response"
+
+            # Set up mock provider to return a new response
+            mock_call_id = self._create_mock_call_id()
+            mock_provider.submit_query_to_provider.return_value = ReadyLLMResponse(
+                call_id=mock_call_id, value="fresh_response"
+            )
+
+            # Create orchestrator with ignore_cache=True
+            orchestrator = AgentOrchestrator(
+                file_manager=fm,
+                backend=mock_backend,
+                provider=mock_provider,
+                logger=mock_logger,
+                dash_logger=mock_dash_logger,
+                ignore_cache=True,
+            )
+
+            # Test that cache is ignored when ignore_cache=True
+            with orchestrator.agent() as agent:
+                response = agent.ask_llm("Test prompt")
+
+                # Backend retrieve should NOT be called
+                mock_backend.retrieve.assert_not_called()
+
+                # Provider should be called directly
+                mock_provider.submit_query_to_provider.assert_called_once()
+
     def _create_mock_call_id(self) -> CallIdentifier:
         """Helper to create mock call identifiers"""
         return {

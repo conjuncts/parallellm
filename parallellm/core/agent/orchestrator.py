@@ -23,16 +23,18 @@ class AgentOrchestrator:
         logger: Logger,
         dash_logger,
         ask_params: Optional[AskParameters] = None,
+        ignore_cache: bool = False,
     ):
         """
-        channel: str, optional
-            Parallellm is typically used as a singleton.
-            If you want to have multiple instances,
-            specify a channel name.
-        dash_logger_k: int, optional
-            Number of hashes to display in the hash logger (default 10)
-        ask_params: Optional[AskParameters], optional
-            Default parameters for ask_llm() calls.
+        Initialize the AgentOrchestrator.
+
+        :param file_manager: File manager for handling persistence and metadata
+        :param backend: Backend for data storage and retrieval
+        :param provider: Provider for submitting queries to LLM APIs
+        :param logger: Logger instance
+        :param dash_logger: Dashboard logger for pretty printing hash status
+        :param ask_params: Default parameters for ask_llm() calls
+        :param ignore_cache: If True, always submit to the API instead of using cached responses
         """
         self._backend = backend
         self._fm = file_manager
@@ -43,6 +45,7 @@ class AgentOrchestrator:
         self._dash_logger: DashboardLogger = dash_logger
 
         self.ask_params = ask_params or {}
+        self.ignore_cache = ignore_cache
 
     def agent(
         self,
@@ -55,8 +58,16 @@ class AgentOrchestrator:
             ask_params = self.ask_params
 
         if dashboard:
-            return AgentDashboardContext(name, self, log_k=10, ask_params=ask_params)
-        return AgentContext(name, self, ask_params=ask_params)
+            return AgentDashboardContext(
+                name,
+                self,
+                log_k=10,
+                ask_params=ask_params,
+                ignore_cache=self.ignore_cache,
+            )
+        return AgentContext(
+            name, self, ask_params=ask_params, ignore_cache=self.ignore_cache
+        )
 
     def save_userdata(self, key, value):
         """

@@ -17,9 +17,22 @@ class ParalleLLMGateway:
         datastore: Literal["sqlite", "sqlite_parquet"] = "sqlite",
         dry_run=False,
         log_level=logging.INFO,
+        ignore_cache=False,
     ):
         """
-        Resume a BatchManager from a given directory.
+        Resume an AgentOrchestrator from a previously saved directory.
+
+        :param directory: Path to directory
+
+        :param strategy: Execution strategy for LLM calls
+        :param provider: LLM provider to use for API calls
+        :param datastore: Backend datastore type for response storage. Recommended: sqlite.
+        :param dry_run: If True, validate setup without making actual API calls
+        :param log_level: Logging level for the session
+        :param ignore_cache: If True, always submit to API instead of using cached responses
+        :return: Configured AgentOrchestrator instance
+        :raises ValueError: If strategy is not supported
+        :raises NotImplementedError: If dry_run is True or strategy is not implemented
         """
 
         # Logic to resume from the specified directory
@@ -101,6 +114,7 @@ class ParalleLLMGateway:
             provider=provider,
             logger=logger,
             dash_logger=dash_logger,
+            ignore_cache=ignore_cache,
         )
 
         logger.info(f"Resuming with session_id={bm.get_session_counter()}")

@@ -25,6 +25,7 @@ class AgentContext:
         batch_manager: "AgentOrchestrator",
         *,
         ask_params: Optional[AskParameters] = None,
+        ignore_cache: bool = False,
     ):
         self.agent_name = agent_name
         self._bm = batch_manager
@@ -33,6 +34,7 @@ class AgentContext:
         self._checkpoint_counter = None  # Initialized when entering checkpoint
 
         self.ask_params = ask_params or {}
+        self.ignore_cache = ignore_cache
 
         self.active_checkpoint: Optional[str] = None
         """
@@ -226,7 +228,7 @@ class AgentContext:
         }
 
         # Cache using datastore
-        cached = self._bm._backend.retrieve(call_id)
+        cached = None if self.ignore_cache else self._bm._backend.retrieve(call_id)
         if cached is not None:
             self.update_hash_status(hashed, HashStatus.CACHED)
             return ReadyLLMResponse(
@@ -267,8 +269,11 @@ class AgentDashboardContext(AgentContext):
         *,
         log_k: int = 10,
         ask_params: Optional[AskParameters] = None,
+        ignore_cache: bool = False,
     ):
-        super().__init__(agent_name, batch_manager, ask_params=ask_params)
+        super().__init__(
+            agent_name, batch_manager, ask_params=ask_params, ignore_cache=ignore_cache
+        )
         self._was_displaying = False
         self._bm._dash_logger.k = log_k
 
