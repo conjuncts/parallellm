@@ -159,8 +159,6 @@ class SQLiteParquetDatastore(Datastore):
         :param response_id: The response ID to store.
         :returns: The seq_id where the response was stored.
         """
-        # Invalidate parquet cache since we're adding new data
-        self._eager_tables.clear()
 
         # Store in SQLite for transactional integrity
         return self._sqlite_datastore.store(call_id, response, response_id)
@@ -178,8 +176,6 @@ class SQLiteParquetDatastore(Datastore):
         :param response_id: The response ID to store.
         :param metadata: The metadata to store.
         """
-        # Invalidate parquet cache since we're adding new data
-        self._eager_tables.clear()
 
         self._sqlite_datastore.store_metadata(call_id, response_id, metadata)
 
@@ -250,7 +246,7 @@ class SQLiteParquetDatastore(Datastore):
         """
         try:
             self._transfer_tables_to_parquet()
-            self._sqlite_datastore.persist()
+            self._load_parquet_cache()
 
         except Exception as e:
             print(f"Warning: Failed to transfer data to Parquet: {e}")

@@ -515,6 +515,8 @@ class SQLiteDatastore(Datastore):
         """
         Persist (commit) changes to SQLite database and transfer metadata to Parquet files.
 
+        And closes all connections.
+
         This method transfers OpenAI metadata from SQLite to Parquet files
         for better storage efficiency.
         """
@@ -538,17 +540,18 @@ class SQLiteDatastore(Datastore):
 
         :param checkpoint: The checkpoint connection to close (if None, close all connections).
         """
-        connections = self._get_connections()
+        if hasattr(self, "_local") and hasattr(self._local, "connections"):
+            connections = self._get_connections()
 
-        if checkpoint is not None:
-            if checkpoint in connections:
-                connections[checkpoint].close()
-                del connections[checkpoint]
-        else:
-            # Close all connections for current thread
-            for conn in connections.values():
-                conn.close()
-            connections.clear()
+            if checkpoint is not None:
+                if checkpoint in connections:
+                    connections[checkpoint].close()
+                    del connections[checkpoint]
+            else:
+                # Close all connections for current thread
+                for conn in connections.values():
+                    conn.close()
+                connections.clear()
 
     def __del__(self):
         """
