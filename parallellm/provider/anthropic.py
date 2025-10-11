@@ -48,6 +48,9 @@ def _fix_docs_for_anthropic(
 class AnthropicProvider(BaseProvider):
     provider_type: str = "anthropic"
 
+    def get_default_llm_identity(self) -> LLMIdentity:
+        return LLMIdentity("claude-3-haiku-20240307", provider=self.provider_type)
+
 
 class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
     def __init__(self, client: "Anthropic", backend: SyncBackend):
@@ -60,7 +63,7 @@ class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
         call_id: CallIdentifier,
-        llm: Optional[LLMIdentity] = None,
+        llm: LLMIdentity,
         _hoist_images=None,
         **kwargs,
     ):
@@ -75,7 +78,7 @@ class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
 
         def sync_anthropic_call():
             return self.client.messages.create(
-                model=llm.model_name if llm else "claude-3-haiku-20240307",
+                model=llm.model_name,
                 max_tokens=config.pop("max_tokens", 4096),
                 messages=messages,
                 **config,
@@ -115,7 +118,7 @@ class AsyncAnthropicProvider(AsyncProvider, AnthropicProvider):
             config["system"] = instructions
 
         coro = self.client.messages.create(
-            model=llm.model_name if llm else "claude-3-haiku-20240307",
+            model=llm.model_name,
             max_tokens=config.pop("max_tokens", 1024),
             messages=messages,
             **config,

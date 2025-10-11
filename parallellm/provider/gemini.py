@@ -50,6 +50,9 @@ def _fix_docs_for_gemini(
 class GeminiProvider(BaseProvider):
     provider_type: str = "google"
 
+    def get_default_llm_identity(self) -> LLMIdentity:
+        return LLMIdentity("gemini-2.5-flash", provider=self.provider_type)
+
 
 class SyncGeminiProvider(SyncProvider, GeminiProvider):
     def __init__(self, client: "genai.Client", backend: SyncBackend):

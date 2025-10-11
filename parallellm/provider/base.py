@@ -1,7 +1,7 @@
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 from parallellm.core.identity import LLMIdentity
-from parallellm.types import CallIdentifier, LLMDocument, ProviderType
+from parallellm.types import BatchIdentifier, CallIdentifier, LLMDocument, ProviderType
 
 
 class BaseProvider:
@@ -14,7 +14,7 @@ class BaseProvider:
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
         call_id: CallIdentifier,
-        llm: Optional[LLMIdentity] = None,
+        llm: LLMIdentity,
         _hoist_images=None,
         **kwargs,
     ):
@@ -23,6 +23,10 @@ class BaseProvider:
     def is_compatible(self, other: ProviderType) -> bool:
         """Returns whether this provider accepts the given provider type."""
         return other is None or self.provider_type == other
+
+    def get_default_llm_identity(self) -> LLMIdentity:
+        """Returns a default LLMIdentity for this provider."""
+        raise NotImplementedError
 
 
 class SyncProvider(BaseProvider):
@@ -34,8 +38,8 @@ class AsyncProvider(BaseProvider):
 
 
 class BatchProvider(BaseProvider):
-    pass
-
-
-class OpenAIProvider(BaseProvider):
-    provider_type: str = "openai"
+    def submit_batch_to_provider(
+        self, call_ids: list[CallIdentifier], stuff: list[Any]
+    ) -> BatchIdentifier:
+        """Submit a batch of calls to the provider."""
+        raise NotImplementedError

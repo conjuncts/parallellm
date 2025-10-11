@@ -43,6 +43,9 @@ class FileManager:
         # session_counter: default to 0
         self.metadata["session_counter"] = self.metadata.get("session_counter", -1) + 1
 
+        # write metadata to immediately persist session_counter increment
+        self._save_metadata(self.metadata)
+
     def _sanitize(
         self, user_input: Optional[str], *, default="default", add_hash=True
     ) -> str:
@@ -112,7 +115,7 @@ class FileManager:
     def _save_metadata(self, metadata: WorkingMetadata):
         """Save metadata to JSON file"""
         with open(self.metadata_file, "w") as f:
-            json.dump(metadata, f, indent=2)
+            json.dump(metadata, f)
 
     def save_userdata(self, key: str, value, overwrite=True):
         """
@@ -166,6 +169,16 @@ class FileManager:
         datastore_dir = self.directory / "datastore"
         datastore_dir.mkdir(parents=True, exist_ok=True)
         return datastore_dir
+
+    def allocate_batches(self) -> Path:
+        """
+        Get the base batches directory.
+
+        :returns: Path to the batch directory
+        """
+        batch_dir = self.directory / "batches"
+        batch_dir.mkdir(parents=True, exist_ok=True)
+        return batch_dir
 
     def persist(self):
         """

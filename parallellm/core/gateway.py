@@ -138,6 +138,7 @@ class ParalleLLMGateway:
             logger=logger,
             dash_logger=dash_logger,
             ignore_cache=ignore_cache,
+            strategy=strategy,
         )
 
         logger.info(f"Resuming with session_id={bm.get_session_counter()}")

@@ -1,5 +1,5 @@
 from logging import Logger
-from typing import List, Optional, Union
+from typing import List, Literal, Optional, Union
 from parallellm.core.agent.agent import AgentContext, AgentDashboardContext
 from parallellm.core.backend import BaseBackend
 from parallellm.core.exception import IntegrityError
@@ -25,6 +25,7 @@ class AgentOrchestrator:
         dash_logger,
         ask_params: Optional[AskParameters] = None,
         ignore_cache: bool = False,
+        strategy: Optional[Literal["sync", "async", "batch"]] = None,
     ):
         """
         Initialize the AgentOrchestrator.
@@ -47,6 +48,7 @@ class AgentOrchestrator:
 
         self.ask_params = ask_params or {}
         self.ignore_cache = ignore_cache
+        self.strategy = strategy
 
     def __enter__(self):
         """Enter the context manager, returning self."""

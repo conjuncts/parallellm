@@ -53,6 +53,9 @@ class AgentContext:
 
         if exc_type in (NotAvailable, WrongCheckpoint, GotoCheckpoint):
             return True
+        if self._bm.strategy == "batch" and exc_type in (NotAvailable,):
+            # swallow NotAvailable errors only in batch mode
+            return True
         return False
 
     def print(self, *args, **kwargs):
@@ -193,7 +196,9 @@ class AgentContext:
             if k == "hash_by" and hash_by is None:
                 hash_by = v
 
-        if isinstance(llm, str):
+        if llm is None:
+            llm = self._bm._provider.get_default_llm_identity()
+        elif isinstance(llm, str):
             llm = LLMIdentity(llm)
 
         # Use dual counter system based on checkpoint mode
@@ -240,7 +245,7 @@ class AgentContext:
             )
 
         # Make sure the LLM is compatible with the provider
-        if llm is not None and not self._bm._provider.is_compatible(llm.provider):
+        if not self._bm._provider.is_compatible(llm.provider):
             raise ValueError(
                 f"LLM {llm.identity} is not compatible"
                 + f" with provider {self._bm._provider.provider_type}"
