@@ -2,6 +2,7 @@ from logging import Logger
 from typing import List, Optional, Union
 from parallellm.core.agent.agent import AgentContext, AgentDashboardContext
 from parallellm.core.backend import BaseBackend
+from parallellm.core.exception import IntegrityError
 from parallellm.core.response import (
     LLMResponse,
     PendingLLMResponse,
@@ -85,7 +86,10 @@ class AgentOrchestrator:
         if isinstance(data, PendingLLMResponse):
             data._backend = self._backend
         elif isinstance(data, ReadyLLMResponse):
-            data.value = self._backend.retrieve(data.call_id)
+            value = self._backend.retrieve(data.call_id)
+            if value is None:
+                raise IntegrityError("Cached value is no longer available")
+            data.value = value
 
         return data
 

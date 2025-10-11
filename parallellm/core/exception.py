@@ -39,3 +39,11 @@ class GotoCheckpoint(ParallellmSignal):
 
 class NotAvailable(ParallellmSignal):
     pass
+
+
+class IntegrityError(Exception):
+    """
+    If you are seeing this exception, something changed between runs
+    """
+
+    pass

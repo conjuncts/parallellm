@@ -12,6 +12,19 @@ def guess_schema(
 
     :returns: A tuple containing the response text, response ID, and metadata dictionary.
     """
+    if isinstance(inp, BaseModel):
+        # hardcoded
+        if provider_type == "openai":
+            res = inp.output_text, inp.id
+            obj = inp.model_dump(mode="json")
+            obj.pop("id")
+            return (*res, obj)
+        elif provider_type == "google":
+            res = inp.text, inp.response_id
+            obj = inp.model_dump(mode="json")
+            obj.pop("response_id")
+            return (*res, obj)
+
     model = None
     if isinstance(inp, BaseModel):
         model = inp
@@ -35,7 +48,7 @@ def guess_schema(
         resp_text = getattr(model, "output_text", None)
 
     if resp_text is None:
-        resp_text = obj.get("output_text") or obj.get("content")
+        resp_text = obj.get("output_text") or obj.get("content") or obj.get("text")
 
     # Extract response ID from various possible fields
     resp_id = (

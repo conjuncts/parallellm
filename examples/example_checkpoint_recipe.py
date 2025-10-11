@@ -18,12 +18,12 @@ pllm = ParalleLLM.resume_directory(
 # or might take a really long time, leading to different outcomes.
 
 # In such a case, ParalleLLM introduces "checkpoints"
-agent = pllm.agent()
+agent = pllm.agent(dashboard=True)
 
 with agent:
     # Non-checkpoint controlled: always executed
     best_vegetable = agent.ask_llm(
-        "What is the best vegetable? Enclose your answer in **double asterisks**."
+        "What is the best vegetable? Enclose your final answer in **double asterisks**."
     )
     pllm.save_userdata("best_vegetable", best_vegetable)  # save for later
 
@@ -38,17 +38,18 @@ with agent:
     agent.goto_checkpoint("generate_recipe")
 
 
-with pllm.agent(dashboard=True) as dash:
+with agent:
     # pllm.dashboard() can be either non-checkpoint or checkpoint
     # depending on whether when_checkpoint() is called
-    dash.when_checkpoint("generate_recipe")
+    agent.when_checkpoint("generate_recipe")
 
     random_num_steps = pllm.load_userdata("random/num_steps")
-    best_vegetable = pllm.load_userdata("best_vegetable")
-    recipe = dash.ask_llm(
-        f"Generate a recipe with {random_num_steps} steps using {best_vegetable.resolve()}.",
+    previous_query = pllm.load_userdata("best_vegetable")
+    best_vegetable = previous_query.resolve().split("**")[1]
+    recipe = agent.ask_llm(
+        f"Generate a recipe with {random_num_steps} steps using {best_vegetable}.",
     )
-    dash.print(recipe.resolve())
+    agent.print(recipe.resolve())
 
 # Why use checkpoints? If we rerun the code without checkpoints, then a different
 # random number could be generated, which interferes with caching and

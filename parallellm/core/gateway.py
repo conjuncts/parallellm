@@ -13,7 +13,7 @@ class ParalleLLMGateway:
         directory,
         *,
         strategy: Literal["sync", "async", "batch", "hybrid"] = "async",
-        provider: Literal["openai", None] = None,
+        provider: Literal["openai", "google", None] = None,
         datastore: Literal["sqlite", "sqlite_parquet"] = "sqlite",
         dry_run=False,
         log_level=logging.INFO,
@@ -95,18 +95,27 @@ class ParalleLLMGateway:
 
                 client = AsyncOpenAI()
                 provider = AsyncOpenAIProvider(client=client, backend=backend)
-            elif strategy == "sync":
+            else:
+                # For other strategies, default to sync for now
                 from openai import OpenAI
 
                 client = OpenAI()
                 provider = SyncOpenAIProvider(client=client, backend=backend)
+        elif provider == "google":
+            from parallellm.provider.gemini import (
+                AsyncGeminiProvider,
+                SyncGeminiProvider,
+            )
+            from google import genai
+
+            if strategy == "async":
+                client = genai.Client()
+                provider = AsyncGeminiProvider(client=client, backend=backend)
             else:
-                # For other strategies, default to async for now
-                from openai import AsyncOpenAI
-
-                client = AsyncOpenAI()
-                provider = AsyncOpenAIProvider(client=client, backend=backend)
-
+                client = genai.Client()
+                provider = SyncGeminiProvider(client=client, backend=backend)
+        else:
+            raise NotImplementedError(f"Provider '{provider}' not implemented yet")
         logger.debug("Creating AgentOrchestrator")
         bm = AgentOrchestrator(
             file_manager=fm,

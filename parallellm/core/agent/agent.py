@@ -167,7 +167,7 @@ class AgentContext:
         instructions: Optional[str] = None,
         llm: Union[LLMIdentity, str, None] = None,
         salt: Optional[str] = None,
-        salt_by: Optional[List[Literal["llm"]]] = None,
+        hash_by: Optional[List[Literal["llm"]]] = None,
         _hoist_images=None,
         **kwargs,
     ) -> LLMResponse:
@@ -180,7 +180,7 @@ class AgentContext:
         :param llm: The identity of the LLM to use.
             Can be helpful multi-agent or multi-model scenarios.
         :param salt: A value to include in the hash for differentiation.
-        :param salt_by: The names of additional terms to include in the hash for differentiation.
+        :param hash_by: The names of additional terms to include in the hash for differentiation.
             Example: "llm" will also include the LLM name.
         :param _hoist_images: Gemini recommends that images be hoisted to the front of the message.
             Set to True/False to explicitly enforce/disable.
@@ -190,8 +190,8 @@ class AgentContext:
 
         # load ask_params defaults
         for k, v in self.ask_params.items():
-            if k == "salt_by" and salt_by is None:
-                salt_by = v
+            if k == "hash_by" and hash_by is None:
+                hash_by = v
 
         if isinstance(llm, str):
             llm = LLMIdentity(llm)
@@ -212,8 +212,8 @@ class AgentContext:
         salt_terms = []
         if salt is not None:
             salt_terms.append(salt)
-        if salt_by is not None:
-            for term in salt_by:
+        if hash_by is not None:
+            for term in hash_by:
                 if term == "llm" and llm is not None:
                     salt_terms.append(llm.identity)
         hashed = compute_hash(instructions, documents + salt_terms)

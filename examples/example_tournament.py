@@ -9,7 +9,6 @@ print("Before")
 
 load_dotenv()
 
-shutil.rmtree(".temp", ignore_errors=True)
 pllm = ParalleLLM.resume_directory(
     ".pllm/nfl",
     # ".temp",

@@ -114,7 +114,7 @@ class FileManager:
         with open(self.metadata_file, "w") as f:
             json.dump(metadata, f, indent=2)
 
-    def save_userdata(self, key: str, value, overwrite=False):
+    def save_userdata(self, key: str, value, overwrite=True):
         """
         Internally persist data across checkpoints
 

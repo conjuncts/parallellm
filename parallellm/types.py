@@ -40,7 +40,7 @@ class CallIdentifier(TypedDict):
 class AskParameters(TypedDict):
     """Parameters for ask_llm()."""
 
-    salt_by: Optional[List[Literal["llm"]]]
+    hash_by: Optional[List[Literal["llm"]]]
 
 
 # Type alias for documents that can be either text or images
