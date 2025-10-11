@@ -136,7 +136,7 @@ class SQLiteDatastore(Datastore):
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS metadata (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        response_id TEXT NOT NULL,
+                        response_id TEXT,
                         metadata TEXT NOT NULL,
                         provider_type TEXT,
                         UNIQUE(response_id)
@@ -285,6 +285,8 @@ class SQLiteDatastore(Datastore):
         :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
         :returns: The retrieved metadata as a dictionary, or None if not found.
         """
+        # TODO: does not work because does not read from parquet
+
         checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
@@ -515,9 +517,10 @@ class SQLiteDatastore(Datastore):
         """
         Persist (commit) changes to SQLite database and transfer metadata to Parquet files.
 
-        And closes all connections.
+        And closes all connections. After this call, the datastore is still usable, 
+        but current connections are closed (connections will be recreated on demand).
 
-        This method transfers OpenAI metadata from SQLite to Parquet files
+        Also, OpenAI metadata is transferred from SQLite to Parquet files
         for better storage efficiency.
         """
         # Transfer all metadata to parquet

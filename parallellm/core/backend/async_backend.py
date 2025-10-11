@@ -111,7 +111,7 @@ class AsyncBackend(BaseBackend):
         """Clean up the datastore from the async thread"""
         if hasattr(self, "_async_ds"):
             self._async_ds.close()
-            del self._async_ds
+            # del self._async_ds
 
     def cleanup_datastore_sync(self):
         """Synchronously trigger datastore cleanup in the async thread"""

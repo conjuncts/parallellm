@@ -88,12 +88,9 @@ class SyncBackend(BaseBackend):
         return self._ds.retrieve(call_id)
 
     def persist(self):
-        """Persist any remaining data. Cleans up any datastore resources."""
+        """Persist any remaining data and datastore"""
         # SQLite commits immediately, but we can clear pending results
         self._ds.persist()
-
-        # Close datastore connections to ensure proper cleanup, especially important on Windows
-        self.close()
 
     def close(self):
         """Clean up resources"""

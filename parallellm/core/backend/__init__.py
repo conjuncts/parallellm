@@ -32,8 +32,5 @@ def _call_matches(c1: CallIdentifier, c2: CallIdentifier) -> bool:
     but calls are conceptually the same across different sessions if they have
     the same checkpoint, doc_hash, and seq_id.
     """
-    return (
-        c1["checkpoint"] == c2["checkpoint"]
-        and c1["doc_hash"] == c2["doc_hash"]
-        and c1["seq_id"] == c2["seq_id"]
-    )
+    keys = ["agent_name", "checkpoint", "doc_hash", "seq_id"]
+    return all(c1[key] == c2[key] for key in keys)

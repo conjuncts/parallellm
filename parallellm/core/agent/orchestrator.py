@@ -48,6 +48,15 @@ class AgentOrchestrator:
         self.ask_params = ask_params or {}
         self.ignore_cache = ignore_cache
 
+    def __enter__(self):
+        """Enter the context manager, returning self."""
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Exit the context manager, automatically calling persist()."""
+        self.persist()
+        return False
+
     def agent(
         self,
         name: str = "default-agent",
@@ -95,8 +104,7 @@ class AgentOrchestrator:
 
     def persist(self):
         """
-        Ensure that everything is properly saved.
-        Cleans up resources.
+        Ensure that everything is properly saved AND cleans up resources.
         """
         self._backend.persist()
 
