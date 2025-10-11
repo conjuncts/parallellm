@@ -5,6 +5,7 @@ from parallellm.core.agent.orchestrator import AgentOrchestrator
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger
 from parallellm.logging.fancy import parallellm_log_handler
+from parallellm.types import ProviderType
 
 
 class ParalleLLMGateway:
@@ -13,7 +14,7 @@ class ParalleLLMGateway:
         directory,
         *,
         strategy: Literal["sync", "async", "batch", "hybrid"] = "async",
-        provider: Literal["openai", "google", None] = None,
+        provider: ProviderType = "openai",
         datastore: Literal["sqlite", "sqlite_parquet"] = "sqlite",
         dry_run=False,
         log_level=logging.INFO,
@@ -114,6 +115,19 @@ class ParalleLLMGateway:
             else:
                 client = genai.Client()
                 provider = SyncGeminiProvider(client=client, backend=backend)
+        elif provider == "anthropic":
+            from parallellm.provider.anthropic import (
+                AsyncAnthropicProvider,
+                SyncAnthropicProvider,
+            )
+            from anthropic import Anthropic
+
+            if strategy == "async":
+                client = Anthropic()
+                provider = AsyncAnthropicProvider(client=client, backend=backend)
+            else:
+                client = Anthropic()
+                provider = SyncAnthropicProvider(client=client, backend=backend)
         else:
             raise NotImplementedError(f"Provider '{provider}' not implemented yet")
         logger.debug("Creating AgentOrchestrator")

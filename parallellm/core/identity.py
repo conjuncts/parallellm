@@ -1,6 +1,5 @@
 from typing import Optional
-from parallellm.provider.hardcoded import guess_provider, guess_provider_and_name
-from parallellm.types import ProviderType
+from parallellm.provider.hardcoded import guess_provider_and_name
 
 
 class LLMIdentity:

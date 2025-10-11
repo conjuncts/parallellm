@@ -214,8 +214,11 @@ class AgentContext:
             salt_terms.append(salt)
         if hash_by is not None:
             for term in hash_by:
-                if term == "llm" and llm is not None:
-                    salt_terms.append(llm.identity)
+                if term == "llm":
+                    if llm is not None:
+                        salt_terms.append(llm.identity)
+                    else:
+                        salt_terms.append(self._bm._provider.provider_type)
         hashed = compute_hash(instructions, documents + salt_terms)
 
         call_id: CallIdentifier = {

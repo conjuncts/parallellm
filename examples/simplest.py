@@ -2,15 +2,12 @@ import logging
 from parallellm.core.gateway import ParalleLLM
 from dotenv import load_dotenv
 
-
-print("Before")
-
 load_dotenv()
 
 pllm = ParalleLLM.resume_directory(
     ".pllm/simplest",
     # ".temp",
-    provider="google",  #
+    provider="anthropic",  #
     strategy="sync",
     log_level=logging.DEBUG,
     # ignore_cache=True,
