@@ -170,13 +170,23 @@ class FileManager:
         datastore_dir.mkdir(parents=True, exist_ok=True)
         return datastore_dir
 
-    def allocate_batches(self) -> Path:
+    def allocate_batch_in(self) -> Path:
         """
         Get the base batches directory.
 
-        :returns: Path to the batch directory
+        :returns: Path to the batch inputs directory
         """
-        batch_dir = self.directory / "batches"
+        batch_dir = self.directory / "batch-in"
+        batch_dir.mkdir(parents=True, exist_ok=True)
+        return batch_dir
+
+    def allocate_batch_out(self) -> Path:
+        """
+        Get the base batch outputs directory.
+
+        :returns: Path to the batch outputs directory
+        """
+        batch_dir = self.directory / "batch-out"
         batch_dir.mkdir(parents=True, exist_ok=True)
         return batch_dir
 

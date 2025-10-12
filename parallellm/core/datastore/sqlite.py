@@ -13,7 +13,7 @@ from parallellm.core.datastore.sql_migrate import (
 )
 from parallellm.core.lake.sequester import sequester_openai_metadata
 from parallellm.file_io.file_manager import FileManager
-from parallellm.types import CallIdentifier
+from parallellm.types import BatchIdentifier, BatchResult, CallIdentifier
 
 
 def _sql_table_to_dataframe(
@@ -143,6 +143,21 @@ class SQLiteDatastore(Datastore):
                     )
                 """)
 
+                # Create batch_pending table for storing pending batch requests
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS batch_pending (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        agent_name TEXT,
+                        checkpoint TEXT,
+                        seq_id INTEGER NOT NULL,
+                        session_id INTEGER NOT NULL,
+                        doc_hash TEXT NOT NULL,
+                        provider_type TEXT,
+                        batch_uuid TEXT NOT NULL,
+                        UNIQUE(agent_name, checkpoint, doc_hash, batch_uuid)
+                    )
+                """)
+
                 # Migrate existing schema if needed
                 _migrate_sql_schema(conn, None)
 
@@ -199,24 +214,21 @@ class SQLiteDatastore(Datastore):
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_metadata_provider_type ON metadata(provider_type)
                 """)
-            else:
-                # For custom named databases, create a simple responses table (legacy support)
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS responses (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        agent_name TEXT,
-                        seq_id INTEGER NOT NULL,
-                        session_id INTEGER NOT NULL,
-                        doc_hash TEXT NOT NULL,
-                        response TEXT NOT NULL,
-                        response_id TEXT,
-                        provider_type TEXT,
-                        UNIQUE(agent_name, doc_hash)
-                    )
-                """)
 
-                # Migrate existing schema if needed
-                _migrate_sql_schema(conn, db_name)
+                # Create indexes for batch_pending table
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_batch_pending_batch_uuid ON batch_pending(batch_uuid)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_batch_pending_agent_checkpoint ON batch_pending(agent_name, checkpoint)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_batch_pending_doc_hash ON batch_pending(doc_hash)
+                """)
+            else:
+                raise NotImplementedError(
+                    "Only main database connection is implemented"
+                )
 
             conn.commit()
             connections[connection_key] = conn
@@ -345,7 +357,12 @@ class SQLiteDatastore(Datastore):
         return None
 
     def store(
-        self, call_id: CallIdentifier, response: str, response_id: str
+        self,
+        call_id: CallIdentifier,
+        response: str,
+        response_id: str,
+        *,
+        metadata: Optional[dict] = None,
     ) -> Optional[int]:
         """
         Store a response in SQLite.
@@ -471,6 +488,136 @@ class SQLiteDatastore(Datastore):
         except sqlite3.Error as e:
             conn.rollback()
             raise RuntimeError(f"SQLite error while storing metadata: {e}")
+
+    def store_pending_batch(
+        self,
+        batch_id: BatchIdentifier,
+    ) -> None:
+        """
+        Store pending batch information to track submitted batch requests.
+
+        This stores the call_ids and batch_uuid so that when the batch completes,
+        the results can be matched back to the original calls.
+
+        :param batch_id: The batch identifier containing call_ids and batch_uuid
+        """
+        conn = self._get_connection(None)
+
+        try:
+            # Insert each call_id from the batch into the batch_pending table
+            for call_id in batch_id.call_ids:
+                agent_name = call_id["agent_name"]
+                checkpoint = call_id.get("checkpoint")
+                seq_id = call_id["seq_id"]
+                session_id = call_id["session_id"]
+                doc_hash = call_id["doc_hash"]
+                provider_type = call_id.get("provider_type")
+                batch_uuid = batch_id.batch_uuid
+
+                # Insert or replace the pending batch record
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO batch_pending 
+                    (agent_name, checkpoint, seq_id, session_id, doc_hash, provider_type, batch_uuid)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        agent_name,
+                        checkpoint,
+                        seq_id,
+                        session_id,
+                        doc_hash,
+                        provider_type,
+                        batch_uuid,
+                    ),
+                )
+
+            # Commit immediately for thread safety
+            conn.commit()
+
+        except sqlite3.Error as e:
+            conn.rollback()
+            raise RuntimeError(f"SQLite error while storing batch: {e}")
+
+    def store_ready_batch(
+        self,
+        batch_result: BatchResult,
+    ):
+        pass
+        # TODO: need to adjust resp_id to actually be custom_id
+
+    def retrieve_batch_call_ids(self, batch_uuid: str) -> list[CallIdentifier]:
+        """
+        Retrieve all call_ids associated with a batch_uuid.
+
+        :param batch_uuid: The batch UUID to look up
+        :returns: List of CallIdentifiers for this batch
+        """
+        conn = self._get_connection(None)
+
+        cursor = conn.execute(
+            """
+            SELECT agent_name, checkpoint, seq_id, session_id, doc_hash, provider_type
+            FROM batch_pending
+            WHERE batch_uuid = ?
+            ORDER BY seq_id
+            """,
+            (batch_uuid,),
+        )
+        rows = cursor.fetchall()
+
+        call_ids = []
+        for row in rows:
+            call_id: CallIdentifier = {
+                "agent_name": row["agent_name"],
+                "checkpoint": row["checkpoint"],
+                "seq_id": row["seq_id"],
+                "session_id": row["session_id"],
+                "doc_hash": row["doc_hash"],
+                "provider_type": row["provider_type"],
+            }
+            call_ids.append(call_id)
+
+        return call_ids
+
+    def get_all_pending_batch_uuids(self) -> list[str]:
+        """
+        Retrieve all pending batches from the datastore.
+
+        :returns: List of BatchIdentifiers, one for each unique batch_uuid
+        """
+        conn = self._get_connection(None)
+
+        # Get all unique batch_uuids
+        cursor = conn.execute(
+            """
+            SELECT DISTINCT batch_uuid
+            FROM batch_pending
+            ORDER BY batch_uuid
+            """
+        )
+        batch_uuids = [row["batch_uuid"] for row in cursor.fetchall()]
+
+        return batch_uuids
+
+    def clear_batch_pending(self, batch_uuid: str) -> None:
+        """
+        Remove all pending batch records for a completed batch.
+
+        :param batch_uuid: The batch UUID to clear
+        """
+        conn = self._get_connection(None)
+
+        try:
+            conn.execute(
+                "DELETE FROM batch_pending WHERE batch_uuid = ?",
+                (batch_uuid,),
+            )
+            conn.commit()
+
+        except sqlite3.Error as e:
+            conn.rollback()
+            raise RuntimeError(f"SQLite error while clearing batch: {e}")
 
     def _transfer_metadata_to_parquet(self) -> None:
         """

@@ -1,7 +1,13 @@
 from typing import Any, List, Optional, Union
 
 from parallellm.core.identity import LLMIdentity
-from parallellm.types import BatchIdentifier, CallIdentifier, LLMDocument, ProviderType
+from parallellm.types import (
+    BatchIdentifier,
+    BatchResult,
+    CallIdentifier,
+    LLMDocument,
+    ProviderType,
+)
 
 
 class BaseProvider:
@@ -42,4 +48,16 @@ class BatchProvider(BaseProvider):
         self, call_ids: list[CallIdentifier], stuff: list[Any]
     ) -> BatchIdentifier:
         """Submit a batch of calls to the provider."""
+        raise NotImplementedError
+
+    def download_batch_from_provider(self, batch_uuid: str) -> BatchResult:
+        """Download the results of a batch from the provider.
+
+        :return: A tuple of (content, batch_status)
+
+            - content is either a string (entire file content), a list (one item per call_id),
+            or None if pending.
+
+            - batch_status is one of "pending", "ready", or "error".
+        """
         raise NotImplementedError

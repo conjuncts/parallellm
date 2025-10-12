@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Union
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.batch_backend import BatchBackend
@@ -15,7 +17,14 @@ from parallellm.provider.base import (
     BatchProvider,
     SyncProvider,
 )
-from parallellm.types import BatchIdentifier, CallIdentifier, LLMDocument
+from parallellm.provider.schemas import guess_schema
+from parallellm.types import (
+    BatchIdentifier,
+    BatchResult,
+    BatchStatus,
+    CallIdentifier,
+    LLMDocument,
+)
 
 if TYPE_CHECKING:
     from openai import OpenAI, AsyncOpenAI
@@ -169,6 +178,50 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         # Batch values are always unavailable
         raise NotAvailable()
 
+    def _decode_openai_batch_result(self, result: dict) -> tuple[str, str, dict]:
+        """Decode a single result from OpenAI batch response"""
+        custom_id = result["custom_id"]
+
+        body = result["response"]["body"]
+
+        # destroyed metadata:
+        # result["error"] (should be null)
+        # result["response"]["status_code"] (should be 200)
+        # redundant IDs (supplanted by custom_id):
+        #   result["id"]
+        #   result["response"]["request_id"]
+        #   result["response"]["body"]["id"]
+
+        resp_text, _, resp_meta = guess_schema(body, provider_type="openai")
+        return resp_text, custom_id, resp_meta
+
+    def _decode_openai_batch_error(self, result: dict) -> tuple[str, str, dict]:
+        """Decode a single error from OpenAI batch response
+
+        The main content (resp_text) is actually the error code.
+        """
+        custom_id = result.pop("custom_id", None)
+        # destroyed metadata:
+        # redundant IDs (see above, supplanted by custom_id)
+        # result["response"]["body"]
+
+        err_obj = result.get("error", {})
+        # actually, error_obj is usually None, and the real error is in response.body.error
+
+        resp_obj = result.get("response", {})
+        error_code = resp_obj.get("status_code")
+        if error_code is not None:
+            error_code = str(error_code)
+
+        if err_obj is not None:
+            # unusually, the error is indeed here
+            return error_code, custom_id, err_obj
+
+        # need to retrieve error from response body
+        body = resp_obj.get("body", {})
+        body_error = body.get("error", {})
+        return error_code, custom_id, body_error
+
     def submit_batch_to_provider(
         self, call_ids: list[CallIdentifier], stuff: list[dict]
     ) -> BatchIdentifier:
@@ -192,3 +245,57 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
             call_ids=call_ids,
             batch_uuid=batch_obj.id,
         )
+
+    def download_batch_from_provider(
+        self,
+        batch_uuid: str,
+    ) -> BatchResult:
+        """Download the results of a batch from the provider.
+
+        :param batch_uuid: The UUID of the batch to download.
+        :return: A BatchResult object containing status and results.
+        """
+        batch = self.client.batches.retrieve(batch_uuid)
+        err_file_id = batch.error_file_id
+        out_file_id = batch.output_file_id
+
+        if out_file_id is None and err_file_id is None:
+            return BatchResult("pending", None, None, None, None)
+        elif err_file_id is not None:
+            err_content = self.client.files.content(err_file_id).text
+
+            try:
+                errors = [
+                    self._decode_openai_batch_error(json.loads(line))
+                    for line in err_content.strip().split("\n")
+                    if line
+                ]
+                contents, custom_ids, metadatas = zip(*errors)
+                return BatchResult(
+                    "error",
+                    err_content,
+                    list(contents),
+                    list(custom_ids),
+                    list(metadatas),
+                )
+            except json.JSONDecodeError:
+                return BatchResult("error", err_content, None, None, None)
+
+        # Successful completion
+        out_content = self.client.files.content(out_file_id).text
+        try:
+            results = [
+                self._decode_openai_batch_result(json.loads(line))
+                for line in out_content.strip().split("\n")
+                if line
+            ]
+            contents, custom_ids, metadatas = zip(*results)
+            return BatchResult(
+                "ready",
+                out_content,
+                list(contents),
+                list(custom_ids),
+                list(metadatas),
+            )
+        except json.JSONDecodeError:
+            return BatchResult("error", out_content, None, None, None)

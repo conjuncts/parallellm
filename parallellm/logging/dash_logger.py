@@ -226,3 +226,24 @@ class DashboardLogger:
             sys.stdout.write("\n")
             sys.stdout.flush()
             self._console_written = False
+
+    def ask_for_confirmation(
+        self,
+        prompt: str,
+        valid_responses=None,
+    ):
+        """
+        Ask the user for a yes/no confirmation, coordinating with dashboard display.
+
+        :param prompt: The prompt message to display
+        :param valid_responses: Optional set of valid responses (e.g., {'y', 'n'})
+        :return: What the user responded
+        """
+        self.coordinated_print(prompt)
+        response = input().strip().lower()
+        while valid_responses is not None and response not in valid_responses:
+            self.coordinated_print(
+                f"Invalid response. Please enter one of: {', '.join(valid_responses)}"
+            )
+            response = input().strip().lower()
+        return response

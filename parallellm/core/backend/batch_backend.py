@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional, Union
 from parallellm.core.backend import BaseBackend
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.datastore.sqlite import SQLiteDatastore
@@ -8,7 +8,13 @@ from parallellm.core.identity import LLMIdentity
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger
 from parallellm.provider.base import BatchProvider
-from parallellm.types import BatchIdentifier, CallIdentifier, CohortIdentifier
+from parallellm.types import (
+    BatchIdentifier,
+    BatchResult,
+    BatchStatus,
+    CallIdentifier,
+    CohortIdentifier,
+)
 
 
 class BatchBackend(BaseBackend):
@@ -132,6 +138,7 @@ class BatchBackend(BaseBackend):
             # Here, you would typically call the provider's batch method
             call_ids, _, stuff = zip(*batch)
             batch_id = self._provider.submit_batch_to_provider(call_ids, list(stuff))
+            self._ds.store_pending_batch(batch_id)
             batch_ids.append(batch_id)
 
         cohort_id = CohortIdentifier(batch_ids=batch_ids, session_id=self.session_id)
@@ -149,7 +156,7 @@ class BatchBackend(BaseBackend):
 
     def persist_batch_to_jsonl(self, stuff: list[dict], *, preferred_name=None) -> Path:
         """
-        Helper function to persist a batch to disk.
+        Helper function to persist batch inputs to disk.
         Coordinates with the FileManager to get a suitable location.
         `stuff` is JSON-serialized.
 
@@ -161,13 +168,30 @@ class BatchBackend(BaseBackend):
 
         # Remnants of same-session_id files should not be possible, since
         # session_id should be unique per run.
-        path = self._fm.allocate_batches() / preferred_name
+        path = self._fm.allocate_batch_in() / preferred_name
 
         with open(path, "w", encoding="utf-8") as f:
             for item in stuff:
                 f.write(json.dumps(item) + "\n")
 
         return path
+
+    def persist_to_zip(self, stuff: Union[str, list[dict]], fpath: Path) -> None:
+        """
+        Helper function to persist anything to a zip file.
+        """
+        import zipfile
+
+        with zipfile.ZipFile(fpath, "w") as zf:
+            intended_name = fpath.stem
+            if isinstance(stuff, str):
+                zf.writestr(intended_name, stuff)
+            else:
+                # write a jsonl
+                with zf.open(intended_name + ".jsonl", "w") as f:
+                    for item in stuff:
+                        line = json.dumps(item) + "\n"
+                        f.write(line.encode("utf-8"))
 
     # TODO: Also need to store the batch_uuid
     # In that datastore, we need to store
@@ -179,17 +203,61 @@ class BatchBackend(BaseBackend):
     # Hence, we will need to create a new table "unready_batch_responses"
     # That contains (agent_name, checkpoint?, seq_id, session_id, doc_hash, provider_type, batch_uuid)
 
-    def download_batch_results(self, batch_id: BatchIdentifier) -> list[Optional[str]]:
+    def download_batch_from_provider(
+        self, batch_uuid: str, *, save_to_disk: Literal[None, "jsonl.zip"] = "jsonl.zip"
+    ) -> BatchResult:
         """
-        Given a batch ID, download the results.
+        Given a batch UUID, download the results.
 
         This is a helper function that calls the provider's download_batch_results method.
+
+        This has the inverted (correct) control flow - the rest of the codebase
+        will eventually be rectified to have this control flow.
+
+        :param batch_uuid: The UUID of the batch to download.
+        :param save_to_disk: If "jsonl.zip", saves the results to a zip file containing a jsonl.
+            If None, does not save to disk.
         """
         if self._provider is None:
             raise ValueError("No provider registered with BatchBackend")
 
-        return self._provider.download_batch_results(batch_id)
+        batch_result = self._provider.download_batch_from_provider(batch_uuid)
 
+        if save_to_disk == "jsonl.zip":
+            # Save to disk
+            if batch_result.status == "ready" or batch_result.status == "error":
+                ending = ".jsonl.zip"
+                if batch_result.status == "error":
+                    ending = "_err.jsonl.zip"
+                fpath = self._fm.allocate_batch_out() / f"{batch_uuid}{ending}"
+                self.persist_to_zip(
+                    batch_result.raw_output, fpath=fpath
+                )
+
+        if batch_result.status == "ready":
+            self._ds.store_ready_batch(batch_result)
+        return batch_result
+
+    def try_download_all_batches(
+        self,
+    ):
+        """
+        Try to download all batches
+        """
+        pending_batches = self._ds.get_all_pending_batch_uuids()
+        for batch_uuid in pending_batches:
+            try:
+                batch_result = self.download_batch_from_provider(
+                    batch_uuid, save_to_disk="jsonl.zip"
+                )
+                if batch_result.status == "ready":
+                    print(f"Batch {batch_uuid} completed and stored.")
+                elif batch_result.status == "error":
+                    print(f"Batch {batch_uuid} completed with errors and stored.")
+                else:
+                    print(f"Batch {batch_uuid} is still pending.")
+            except Exception as e:
+                print(f"Error downloading batch {batch_uuid}: {e}")
 
 class DebugBatchBackend(BatchBackend):
     """

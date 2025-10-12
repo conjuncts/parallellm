@@ -67,6 +67,19 @@ class AskParameters(TypedDict):
     hash_by: Optional[List[Literal["llm"]]]
 
 
+BatchStatus = Literal["pending", "ready", "error"]
+
+
+@dataclass
+class BatchResult:
+    status: BatchStatus
+
+    raw_output: Optional[str]
+    resp_texts: Optional[List[str]]
+    custom_ids: Optional[List[str]]
+    metadatas: Optional[List[dict]]
+
+
 # Type alias for documents that can be either text or images
 LLMDocument = Union[str, Image.Image]
 

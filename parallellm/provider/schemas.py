@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import List, Optional, Union
 from pydantic import BaseModel
 
 
@@ -9,6 +9,7 @@ def guess_schema(
 
     Guess the schema of the given object and convert it to a dictionary.
     :param obj: The object to guess the schema for. Can be a Pydantic BaseModel or a dictionary.
+    Warning: will modify the input dict in place.
 
     :returns: A tuple containing the response text, response ID, and metadata dictionary.
     """
@@ -16,6 +17,7 @@ def guess_schema(
         # hardcoded
         try:
             if provider_type == "openai":
+                # from openai.types.responses.response import Response
                 res = inp.output_text, inp.id
                 obj = inp.model_dump(mode="json")
                 obj.pop("id")
@@ -45,13 +47,39 @@ def guess_schema(
                 f"Unexpected error while processing known provider type {provider_type}",
                 e,
             )
+    elif isinstance(inp, dict):
+        try:
+            if provider_type == "openai":
+                # responses API
 
+                # "rather than accessing the first item in the output array and
+                # assuming it's an assistant message with ...
+
+                resp_id = inp.pop("id", None)
+
+                # compare openai.types.responses.response.Response.output_text
+
+                texts: List[str] = []
+                for output in inp.get("output"):
+                    if output.type == "message":
+                        for content in output.content:
+                            if content.type == "output_text":
+                                texts.append(content.text)
+
+                return "".join(texts), resp_id, inp
+        except Exception as e:
+            print(
+                f"Unexpected error while processing known provider type {provider_type}",
+                e,
+            )
+
+    # Generic handling for unknown types
     model = None
     if isinstance(inp, BaseModel):
         model = inp
         obj = inp.model_dump(mode="json")
     elif isinstance(inp, dict):
-        obj = inp.copy()
+        obj = inp
     else:
         # Handle OpenAI ChatCompletion objects and other API response objects
         if hasattr(inp, "model_dump"):
