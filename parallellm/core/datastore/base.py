@@ -37,6 +37,8 @@ class Datastore(ABC):
         call_id: CallIdentifier,
         response: str,
         response_id: str,
+        *,
+        metadata: Optional[dict] = None,
     ) -> Optional[int]:
         """
         Store a response in the backend.
@@ -44,22 +46,8 @@ class Datastore(ABC):
         :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
         :param response: The response content to store.
         :param response_id: The response ID to store.
+        :param metadata: Optional metadata dictionary to store alongside the response.
         :returns: The seq_id where the response was stored (if applicable).
-        """
-        raise NotImplementedError
-
-    def store_metadata(
-        self,
-        call_id: CallIdentifier,
-        response_id: str,
-        metadata: dict,
-    ) -> None:
-        """
-        Store metadata in the backend.
-
-        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
-        :param response_id: The response ID to store.
-        :param metadata: The metadata to store.
         """
         raise NotImplementedError
 

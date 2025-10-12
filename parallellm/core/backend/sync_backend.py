@@ -51,8 +51,7 @@ class SyncBackend(BaseBackend):
             resp_text, resp_id, resp_metadata = guess_schema(
                 result, provider_type=provider_type
             )
-            self._ds.store(call_id, resp_text, resp_id)
-            self._ds.store_metadata(call_id, resp_id, resp_metadata)
+            self._ds.store(call_id, resp_text, resp_id, metadata=resp_metadata)
 
             # Store in pending results for immediate retrieval
             key = f"{checkpoint}:{doc_hash}:{seq_id}"

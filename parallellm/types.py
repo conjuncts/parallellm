@@ -42,6 +42,9 @@ class CallIdentifier(TypedDict):
 class BatchIdentifier:
     call_ids: List[CallIdentifier]
 
+    custom_ids: List[str]
+    """Custom IDs assigned to each call in the batch, in the same order as call_ids."""
+
     batch_uuid: str
     """A unique identifier given for the batch by the provider."""
 

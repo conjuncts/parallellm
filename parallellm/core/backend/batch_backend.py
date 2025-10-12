@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import List, Literal, Optional, Union
 from parallellm.core.backend import BaseBackend
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.datastore.sqlite import SQLiteDatastore
@@ -30,7 +30,7 @@ class BatchBackend(BaseBackend):
         dash_logger: Optional[DashboardLogger] = None,
         *,
         datastore_cls=None,
-        session_id,
+        session_id: int,
     ):
         self._fm = fm
         if datastore_cls is None:
@@ -40,7 +40,7 @@ class BatchBackend(BaseBackend):
         self._dash_logger = dash_logger
 
         self._batch_buffer: list[tuple[CallIdentifier, dict]] = []
-        self._provider = None
+        self._provider: BatchProvider = None
         self.session_id = session_id
 
         self.batch_group_counter = 0
@@ -85,7 +85,14 @@ class BatchBackend(BaseBackend):
         :param auto_assign_id: If not None, then `stuff` will be auto-assigned a custom_id, which
         will be f"{checkpoint_name}-{session_id}-{seq_id}", which is guaranteed to be unique unless a major
         error has occurred. It will be placed in stuff[auto_assign_id].
+
+        :raises NotAvailable: If the call_id is already in a pending batch
         """
+        # If call is already in a pending batch,
+        # do not add it again
+        if self._ds.is_call_in_pending_batch(call_id):
+            return
+
         if auto_assign_id is not None:
             agent_name = call_id["agent_name"]
             checkpoint = call_id["checkpoint"] or ""
@@ -136,7 +143,7 @@ class BatchBackend(BaseBackend):
         batch_ids = []
         for batch in batches:
             # Here, you would typically call the provider's batch method
-            call_ids, _, stuff = zip(*batch)
+            call_ids, stuff = zip(*batch)
             batch_id = self._provider.submit_batch_to_provider(call_ids, list(stuff))
             self._ds.store_pending_batch(batch_id)
             batch_ids.append(batch_id)
@@ -176,19 +183,27 @@ class BatchBackend(BaseBackend):
 
         return path
 
-    def persist_to_zip(self, stuff: Union[str, list[dict]], fpath: Path) -> None:
+    def persist_to_zip(
+        self, stuff: Union[str, list[dict]], fpath: Path, *, inner_fname: str = None
+    ) -> None:
         """
         Helper function to persist anything to a zip file.
+
+        :param stuff: If str, writes the string as a single file.
+        :param fpath: The path to the zip file to create.
+        :param inner_fname: The name of the file inside the zip.
+            If not given, then `fpath` minus ".zip".
         """
         import zipfile
 
         with zipfile.ZipFile(fpath, "w") as zf:
-            intended_name = fpath.stem
+            if inner_fname is None:
+                inner_fname = fpath.stem
             if isinstance(stuff, str):
-                zf.writestr(intended_name, stuff)
+                zf.writestr(inner_fname, stuff)
             else:
                 # write a jsonl
-                with zf.open(intended_name + ".jsonl", "w") as f:
+                with zf.open(inner_fname + ".jsonl", "w") as f:
                     for item in stuff:
                         line = json.dumps(item) + "\n"
                         f.write(line.encode("utf-8"))
@@ -204,8 +219,8 @@ class BatchBackend(BaseBackend):
     # That contains (agent_name, checkpoint?, seq_id, session_id, doc_hash, provider_type, batch_uuid)
 
     def download_batch_from_provider(
-        self, batch_uuid: str, *, save_to_disk: Literal[None, "jsonl.zip"] = "jsonl.zip"
-    ) -> BatchResult:
+        self, batch_uuid: str, *, save_to_disk: Literal[None, "zip"] = "zip"
+    ) -> List[BatchResult]:
         """
         Given a batch UUID, download the results.
 
@@ -215,49 +230,56 @@ class BatchBackend(BaseBackend):
         will eventually be rectified to have this control flow.
 
         :param batch_uuid: The UUID of the batch to download.
-        :param save_to_disk: If "jsonl.zip", saves the results to a zip file containing a jsonl.
+        :param save_to_disk: If "zip", saves the results to a zip file.
             If None, does not save to disk.
         """
         if self._provider is None:
             raise ValueError("No provider registered with BatchBackend")
 
-        batch_result = self._provider.download_batch_from_provider(batch_uuid)
+        batch_results = self._provider.download_batch(batch_uuid)
 
-        if save_to_disk == "jsonl.zip":
-            # Save to disk
-            if batch_result.status == "ready" or batch_result.status == "error":
-                ending = ".jsonl.zip"
-                if batch_result.status == "error":
-                    ending = "_err.jsonl.zip"
+        for res in batch_results:
+            if save_to_disk == "zip":
+                ending = ".zip" if res.status == "ready" else "_err.zip"
                 fpath = self._fm.allocate_batch_out() / f"{batch_uuid}{ending}"
                 self.persist_to_zip(
-                    batch_result.raw_output, fpath=fpath
+                    res.raw_output, fpath=fpath, inner_fname=batch_uuid + ".jsonl"
                 )
 
-        if batch_result.status == "ready":
-            self._ds.store_ready_batch(batch_result)
-        return batch_result
+            if res.status == "ready":
+                self._ds.store_ready_batch(res)
+                # self._ds.clear_batch_pending(batch_uuid)
+            else:
+                # TODO
+                # self._ds.store_error_batch(res)
+                # self._ds.clear_batch_pending(batch_uuid)
+                pass
 
     def try_download_all_batches(
         self,
     ):
         """
-        Try to download all batches
+        Try to download all batches and clean up completed ones
         """
         pending_batches = self._ds.get_all_pending_batch_uuids()
         for batch_uuid in pending_batches:
             try:
                 batch_result = self.download_batch_from_provider(
-                    batch_uuid, save_to_disk="jsonl.zip"
+                    batch_uuid, save_to_disk="zip"
                 )
                 if batch_result.status == "ready":
                     print(f"Batch {batch_uuid} completed and stored.")
+                    # Clean up the pending batch record
+                    self._ds.clear_batch_pending(batch_uuid)
                 elif batch_result.status == "error":
                     print(f"Batch {batch_uuid} completed with errors and stored.")
+                    # Clean up the pending batch record even for errors
+                    self._ds.clear_batch_pending(batch_uuid)
                 else:
                     print(f"Batch {batch_uuid} is still pending.")
             except Exception as e:
                 print(f"Error downloading batch {batch_uuid}: {e}")
+
 
 class DebugBatchBackend(BatchBackend):
     """

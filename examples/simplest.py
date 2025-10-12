@@ -7,8 +7,8 @@ load_dotenv()
 with ParalleLLM.resume_directory(
     ".pllm/simplest",
     # ".temp",
-    provider="anthropic",  #
-    strategy="sync",
+    provider="openai",  #
+    strategy="batch",
     log_level=logging.DEBUG,
     # ignore_cache=True,
 ) as pllm:

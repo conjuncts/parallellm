@@ -13,9 +13,9 @@ def guess_schema(
 
     :returns: A tuple containing the response text, response ID, and metadata dictionary.
     """
-    if isinstance(inp, BaseModel):
-        # hardcoded
-        try:
+    # hardcoded
+    try:
+        if isinstance(inp, BaseModel):
             if provider_type == "openai":
                 # from openai.types.responses.response import Response
                 res = inp.output_text, inp.id
@@ -42,13 +42,7 @@ def guess_schema(
                 obj = inp.model_dump(mode="json")
                 obj.pop("id")
                 return (*res, obj)
-        except Exception as e:
-            print(
-                f"Unexpected error while processing known provider type {provider_type}",
-                e,
-            )
-    elif isinstance(inp, dict):
-        try:
+        elif isinstance(inp, dict):
             if provider_type == "openai":
                 # responses API
 
@@ -61,17 +55,17 @@ def guess_schema(
 
                 texts: List[str] = []
                 for output in inp.get("output"):
-                    if output.type == "message":
-                        for content in output.content:
-                            if content.type == "output_text":
-                                texts.append(content.text)
+                    if output["type"] == "message":
+                        for content in output["content"]:
+                            if content["type"] == "output_text":
+                                texts.append(content["text"])
 
                 return "".join(texts), resp_id, inp
-        except Exception as e:
-            print(
-                f"Unexpected error while processing known provider type {provider_type}",
-                e,
-            )
+    except Exception as e:
+        print(
+            f"Unexpected error while processing known provider type {provider_type}",
+            e,
+        )
 
     # Generic handling for unknown types
     model = None

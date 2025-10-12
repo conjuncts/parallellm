@@ -171,8 +171,7 @@ class AsyncBackend(BaseBackend):
             resp_text, resp_id, resp_metadata = guess_schema(
                 result, provider_type=call_id.get("provider_type", None)
             )
-            self._async_ds.store(call_id, resp_text, resp_id)
-            self._async_ds.store_metadata(call_id, resp_id, resp_metadata)
+            self._async_ds.store(call_id, resp_text, resp_id, metadata=resp_metadata)
             done_tasks.append(metadata)
 
             # do logging

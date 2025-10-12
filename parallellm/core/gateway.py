@@ -5,6 +5,7 @@ from parallellm.core.agent.orchestrator import AgentOrchestrator
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger
 from parallellm.logging.fancy import parallellm_log_handler
+from parallellm.provider.openai import BatchOpenAIProvider
 from parallellm.types import ProviderType
 
 
@@ -81,6 +82,15 @@ class ParalleLLMGateway:
             backend = SyncBackend(
                 fm, dash_logger=dash_logger, datastore_cls=datastore_cls
             )
+        elif strategy == "batch":
+            from parallellm.core.backend.batch_backend import BatchBackend
+
+            backend = BatchBackend(
+                fm,
+                dash_logger=dash_logger,
+                datastore_cls=datastore_cls,
+                session_id=fm.metadata["session_counter"],
+            )
         else:
             raise NotImplementedError(f"Strategy '{strategy}' is not implemented yet")
 
@@ -96,6 +106,11 @@ class ParalleLLMGateway:
 
                 client = AsyncOpenAI()
                 provider = AsyncOpenAIProvider(client=client, backend=backend)
+            elif strategy == "batch":
+                from openai import OpenAI
+
+                client = OpenAI()
+                provider = BatchOpenAIProvider(client=client, backend=backend)
             else:
                 # For other strategies, default to sync for now
                 from openai import OpenAI
@@ -140,6 +155,10 @@ class ParalleLLMGateway:
             ignore_cache=ignore_cache,
             strategy=strategy,
         )
+
+        # try downloading previous batches if any
+        if strategy == "batch":
+            backend.try_download_all_batches()
 
         logger.info(f"Resuming with session_id={bm.get_session_counter()}")
         return bm

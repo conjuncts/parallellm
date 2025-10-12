@@ -154,7 +154,8 @@ class SQLiteDatastore(Datastore):
                         doc_hash TEXT NOT NULL,
                         provider_type TEXT,
                         batch_uuid TEXT NOT NULL,
-                        UNIQUE(agent_name, checkpoint, doc_hash, batch_uuid)
+                        custom_id TEXT,
+                        UNIQUE(custom_id, batch_uuid)
                     )
                 """)
 
@@ -218,6 +219,9 @@ class SQLiteDatastore(Datastore):
                 # Create indexes for batch_pending table
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_batch_pending_batch_uuid ON batch_pending(batch_uuid)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_batch_pending_custom_id ON batch_pending(custom_id)
                 """)
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_batch_pending_agent_checkpoint ON batch_pending(agent_name, checkpoint)
@@ -370,6 +374,7 @@ class SQLiteDatastore(Datastore):
         :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
         :param response: The response content to store.
         :param response_id: The response ID to store.
+        :param metadata: Optional metadata to store alongside the response.
         :returns: The seq_id where the response was stored.
         """
         checkpoint = call_id["checkpoint"]
@@ -445,6 +450,14 @@ class SQLiteDatastore(Datastore):
                 insert_sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
                 conn.execute(insert_sql, values)
 
+            # Store metadata if provided
+            if metadata:
+                metadata_json = json.dumps(metadata)
+                conn.execute(
+                    "INSERT OR REPLACE INTO metadata (response_id, metadata, provider_type) VALUES (?, ?, ?)",
+                    (response_id, metadata_json, provider_type),
+                )
+
             # Always commit immediately for thread safety
             conn.commit()
             return seq_id
@@ -453,42 +466,6 @@ class SQLiteDatastore(Datastore):
             conn.rollback()
             raise RuntimeError(f"SQLite error while storing response: {e}")
 
-    def store_metadata(
-        self,
-        call_id: CallIdentifier,
-        response_id: str,
-        metadata: dict,
-    ) -> None:
-        """
-        Store metadata in SQLite.
-
-        :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
-        :param response_id: The response ID to store.
-        :param metadata: The metadata to store.
-        """
-        provider_type = call_id.get("provider_type", None)
-
-        # Get main database connection
-        conn = self._get_connection(None)
-
-        try:
-            # Serialize metadata to JSON
-            metadata_json = json.dumps(metadata) if metadata else None
-
-            if metadata_json:
-                # Insert or replace metadata for this response_id (response_id is unique UUID)
-                conn.execute(
-                    "INSERT OR REPLACE INTO metadata (response_id, metadata, provider_type) VALUES (?, ?, ?)",
-                    (response_id, metadata_json, provider_type),
-                )
-
-            # Always commit immediately for thread safety
-            conn.commit()
-
-        except sqlite3.Error as e:
-            conn.rollback()
-            raise RuntimeError(f"SQLite error while storing metadata: {e}")
-
     def store_pending_batch(
         self,
         batch_id: BatchIdentifier,
@@ -496,16 +473,16 @@ class SQLiteDatastore(Datastore):
         """
         Store pending batch information to track submitted batch requests.
 
-        This stores the call_ids and batch_uuid so that when the batch completes,
+        This stores the call_ids, custom_ids, and batch_uuid so that when the batch completes,
         the results can be matched back to the original calls.
 
-        :param batch_id: The batch identifier containing call_ids and batch_uuid
+        :param batch_id: The batch identifier containing call_ids, custom_ids, and batch_uuid
         """
         conn = self._get_connection(None)
 
         try:
             # Insert each call_id from the batch into the batch_pending table
-            for call_id in batch_id.call_ids:
+            for call_id, custom_id in zip(batch_id.call_ids, batch_id.custom_ids):
                 agent_name = call_id["agent_name"]
                 checkpoint = call_id.get("checkpoint")
                 seq_id = call_id["seq_id"]
@@ -518,8 +495,8 @@ class SQLiteDatastore(Datastore):
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO batch_pending 
-                    (agent_name, checkpoint, seq_id, session_id, doc_hash, provider_type, batch_uuid)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (agent_name, checkpoint, seq_id, session_id, doc_hash, provider_type, batch_uuid, custom_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         agent_name,
@@ -529,6 +506,7 @@ class SQLiteDatastore(Datastore):
                         doc_hash,
                         provider_type,
                         batch_uuid,
+                        custom_id,
                     ),
                 )
 
@@ -542,9 +520,127 @@ class SQLiteDatastore(Datastore):
     def store_ready_batch(
         self,
         batch_result: BatchResult,
-    ):
-        pass
-        # TODO: need to adjust resp_id to actually be custom_id
+    ) -> None:
+        """
+        Store completed batch results in the datastore.
+
+        This takes the BatchResult, matches each response back to its original
+        call_id using custom_id, and stores both the response and metadata.
+
+        :param batch_result: The completed batch results to store
+        """
+        if not batch_result.resp_texts or not batch_result.custom_ids:
+            return  # Nothing to store
+
+        conn = self._get_connection(None)
+
+        try:
+            # Process each response in the batch
+            for i, (custom_id, resp_text) in enumerate(
+                zip(batch_result.custom_ids, batch_result.resp_texts)
+            ):
+                # Look up the call_id using custom_id from batch_pending
+                cursor = conn.execute(
+                    """
+                    SELECT agent_name, checkpoint, seq_id, session_id, doc_hash, provider_type
+                    FROM batch_pending
+                    WHERE custom_id = ?
+                    LIMIT 1
+                    """,
+                    (custom_id,),
+                )
+                row = cursor.fetchone()
+
+                if not row:
+                    raise ValueError(
+                        f"Could not find pending batch record for custom_id: {custom_id}"
+                    )
+
+                agent_name = row["agent_name"]
+                checkpoint = row["checkpoint"]
+                seq_id = row["seq_id"]
+                session_id = row["session_id"]
+                doc_hash = row["doc_hash"]
+                provider_type = row["provider_type"]
+
+                # Determine table
+                table_name = "chk_responses" if checkpoint else "anon_responses"
+
+                # Get metadata if available
+                metadata = batch_result.metadatas[i] if batch_result.metadatas else None
+
+                # Prepare columns and values
+                columns = [
+                    "agent_name",
+                    "seq_id",
+                    "session_id",
+                    "doc_hash",
+                    "response",
+                    "response_id",
+                    "provider_type",
+                ]
+                values = [
+                    agent_name,
+                    seq_id,
+                    session_id,
+                    doc_hash,
+                    resp_text,
+                    custom_id,  # Use custom_id as response_id for batch results
+                    provider_type,
+                ]
+
+                if checkpoint:
+                    columns.insert(1, "checkpoint")
+                    values.insert(1, checkpoint)
+
+                # Build WHERE clause for checking existing records
+                where_conditions = ["doc_hash = ?"]
+                where_params = [doc_hash]
+
+                if agent_name is not None:
+                    where_conditions.append("agent_name = ?")
+                    where_params.append(agent_name)
+                else:
+                    where_conditions.append("agent_name IS NULL")
+
+                if checkpoint:
+                    where_conditions.append("checkpoint = ?")
+                    where_params.append(checkpoint)
+
+                where_clause = " AND ".join(where_conditions)
+
+                # Check if record exists
+                cursor = conn.execute(
+                    f"SELECT seq_id FROM {table_name} WHERE {where_clause}",
+                    where_params,
+                )
+                existing = cursor.fetchone()
+
+                if existing:
+                    # Update existing record
+                    set_clauses = [f"{col} = ?" for col in columns]
+                    update_sql = f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {where_clause}"
+                    conn.execute(update_sql, values + where_params)
+                else:
+                    # Insert new record
+                    placeholders = ", ".join(["?" for _ in columns])
+                    insert_sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+                    conn.execute(insert_sql, values)
+
+                # Store metadata if available
+                if metadata:
+                    metadata_json = json.dumps(metadata)
+                    conn.execute(
+                        "INSERT OR REPLACE INTO metadata (response_id, metadata, provider_type) VALUES (?, ?, ?)",
+                        (custom_id, metadata_json, provider_type),
+                    )
+
+            # Commit all changes
+            conn.commit()
+
+        except sqlite3.Error as e:
+            conn.rollback()
+            raise RuntimeError(f"SQLite error while storing batch results: {e}")
 
     def retrieve_batch_call_ids(self, batch_uuid: str) -> list[CallIdentifier]:
         """
@@ -618,6 +714,44 @@ class SQLiteDatastore(Datastore):
         except sqlite3.Error as e:
             conn.rollback()
             raise RuntimeError(f"SQLite error while clearing batch: {e}")
+
+    def is_call_in_pending_batch(self, call_id: CallIdentifier) -> bool:
+        """
+        Check if a call_id is already in a pending batch.
+
+        :param call_id: The call identifier to check
+        :returns: True if the call_id is in a pending batch, False otherwise
+        """
+        conn = self._get_connection(None)
+
+        agent_name = call_id["agent_name"]
+        checkpoint = call_id.get("checkpoint")
+        doc_hash = call_id["doc_hash"]
+
+        # Build WHERE conditions to match the call_id
+        where_conditions = ["doc_hash = ?"]
+        params = [doc_hash]
+
+        if agent_name is not None:
+            where_conditions.append("agent_name = ?")
+            params.append(agent_name)
+        else:
+            where_conditions.append("agent_name IS NULL")
+
+        if checkpoint is not None:
+            where_conditions.append("checkpoint = ?")
+            params.append(checkpoint)
+        else:
+            where_conditions.append("checkpoint IS NULL")
+
+        where_clause = " AND ".join(where_conditions)
+
+        cursor = conn.execute(
+            f"SELECT COUNT(*) as count FROM batch_pending WHERE {where_clause}",
+            params,
+        )
+        row = cursor.fetchone()
+        return row["count"] > 0 if row else False
 
     def _transfer_metadata_to_parquet(self) -> None:
         """

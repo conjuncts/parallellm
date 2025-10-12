@@ -149,7 +149,12 @@ class SQLiteParquetDatastore(Datastore):
         return self._sqlite_datastore.retrieve_metadata(call_id)
 
     def store(
-        self, call_id: CallIdentifier, response: str, response_id: str
+        self,
+        call_id: CallIdentifier,
+        response: str,
+        response_id: str,
+        *,
+        metadata: Optional[dict] = None,
     ) -> Optional[int]:
         """
         Store a response in SQLite (transactional).
@@ -157,27 +162,14 @@ class SQLiteParquetDatastore(Datastore):
         :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
         :param response: The response content to store.
         :param response_id: The response ID to store.
+        :param metadata: Optional metadata dictionary to store alongside the response.
         :returns: The seq_id where the response was stored.
         """
 
         # Store in SQLite for transactional integrity
-        return self._sqlite_datastore.store(call_id, response, response_id)
-
-    def store_metadata(
-        self,
-        call_id: CallIdentifier,
-        response_id: str,
-        metadata: dict,
-    ) -> None:
-        """
-        Store metadata in SQLite (transactional).
-
-        :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
-        :param response_id: The response ID to store.
-        :param metadata: The metadata to store.
-        """
-
-        self._sqlite_datastore.store_metadata(call_id, response_id, metadata)
+        return self._sqlite_datastore.store(
+            call_id, response, response_id, metadata=metadata
+        )
 
     def _transfer_tables_to_parquet(self) -> None:
         """

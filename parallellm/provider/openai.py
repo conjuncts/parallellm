@@ -241,45 +241,34 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
             completion_window="24h",
             # metadata={"description":""}
         )
+
+        # Extract custom_ids from stuff (they were added by persist_batch_to_jsonl)
+        custom_ids = [s["custom_id"] for s in stuff]
+
         return BatchIdentifier(
             call_ids=call_ids,
+            custom_ids=custom_ids,
             batch_uuid=batch_obj.id,
         )
 
-    def download_batch_from_provider(
+    def download_batch(
         self,
         batch_uuid: str,
-    ) -> BatchResult:
+    ) -> List[BatchResult]:
         """Download the results of a batch from the provider.
 
         :param batch_uuid: The UUID of the batch to download.
-        :return: A BatchResult object containing status and results.
+        :return: List of BatchResult objects containing the results and errors (if any).
+            If nothing is ready yet, empty list is returned.
         """
         batch = self.client.batches.retrieve(batch_uuid)
         err_file_id = batch.error_file_id
         out_file_id = batch.output_file_id
 
         if out_file_id is None and err_file_id is None:
-            return BatchResult("pending", None, None, None, None)
-        elif err_file_id is not None:
-            err_content = self.client.files.content(err_file_id).text
+            return []
 
-            try:
-                errors = [
-                    self._decode_openai_batch_error(json.loads(line))
-                    for line in err_content.strip().split("\n")
-                    if line
-                ]
-                contents, custom_ids, metadatas = zip(*errors)
-                return BatchResult(
-                    "error",
-                    err_content,
-                    list(contents),
-                    list(custom_ids),
-                    list(metadatas),
-                )
-            except json.JSONDecodeError:
-                return BatchResult("error", err_content, None, None, None)
+        results = []
 
         # Successful completion
         out_content = self.client.files.content(out_file_id).text
@@ -290,7 +279,7 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
                 if line
             ]
             contents, custom_ids, metadatas = zip(*results)
-            return BatchResult(
+            suc_res = BatchResult(
                 "ready",
                 out_content,
                 list(contents),
@@ -298,4 +287,28 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
                 list(metadatas),
             )
         except json.JSONDecodeError:
-            return BatchResult("error", out_content, None, None, None)
+            suc_res = BatchResult("error", out_content, None, None, None)
+        results.append(suc_res)
+
+        # Errors
+        if err_file_id is not None:
+            err_content = self.client.files.content(err_file_id).text
+
+            try:
+                errors = [
+                    self._decode_openai_batch_error(json.loads(line))
+                    for line in err_content.strip().split("\n")
+                    if line
+                ]
+                contents, custom_ids, metadatas = zip(*errors)
+                err_res = BatchResult(
+                    "error",
+                    err_content,
+                    list(contents),
+                    list(custom_ids),
+                    list(metadatas),
+                )
+            except json.JSONDecodeError:
+                err_res = BatchResult("error", err_content, None, None, None)
+            results.append(err_res)
+        return results

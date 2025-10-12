@@ -50,7 +50,7 @@ class BatchProvider(BaseProvider):
         """Submit a batch of calls to the provider."""
         raise NotImplementedError
 
-    def download_batch_from_provider(self, batch_uuid: str) -> BatchResult:
+    def download_batch(self, batch_uuid: str) -> List[BatchResult]:
         """Download the results of a batch from the provider.
 
         :return: A tuple of (content, batch_status)

@@ -12,6 +12,12 @@ from parallellm.types import WorkingMetadata
 
 
 class FileManager:
+    """
+
+    Because FileManager is the first to read metadata, it also is the authoritative
+    source for the session_counter / session_id.
+    """
+
     def __init__(self, directory):
         self.directory = Path(directory)
         self.metadata_file = self.directory / "metadata.json"

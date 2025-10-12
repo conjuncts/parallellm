@@ -19,6 +19,8 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
     - concoct a "multi-provider" that routes based on `provider_type`
 - [ ] right now, provider and backend control is inverted. Here, the ask_llm calls provider calls backend. And backend has hard-coded stuff per provider. But really, is should be ask_llm calls backend calls provider. And the provider has encapsulated method that handles input (call_id, llm, etc. --> {sync function, async function}) and post-input format handling (Pydantic Model --> common data format for SQL: this right here is hard coded into guess_schemas()). ask_llm already calls backend anyways to check for cached values. I'm going to pre-empt this by making some of the batch methods have the correct control.
 - [ ] dedicated SQLite storage for requests that error
+- [ ] retrieve() should also be able to return if a value is pending (in addition to present/absent)
+- [ ] right now, (for batch) bookkeep_call() is the one that emits an error if a value is pending but not available, but this seems unelegant and should probably be moved out
     
 
 - Automatically persist upon pllm exit
