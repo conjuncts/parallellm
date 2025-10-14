@@ -20,6 +20,7 @@ class ParalleLLMGateway:
         dry_run=False,
         log_level=logging.INFO,
         ignore_cache=False,
+        user_confirmation=False,
     ):
         """
         Resume an AgentOrchestrator from a previously saved directory.
@@ -32,6 +33,8 @@ class ParalleLLMGateway:
         :param dry_run: If True, validate setup without making actual API calls
         :param log_level: Logging level for the session
         :param ignore_cache: If True, always submit to API instead of using cached responses
+        :param user_confirmation: If True, ask for user confirmation before
+            submitting batches (only applicable 'batch')
         :return: Configured AgentOrchestrator instance
         :raises ValueError: If strategy is not supported
         :raises NotImplementedError: If dry_run is True or strategy is not implemented
@@ -90,6 +93,7 @@ class ParalleLLMGateway:
                 dash_logger=dash_logger,
                 datastore_cls=datastore_cls,
                 session_id=fm.metadata["session_counter"],
+                confirm_batch_submission=user_confirmation,
             )
         else:
             raise NotImplementedError(f"Strategy '{strategy}' is not implemented yet")

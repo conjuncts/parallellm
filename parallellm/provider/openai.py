@@ -273,12 +273,12 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         # Successful completion
         out_content = self.client.files.content(out_file_id).text
         try:
-            results = [
+            oks = [
                 self._decode_openai_batch_result(json.loads(line))
                 for line in out_content.strip().split("\n")
                 if line
             ]
-            contents, custom_ids, metadatas = zip(*results)
+            contents, custom_ids, metadatas = zip(*oks)
             suc_res = BatchResult(
                 "ready",
                 out_content,

@@ -16,7 +16,9 @@ class HashStatus(Enum):
 
     CACHED = "C"  # cached
     SENT = "↗"  # sent to provider
+    SENT_BATCH = "⇈"  # sent to provider in batch
     RECEIVED = "↘"  # received from provider
+    RECEIVED_BATCH = "⇊"  # received from provider in batch
     STORED = "✓"  # stored in datastore
 
 
@@ -31,11 +33,11 @@ class HashEntry:
 
 class DashboardLogger:
     """
-    Sophisticated hash logger that displays top k=10 hashes with dynamic console updates.
+    Sophisticated logger that displays top k=10 hashes or batch UUIDs with dynamic console updates.
 
     Features:
     - Shows the top k=10 hash entries (or fewer if console width is limited)
-    - Allows updating hash statuses
+    - Allows updating hash/batch statuses
     - Option to enable/disable console output
     - Console rewrites itself to minimize spam
     - Status changes update existing entries instead of adding new ones
@@ -48,7 +50,7 @@ class DashboardLogger:
         Initialize the DashboardLogger.
 
         Args:
-            k: Maximum number of hashes to display (default 10)
+            k: Maximum number of hashes/batches to display (default 10)
             display: Whether to display console output (default True)
         """
         self.k = k
@@ -65,19 +67,25 @@ class DashboardLogger:
         self._status_colors = {
             HashStatus.CACHED: Fore.GREEN,
             HashStatus.SENT: Fore.CYAN,
+            HashStatus.SENT_BATCH: Fore.CYAN,
             HashStatus.RECEIVED: Fore.GREEN,
+            HashStatus.RECEIVED_BATCH: Fore.GREEN,
             HashStatus.STORED: Fore.GREEN,
         }
 
     def update_hash(self, full_hash: str, status: HashStatus):
         """
-        Update or add a hash with the given status.
+        Update or add a hash or batch UUID with the given status.
 
         Args:
-            full_hash: The full hash string
-            status: The status of the hash
+            full_hash: The full hash string or batch UUID
+            status: The status of the hash/batch
         """
         with self._lock:
+            # Strip "batch_" prefix if present
+            if full_hash.startswith("batch_"):
+                full_hash = full_hash[6:]  # Remove "batch_" prefix
+
             hash_id = full_hash[:8]  # Use first 8 characters as display ID
 
             if hash_id in self._hashes:
@@ -175,15 +183,19 @@ class DashboardLogger:
 
     def get_status(self, full_hash: str) -> Optional[HashStatus]:
         """
-        Get the current status of a hash.
+        Get the current status of a hash or batch UUID.
 
         Args:
-            full_hash: The full hash string
+            full_hash: The full hash string or batch UUID
 
         Returns:
-            The current status of the hash, or None if not found
+            The current status of the hash/batch, or None if not found
         """
         with self._lock:
+            # Strip "batch_" prefix if present
+            if full_hash.startswith("batch_"):
+                full_hash = full_hash[6:]
+
             hash_id = full_hash[:8]
             entry = self._hashes.get(hash_id)
             return entry.status if entry else None
@@ -247,3 +259,30 @@ class DashboardLogger:
             )
             response = input().strip().lower()
         return response
+
+    def confirm_batch_submission(self, num_batches: int, total_calls: int) -> bool:
+        """
+        Ask the user to confirm batch submission with formatted message.
+
+        :param num_batches: Number of batches to be submitted
+        :param total_calls: Total number of API calls across all batches
+        :return: True if user confirms, False otherwise
+        """
+
+        # Format the message with colors
+        plural = ""
+        if num_batches > 1:
+            plural = "es"
+        message = (
+            f"Submit {Fore.CYAN}{num_batches} batch{plural}{Style.RESET_ALL} "
+            f"({Fore.CYAN}{total_calls} calls{Style.RESET_ALL})?"
+        )
+
+        self.coordinated_print(message)
+        prompt = f" (y/n): "
+
+        response = self.ask_for_confirmation(
+            prompt, valid_responses={"y", "n", "yes", "no"}
+        )
+
+        return response in {"y", "yes"}
