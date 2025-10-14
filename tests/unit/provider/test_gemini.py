@@ -7,6 +7,7 @@ Tests the Gemini provider functionality including:
 - Provider type handling
 """
 
+from dotenv import load_dotenv
 import pytest
 from unittest.mock import Mock, AsyncMock
 from parallellm.provider.gemini import (
@@ -18,6 +19,7 @@ from parallellm.provider.gemini import (
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.response import PendingLLMResponse, ReadyLLMResponse
+from parallellm.provider.schemas import guess_schema
 from parallellm.types import CallIdentifier
 
 
@@ -61,36 +63,28 @@ class TestGeminiProviders:
         """Test that GeminiProvider has correct provider type"""
         assert GeminiProvider.provider_type == "google"
 
-    def test_sync_gemini_provider_submit_query(self, call_id):
-        """Test SyncGeminiProvider query submission"""
-        # Mock client and backend
-        mock_client = Mock()
-        mock_models = Mock()
-        mock_client.models = mock_models
+    # @pytest.mark.skip("costs real money")
+    def test_sync_gemini_provider_prepare_sync_call(self, call_id):
+        """Test SyncGeminiProvider prepares sync callable correctly"""
+        load_dotenv()
+        from google import genai
 
-        mock_response = Mock()
-        mock_response.text = "Test response from Gemini"
-        mock_models.generate_content.return_value = mock_response
+        client = genai.Client()
+        provider = SyncGeminiProvider(client=client)
 
-        mock_backend = Mock(spec=SyncBackend)
-        mock_backend.submit_sync_call.return_value = (
-            "Test response from Gemini",
-            None,
-            {},
-        )
-
-        provider = SyncGeminiProvider(client=mock_client, backend=mock_backend)
-
-        response = provider.submit_query_to_provider(
-            instructions="Test instructions",
+        # Test prepare_sync_call returns a callable
+        sync_callable = provider.prepare_sync_call(
+            instructions="Please respond exactly with Hello World!",
             documents=["Test document"],
-            call_id=call_id,
+            llm=Mock(model_name="gemini-2.5-flash"),
         )
 
-        assert isinstance(response, ReadyLLMResponse)
-        assert response.call_id == call_id
-        assert response.value == "Test response from Gemini"
+        # Verify it returns a callable
+        assert callable(sync_callable)
 
-        # Verify backend was called
-        mock_backend.submit_sync_call.assert_called_once()
-        assert mock_backend.submit_sync_call.call_args[0][0] == call_id
+        # Execute the callable
+        result = sync_callable()
+        parsed, _, _ = guess_schema(result)
+
+        # Verify result
+        assert parsed == "Hello World!"

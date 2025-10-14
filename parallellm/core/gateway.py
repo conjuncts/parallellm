@@ -109,18 +109,18 @@ class ParalleLLMGateway:
                 from openai import AsyncOpenAI
 
                 client = AsyncOpenAI()
-                provider = AsyncOpenAIProvider(client=client, backend=backend)
+                provider = AsyncOpenAIProvider(client=client)
             elif strategy == "batch":
                 from openai import OpenAI
 
                 client = OpenAI()
-                provider = BatchOpenAIProvider(client=client, backend=backend)
+                provider = BatchOpenAIProvider(client=client)
             else:
                 # For other strategies, default to sync for now
                 from openai import OpenAI
 
                 client = OpenAI()
-                provider = SyncOpenAIProvider(client=client, backend=backend)
+                provider = SyncOpenAIProvider(client=client)
         elif provider == "google":
             from parallellm.provider.gemini import (
                 AsyncGeminiProvider,
@@ -130,10 +130,10 @@ class ParalleLLMGateway:
 
             if strategy == "async":
                 client = genai.Client()
-                provider = AsyncGeminiProvider(client=client, backend=backend)
+                provider = AsyncGeminiProvider(client=client)
             else:
                 client = genai.Client()
-                provider = SyncGeminiProvider(client=client, backend=backend)
+                provider = SyncGeminiProvider(client=client)
         elif provider == "anthropic":
             from parallellm.provider.anthropic import (
                 AsyncAnthropicProvider,
@@ -143,12 +143,13 @@ class ParalleLLMGateway:
 
             if strategy == "async":
                 client = Anthropic()
-                provider = AsyncAnthropicProvider(client=client, backend=backend)
+                provider = AsyncAnthropicProvider(client=client)
             else:
                 client = Anthropic()
-                provider = SyncAnthropicProvider(client=client, backend=backend)
+                provider = SyncAnthropicProvider(client=client)
         else:
             raise NotImplementedError(f"Provider '{provider}' not implemented yet")
+
         logger.debug("Creating AgentOrchestrator")
         bm = AgentOrchestrator(
             file_manager=fm,

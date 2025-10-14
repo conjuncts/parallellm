@@ -3,13 +3,17 @@ import logging
 import types
 import threading
 import atexit
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from parallellm.core.backend import BaseBackend, _call_matches
 from parallellm.core.datastore.sqlite import SQLiteDatastore
+from parallellm.core.response import PendingLLMResponse
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 from parallellm.provider.schemas import guess_schema
 from parallellm.types import CallIdentifier
+
+if TYPE_CHECKING:
+    from parallellm.provider.base import AsyncProvider
 
 
 class AsyncBackend(BaseBackend):
@@ -100,6 +104,38 @@ class AsyncBackend(BaseBackend):
         res = future.result()
         return res
 
+    def submit_query(
+        self,
+        provider: "AsyncProvider",
+        instructions,
+        documents,
+        *,
+        call_id: CallIdentifier,
+        llm,
+        _hoist_images=None,
+        **kwargs,
+    ):
+        """
+        New control flow: Backend calls provider to get coroutine, then executes it.
+        This inverts control from provider calling backend.
+        """
+        # Get the coroutine from the provider
+        coro = provider.prepare_async_call(
+            instructions,
+            documents,
+            llm=llm,
+            _hoist_images=_hoist_images,
+            **kwargs,
+        )
+
+        # Submit to the backend for asynchronous execution
+        self.submit_coro(call_id=call_id, coro=coro, provider=provider)
+
+        return PendingLLMResponse(
+            call_id=call_id,
+            backend=self,
+        )
+
     def shutdown(self):
         """Shutdown the event loop and cleanup"""
         if self._shutdown_event is not None:
@@ -124,14 +160,16 @@ class AsyncBackend(BaseBackend):
             except Exception as e:
                 print(f"Warning: Failed to cleanup datastore: {e}")
 
-    def submit_coro(self, call_id: CallIdentifier, coro: types.CoroutineType):
+    def submit_coro(
+        self, call_id: CallIdentifier, coro: types.CoroutineType, provider=None
+    ):
         """Submit a coroutine to be executed in the backend's event loop"""
         if self._loop is None or self._loop.is_closed():
             raise RuntimeError("AsyncBackend event loop is not running")
 
         # Create the task in the backend's event loop
         future = asyncio.run_coroutine_threadsafe(
-            self._create_and_store_task(call_id, coro), self._loop
+            self._create_and_store_task(call_id, coro, provider), self._loop
         )
 
         if self._dash_logger is not None:
@@ -140,12 +178,13 @@ class AsyncBackend(BaseBackend):
         return future
 
     async def _create_and_store_task(
-        self, call_id: CallIdentifier, coro: types.CoroutineType
+        self, call_id: CallIdentifier, coro: types.CoroutineType, provider=None
     ):
         """Helper to create and store a task in the event loop"""
 
         # Wrap the coro to include metadata
         metadata = call_id.copy()
+        metadata["_provider"] = provider  # Store provider for response parsing
 
         async def wrapped_coro():
             result = await coro
@@ -167,10 +206,16 @@ class AsyncBackend(BaseBackend):
             result, metadata = await coro
 
             call_id: CallIdentifier = metadata.copy()
+            provider = call_id.pop("_provider", None)  # Extract provider from metadata
 
-            resp_text, resp_id, resp_metadata = guess_schema(
-                result, provider_type=call_id.get("provider_type", None)
-            )
+            # Use provider.parse_response if available, otherwise fallback to guess_schema
+            if provider is not None:
+                resp_text, resp_id, resp_metadata = provider.parse_response(result)
+            else:
+                resp_text, resp_id, resp_metadata = guess_schema(
+                    result, provider_type=call_id.get("provider_type", None)
+                )
+
             self._async_ds.store(call_id, resp_text, resp_id, metadata=resp_metadata)
             done_tasks.append(metadata)
 

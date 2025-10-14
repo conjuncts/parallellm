@@ -17,7 +17,6 @@ from parallellm.core.identity import LLMIdentity
 from parallellm.provider.openai import (
     SyncOpenAIProvider,
     AsyncOpenAIProvider,
-    _fix_docs_for_openai,
 )
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.backend.async_backend import AsyncBackend
@@ -28,6 +27,11 @@ from PIL import Image
 
 
 pytest.skip("Not very informative", allow_module_level=True)
+
+
+_fix_docs_for_openai = lambda *args, **kwargs: SyncOpenAIProvider._fix_docs_for_openai(
+    None, *args, **kwargs
+)
 
 
 class MockSyncBackend:

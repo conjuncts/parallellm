@@ -349,7 +349,7 @@ class TestAgentOrchestratorIntegration:
             mock_backend.retrieve.return_value = "cached_response"
 
             mock_call_id = self._create_mock_call_id()
-            mock_provider.submit_query_to_provider.return_value = ReadyLLMResponse(
+            mock_backend.submit_query.return_value = ReadyLLMResponse(
                 call_id=mock_call_id, value="fresh_response"
             )
 
@@ -369,7 +369,8 @@ class TestAgentOrchestratorIntegration:
                 # Backend retrieve should NOT be called
                 mock_backend.retrieve.assert_not_called()
 
-                mock_provider.submit_query_to_provider.assert_called_once()
+                # Backend submit_query should be called (new inverted control flow)
+                mock_backend.submit_query.assert_called_once()
 
     def _create_mock_call_id(self) -> CallIdentifier:
         """Helper to create mock call identifiers"""

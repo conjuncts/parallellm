@@ -238,6 +238,7 @@ class AgentContext:
         # Cache using datastore
         cached = None if self.ignore_cache else self._bm._backend.retrieve(call_id)
         if cached is not None:
+            # if self._bm.strategy != "batch":
             self.update_hash_status(hashed, HashStatus.CACHED)
             return ReadyLLMResponse(
                 call_id=call_id,
@@ -251,9 +252,9 @@ class AgentContext:
                 + f" with provider {self._bm._provider.provider_type}"
             )
 
-        # Not cached, submit to provider
-        self.update_hash_status(hashed, HashStatus.SENT)
-        return self._bm._provider.submit_query_to_provider(
+        # Not cached, submit via backend (inverted control flow)
+        return self._bm._backend.submit_query(
+            self._bm._provider,
             instructions,
             documents,
             call_id=call_id,

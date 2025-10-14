@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from pydantic import BaseModel
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.identity import LLMIdentity
@@ -51,24 +52,58 @@ class AnthropicProvider(BaseProvider):
     def get_default_llm_identity(self) -> LLMIdentity:
         return LLMIdentity("claude-3-haiku-20240307", provider=self.provider_type)
 
+    def parse_response(
+        self, raw_response: Union[BaseModel, dict]
+    ) -> Tuple[str, Optional[str], dict]:
+        """Parse Anthropic API response into common format"""
+        if isinstance(raw_response, BaseModel):
+            # Pydantic model (e.g., anthropic.types.Message)
+            content = raw_response.content
+            if isinstance(content, list) and len(content) > 0:
+                text_content = (
+                    content[0].text if hasattr(content[0], "text") else str(content[0])
+                )
+            else:
+                text_content = str(content)
+
+            res = text_content, raw_response.id
+            obj = raw_response.model_dump(mode="json")
+            obj.pop("id", None)
+            return (*res, obj)
+        elif isinstance(raw_response, dict):
+            # Dict response
+            resp_id = raw_response.pop("id", None)
+
+            # Extract text from content
+            content = raw_response.get("content", [])
+            if isinstance(content, list) and len(content) > 0:
+                first_block = content[0]
+                if isinstance(first_block, dict) and "text" in first_block:
+                    text_content = first_block["text"]
+                else:
+                    text_content = str(first_block)
+            else:
+                text_content = str(content)
+
+            return text_content, resp_id, raw_response
+        else:
+            raise ValueError(f"Unsupported response type: {type(raw_response)}")
+
 
 class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
-    def __init__(self, client: "Anthropic", backend: SyncBackend):
+    def __init__(self, client: "Anthropic"):
         self.client = client
-        self.backend = backend
 
-    def submit_query_to_provider(
+    def prepare_sync_call(
         self,
         instructions,
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
-        call_id: CallIdentifier,
         llm: LLMIdentity,
         _hoist_images=None,
         **kwargs,
     ):
-        """Synchronously submit a query to Anthropic and return a ready response"""
-
+        """Prepare a synchronous callable for Anthropic API"""
         messages = _fix_docs_for_anthropic(documents)
 
         # Add system instruction if provided
@@ -84,32 +119,23 @@ class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
                 **config,
             )
 
-        # Execute the call synchronously and store the result
-        resp_text, _, _ = self.backend.submit_sync_call(
-            call_id, sync_function=sync_anthropic_call
-        )
-
-        # Return a ready response since the operation completed immediately
-        return ReadyLLMResponse(call_id=call_id, value=resp_text)
+        return sync_anthropic_call
 
 
 class AsyncAnthropicProvider(AsyncProvider, AnthropicProvider):
-    def __init__(self, client: "AsyncAnthropic", backend: AsyncBackend):
+    def __init__(self, client: "AsyncAnthropic"):
         self.client = client
-        self.backend = backend
 
-    def submit_query_to_provider(
+    def prepare_async_call(
         self,
         instructions,
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
-        call_id: CallIdentifier,
-        llm: Optional[LLMIdentity] = None,
+        llm: LLMIdentity,
         _hoist_images=None,
         **kwargs,
     ):
-        """Asynchronously submit a query to Anthropic and return a pending response"""
-
+        """Prepare an async coroutine for Anthropic API"""
         messages = _fix_docs_for_anthropic(documents)
 
         # Add system instruction if provided
@@ -124,10 +150,4 @@ class AsyncAnthropicProvider(AsyncProvider, AnthropicProvider):
             **config,
         )
 
-        # Submit to the backend for asynchronous execution
-        self.backend.submit_coro(call_id=call_id, coro=coro)
-
-        return PendingLLMResponse(
-            call_id=call_id,
-            backend=self.backend,
-        )
+        return coro

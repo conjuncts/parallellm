@@ -1,9 +1,10 @@
 import json
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union, TYPE_CHECKING
 from parallellm.core.backend import BaseBackend
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.datastore.sqlite import SQLiteDatastore
+from parallellm.core.exception import NotAvailable
 from parallellm.core.identity import LLMIdentity
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
@@ -15,6 +16,9 @@ from parallellm.types import (
     CallIdentifier,
     CohortIdentifier,
 )
+
+if TYPE_CHECKING:
+    from parallellm.provider.base import BatchProvider as BatchProviderType
 
 
 class BatchBackend(BaseBackend):
@@ -46,6 +50,50 @@ class BatchBackend(BaseBackend):
         self.session_id = session_id
 
         self.batch_group_counter = 0
+
+    def submit_query(
+        self,
+        provider: "BatchProviderType",
+        instructions,
+        documents,
+        *,
+        call_id: CallIdentifier,
+        llm,
+        _hoist_images=None,
+        **kwargs,
+    ):
+        """
+        New control flow: Backend calls provider to get batch data, then bookkeeps it.
+        This inverts control from provider calling backend.
+        """
+        # Store provider reference (all calls in a batch must use the same provider)
+        if self._provider is None:
+            self._provider = provider
+        elif self._provider is not provider:
+            raise ValueError(
+                f"BatchBackend already has provider of type {self._provider.provider_type}; "
+                f"cannot mix with {provider.provider_type} provider in the same batch."
+            )
+
+        # Get the batch call data from the provider
+        stuff = provider.prepare_batch_call(
+            instructions,
+            documents,
+            llm=llm,
+            _hoist_images=_hoist_images,
+            **kwargs,
+        )
+
+        # Bookkeep the call
+        self.bookkeep_call(
+            call_id,
+            llm,
+            stuff=stuff,
+            auto_assign_id="custom_id",
+        )
+
+        # Batch values are always unavailable
+        raise NotAvailable()
 
     def _poll_changes(self, call_id: CallIdentifier):
         """
@@ -104,15 +152,6 @@ class BatchBackend(BaseBackend):
 
         self._batch_buffer.append((call_id, llm.model_name, stuff))
 
-    def _register_provider(self, provider: BatchProvider):
-        """Register a provider"""
-        if self._provider is not None:
-            raise ValueError(
-                f"BatchBackend already has provider of type {self._provider.provider_type}"
-                f"; cannot register additional {provider.provider_type} provider."
-            )
-        self._provider = provider
-
     def execute_batch(
         self, *, max_batch_size=1000, partition_by_model_name=True
     ) -> CohortIdentifier:
@@ -145,12 +184,16 @@ class BatchBackend(BaseBackend):
         if self._confirm_batch_submission and self._dash_logger is not None:
             total_calls = sum(len(batch) for batch in batches)
             num_batches = len(batches)
-            
-            confirmed = self._dash_logger.confirm_batch_submission(num_batches, total_calls)
-            
+
+            confirmed = self._dash_logger.confirm_batch_submission(
+                num_batches, total_calls
+            )
+
             if not confirmed:
                 if self._dash_logger is not None:
-                    self._dash_logger.coordinated_print("Batch submission cancelled by user.")
+                    self._dash_logger.coordinated_print(
+                        "Batch submission cancelled by user."
+                    )
                 # Don't clear the buffer - allow the user to try again later
                 return CohortIdentifier(batch_ids=[], session_id=self.session_id)
 
@@ -162,10 +205,12 @@ class BatchBackend(BaseBackend):
             batch_id = self._provider.submit_batch_to_provider(call_ids, list(stuff))
             self._ds.store_pending_batch(batch_id)
             batch_ids.append(batch_id)
-            
+
             # Log batch submission to dashboard
             if self._dash_logger is not None:
-                self._dash_logger.update_hash(batch_id.batch_uuid, HashStatus.SENT_BATCH)
+                self._dash_logger.update_hash(
+                    batch_id.batch_uuid, HashStatus.SENT_BATCH
+                )
 
         cohort_id = CohortIdentifier(batch_ids=batch_ids, session_id=self.session_id)
         # Clear the batch buffer after execution
@@ -303,7 +348,7 @@ class BatchBackend(BaseBackend):
                         print(f"Batch {batch_uuid} completed with errors and stored.")
                         # Clean up the pending batch record even for errors
                         self._ds.clear_batch_pending(batch_uuid)
-                
+
                 if not batch_results:
                     print(f"Batch {batch_uuid} is still pending.")
             except Exception as e:

@@ -83,7 +83,8 @@ class TestAskLLMMethod:
             response = agent.ask_llm("Test prompt")
 
             assert isinstance(response, (ReadyLLMResponse, PendingLLMResponse))
-            mock_orchestrator._provider.submit_query_to_provider.assert_called_once()
+            # Now backend.submit_query is called instead of provider.submit_query_to_provider
+            mock_orchestrator._backend.submit_query.assert_called_once()
 
     def test_ask_llm_with_cache_hit(self, mock_orchestrator):
         """Test ask_llm when response is cached"""
@@ -96,8 +97,8 @@ class TestAskLLMMethod:
 
             assert isinstance(response, ReadyLLMResponse)
             assert response.resolve() == "Cached response"
-            # Provider should not be called for cached responses
-            mock_orchestrator._provider.submit_query_to_provider.assert_not_called()
+            # Backend submit_query should not be called for cached responses
+            mock_orchestrator._backend.submit_query.assert_not_called()
 
     def test_ask_llm_call_id_generation(self, mock_orchestrator):
         """Test that ask_llm generates correct call IDs"""
@@ -106,8 +107,8 @@ class TestAskLLMMethod:
         with agent:
             agent.ask_llm("Test prompt")
 
-            # Verify provider was called with correct call_id structure
-            call_args = mock_orchestrator._provider.submit_query_to_provider.call_args
+            # Verify backend was called with correct call_id structure
+            call_args = mock_orchestrator._backend.submit_query.call_args
             call_id = call_args.kwargs["call_id"]
 
             assert call_id["agent_name"] == "test_agent"
@@ -124,7 +125,7 @@ class TestAskLLMMethod:
             agent.when_checkpoint("test_checkpoint")
             agent.ask_llm("Checkpoint prompt")
 
-            call_args = mock_orchestrator._provider.submit_query_to_provider.call_args
+            call_args = mock_orchestrator._backend.submit_query.call_args
             call_id = call_args.kwargs["call_id"]
 
             assert call_id["checkpoint"] == "test_checkpoint"

@@ -95,7 +95,7 @@ class TestComputeHash:
         assert result == expected
 
 
-@pytest.skip("Not very informative")
+@pytest.mark.skip("Not very informative")
 class TestDashboardLogger:
     """Test DashboardLogger functionality"""
 

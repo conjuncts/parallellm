@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from pydantic import BaseModel
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.identity import LLMIdentity
@@ -53,24 +54,44 @@ class GeminiProvider(BaseProvider):
     def get_default_llm_identity(self) -> LLMIdentity:
         return LLMIdentity("gemini-2.5-flash", provider=self.provider_type)
 
+    def parse_response(
+        self, raw_response: Union[BaseModel, dict]
+    ) -> Tuple[str, Optional[str], dict]:
+        """Parse Gemini API response into common format"""
+        if isinstance(raw_response, BaseModel):
+            # Pydantic model (e.g., google.genai.types.GenerateContentResponse)
+            res = raw_response.text, raw_response.response_id
+            obj = raw_response.model_dump(mode="json")
+            obj.pop("response_id", None)
+            return (*res, obj)
+        elif isinstance(raw_response, dict):
+            # Dict response
+            resp_id = raw_response.pop("response_id", None) or raw_response.pop(
+                "responseId", None
+            )
+
+            # Extract text from Gemini response
+            text_content = raw_response.get("text", str(raw_response))
+
+            return text_content, resp_id, raw_response
+        else:
+            raise ValueError(f"Unsupported response type: {type(raw_response)}")
+
 
 class SyncGeminiProvider(SyncProvider, GeminiProvider):
-    def __init__(self, client: "genai.Client", backend: SyncBackend):
+    def __init__(self, client: "genai.Client"):
         self.client = client
-        self.backend = backend
 
-    def submit_query_to_provider(
+    def prepare_sync_call(
         self,
         instructions,
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
-        call_id: CallIdentifier,
-        llm: Optional[LLMIdentity] = None,
+        llm: LLMIdentity,
         _hoist_images=None,
         **kwargs,
     ):
-        """Synchronously submit a query to Gemini and return a ready response"""
-
+        """Prepare a synchronous callable for Gemini API"""
         contents = _fix_docs_for_gemini(documents)
 
         config = kwargs.copy()
@@ -84,31 +105,23 @@ class SyncGeminiProvider(SyncProvider, GeminiProvider):
                 config=config,
             )
 
-        resp_text, _, _ = self.backend.submit_sync_call(
-            call_id, sync_function=sync_gemini_call
-        )
-
-        return ReadyLLMResponse(call_id=call_id, value=resp_text)
+        return sync_gemini_call
 
 
 class AsyncGeminiProvider(AsyncProvider, GeminiProvider):
-    def __init__(self, client: "genai.Client", backend: AsyncBackend):
+    def __init__(self, client: "genai.Client"):
         self.client = client
-        self.backend = backend
 
-    def submit_query_to_provider(
+    def prepare_async_call(
         self,
         instructions,
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
-        call_id: CallIdentifier,
-        llm: Optional[LLMIdentity] = None,
+        llm: LLMIdentity,
         _hoist_images=None,
         **kwargs,
     ):
-        """Asynchronously submit a query to Gemini and return a pending response"""
-
-        # Convert documents to Gemini format
+        """Prepare an async coroutine for Gemini API"""
         contents = _fix_docs_for_gemini(documents)
 
         # Prepare generation config with system instructions
@@ -122,9 +135,4 @@ class AsyncGeminiProvider(AsyncProvider, GeminiProvider):
             config=config,
         )
 
-        self.backend.submit_coro(call_id=call_id, coro=coro)
-
-        return PendingLLMResponse(
-            call_id=call_id,
-            backend=self.backend,
-        )
+        return coro

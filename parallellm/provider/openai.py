@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from pydantic import BaseModel
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.batch_backend import BatchBackend
 from parallellm.core.backend.sync_backend import SyncBackend
@@ -55,24 +56,47 @@ class OpenAIProvider(BaseProvider):
     def get_default_llm_identity(self) -> LLMIdentity:
         return LLMIdentity("gpt-4.1-nano", provider=self.provider_type)
 
+    def parse_response(
+        self, raw_response: Union[BaseModel, dict]
+    ) -> Tuple[str, Optional[str], dict]:
+        """Parse OpenAI API response into common format"""
+        if isinstance(raw_response, BaseModel):
+            # Pydantic model (e.g., from openai.types.responses.response.Response)
+            res = raw_response.output_text, raw_response.id
+            obj = raw_response.model_dump(mode="json")
+            obj.pop("id", None)
+            return (*res, obj)
+        elif isinstance(raw_response, dict):
+            # Dict response (e.g., from batch API)
+            resp_id = raw_response.pop("id", None)
+
+            # Extract text from OpenAI responses API format
+            texts: List[str] = []
+            for output in raw_response.get("output", []):
+                if output["type"] == "message":
+                    for content in output["content"]:
+                        if content["type"] == "output_text":
+                            texts.append(content["text"])
+
+            return "".join(texts), resp_id, raw_response
+        else:
+            raise ValueError(f"Unsupported response type: {type(raw_response)}")
+
 
 class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
-    def __init__(self, client: "OpenAI", backend: SyncBackend):
+    def __init__(self, client: "OpenAI"):
         self.client = client
-        self.backend = backend
 
-    def submit_query_to_provider(
+    def prepare_sync_call(
         self,
         instructions,
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
-        call_id: CallIdentifier,
         llm: LLMIdentity,
         _hoist_images=None,
         **kwargs,
     ):
-        """Synchronously submit a query to OpenAI and return a ready response"""
-
+        """Prepare a synchronous callable for OpenAI API"""
         documents = self._fix_docs_for_openai(documents)
 
         def sync_openai_call():
@@ -83,30 +107,23 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
                 **kwargs,
             )
 
-        # Execute the call synchronously and store the result
-        resp_text, _, _ = self.backend.submit_sync_call(
-            call_id, sync_function=sync_openai_call
-        )
-
-        # Return a ready response since the operation completed immediately
-        return ReadyLLMResponse(call_id=call_id, value=resp_text)
+        return sync_openai_call
 
 
 class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
-    def __init__(self, client: "AsyncOpenAI", backend: AsyncBackend):
+    def __init__(self, client: "AsyncOpenAI"):
         self.client = client
-        self.backend = backend
 
-    def submit_query_to_provider(
+    def prepare_async_call(
         self,
         instructions,
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
-        call_id: CallIdentifier,
         llm: LLMIdentity,
         _hoist_images=None,
         **kwargs,
     ):
+        """Prepare an async coroutine for OpenAI API"""
         documents = self._fix_docs_for_openai(documents)
 
         coro = self.client.responses.create(
@@ -116,20 +133,12 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
             **kwargs,
         )
 
-        # Submit to the backend for asynchronous execution
-        self.backend.submit_coro(call_id=call_id, coro=coro)
-
-        return PendingLLMResponse(
-            call_id=call_id,
-            backend=self.backend,
-        )
+        return coro
 
 
 class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
-    def __init__(self, client: "OpenAI", backend: BatchBackend):
+    def __init__(self, client: "OpenAI"):
         self.client = client
-        self.backend = backend
-        self.backend._register_provider(self)
 
     def _turn_to_openai_batch(
         self,
@@ -148,35 +157,25 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         }
         return {"method": "POST", "url": "/v1/responses", "body": body}
 
-    def submit_query_to_provider(
+    def prepare_batch_call(
         self,
         instructions,
         documents: Union[LLMDocument, List[LLMDocument]] = [],
         *,
-        call_id: CallIdentifier,
-        llm: Optional[LLMIdentity] = None,
+        llm: LLMIdentity,
         _hoist_images=None,
         **kwargs,
     ):
-        """Submit a query to OpenAI, which (for batch) will never be immediately available"""
-
+        """Prepare batch call data for OpenAI"""
         documents = self._fix_docs_for_openai(documents)
 
-        self.backend.bookkeep_call(
-            call_id,
-            llm,
-            stuff=self._turn_to_openai_batch(
-                instructions,
-                documents,
-                llm=llm,
-                _hoist_images=_hoist_images,
-                **kwargs,
-            ),
-            auto_assign_id="custom_id",
+        return self._turn_to_openai_batch(
+            instructions,
+            documents,
+            llm=llm,
+            _hoist_images=_hoist_images,
+            **kwargs,
         )
-
-        # Batch values are always unavailable
-        raise NotAvailable()
 
     def _decode_openai_batch_result(self, result: dict) -> tuple[str, str, dict]:
         """Decode a single result from OpenAI batch response"""

@@ -41,4 +41,8 @@ def mock_orchestrator():
         call_id=mock_call_id, value="Mock response"
     )
 
+    mock_orch._backend.submit_query.return_value = ReadyLLMResponse(
+        call_id=mock_call_id, value="Mock response"
+    )
+
     yield mock_orch
