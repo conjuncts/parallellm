@@ -1,13 +1,6 @@
 from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 from pydantic import BaseModel
-from parallellm.core.backend.async_backend import AsyncBackend
-from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.identity import LLMIdentity
-from parallellm.core.response import (
-    LLMResponse,
-    PendingLLMResponse,
-    ReadyLLMResponse,
-)
 from parallellm.provider.base import AsyncProvider, BaseProvider, SyncProvider
 from parallellm.types import CallIdentifier, LLMDocument
 
@@ -15,7 +8,7 @@ if TYPE_CHECKING:
     from google import genai
 
 
-def _fix_docs_for_gemini(
+def _fix_docs_for_google(
     documents: Union[LLMDocument, List[LLMDocument]],
 ) -> Union[str, List]:
     """Ensure documents are in the correct format for Gemini API"""
@@ -48,7 +41,7 @@ def _fix_docs_for_gemini(
     return formatted_docs
 
 
-class GeminiProvider(BaseProvider):
+class GoogleProvider(BaseProvider):
     provider_type: str = "google"
 
     def get_default_llm_identity(self) -> LLMIdentity:
@@ -78,7 +71,7 @@ class GeminiProvider(BaseProvider):
             raise ValueError(f"Unsupported response type: {type(raw_response)}")
 
 
-class SyncGeminiProvider(SyncProvider, GeminiProvider):
+class SyncGoogleProvider(SyncProvider, GoogleProvider):
     def __init__(self, client: "genai.Client"):
         self.client = client
 
@@ -92,7 +85,7 @@ class SyncGeminiProvider(SyncProvider, GeminiProvider):
         **kwargs,
     ):
         """Prepare a synchronous callable for Gemini API"""
-        contents = _fix_docs_for_gemini(documents)
+        contents = _fix_docs_for_google(documents)
 
         config = kwargs.copy()
         if instructions:
@@ -108,7 +101,7 @@ class SyncGeminiProvider(SyncProvider, GeminiProvider):
         return sync_gemini_call
 
 
-class AsyncGeminiProvider(AsyncProvider, GeminiProvider):
+class AsyncGoogleProvider(AsyncProvider, GoogleProvider):
     def __init__(self, client: "genai.Client"):
         self.client = client
 
@@ -122,7 +115,7 @@ class AsyncGeminiProvider(AsyncProvider, GeminiProvider):
         **kwargs,
     ):
         """Prepare an async coroutine for Gemini API"""
-        contents = _fix_docs_for_gemini(documents)
+        contents = _fix_docs_for_google(documents)
 
         # Prepare generation config with system instructions
         config = kwargs.copy()

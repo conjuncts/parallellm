@@ -10,11 +10,12 @@ Tests the Gemini provider functionality including:
 from dotenv import load_dotenv
 import pytest
 from unittest.mock import Mock, AsyncMock
-from parallellm.provider.gemini import (
-    SyncGeminiProvider,
-    AsyncGeminiProvider,
-    _fix_docs_for_gemini,
-    GeminiProvider,
+from parallellm.core.identity import LLMIdentity
+from parallellm.provider.google import (
+    SyncGoogleProvider,
+    AsyncGoogleProvider,
+    _fix_docs_for_google,
+    GoogleProvider,
 )
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.backend.async_backend import AsyncBackend
@@ -41,14 +42,14 @@ class TestGeminiDocumentFormatting:
 
     def test_fix_docs_single_string(self):
         """Test fixing a single string document"""
-        result = _fix_docs_for_gemini("Hello world")
+        result = _fix_docs_for_google("Hello world")
 
         assert result == "Hello world"  # Single strings are passed directly
 
     def test_fix_docs_list_of_strings(self):
         """Test fixing a list of string documents"""
         docs = ["First message", "Second message"]
-        result = _fix_docs_for_gemini(docs)
+        result = _fix_docs_for_google(docs)
 
         assert isinstance(result, list)
         assert len(result) == 2
@@ -61,22 +62,22 @@ class TestGeminiProviders:
 
     def test_provider_type(self):
         """Test that GeminiProvider has correct provider type"""
-        assert GeminiProvider.provider_type == "google"
+        assert GoogleProvider.provider_type == "google"
 
-    # @pytest.mark.skip("costs real money")
+    @pytest.mark.skip("costs real money")
     def test_sync_gemini_provider_prepare_sync_call(self, call_id):
         """Test SyncGeminiProvider prepares sync callable correctly"""
         load_dotenv()
         from google import genai
 
         client = genai.Client()
-        provider = SyncGeminiProvider(client=client)
+        provider = SyncGoogleProvider(client=client)
 
         # Test prepare_sync_call returns a callable
         sync_callable = provider.prepare_sync_call(
             instructions="Please respond exactly with Hello World!",
             documents=["Test document"],
-            llm=Mock(model_name="gemini-2.5-flash"),
+            llm=LLMIdentity("gemini-2.5-flash"),
         )
 
         # Verify it returns a callable
@@ -84,7 +85,7 @@ class TestGeminiProviders:
 
         # Execute the callable
         result = sync_callable()
-        parsed, _, _ = guess_schema(result)
+        parsed, _, _ = provider.parse_response(result)
 
         # Verify result
         assert parsed == "Hello World!"

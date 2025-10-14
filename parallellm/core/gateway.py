@@ -52,7 +52,7 @@ class ParalleLLMGateway:
         logger.setLevel(log_level)
         logger.addHandler(parallellm_log_handler)
 
-        # logger.debug("Resuming directory")
+        logger.debug("Resuming directory")
 
         dash_logger = DashboardLogger(k=10, display=False)
         parallellm_log_handler.set_dash_logger(dash_logger)
@@ -63,7 +63,7 @@ class ParalleLLMGateway:
         # 3. Setup components
         fm = FileManager(directory)
 
-        # logger.debug("Creating backend")
+        logger.debug("Creating backend")
         if datastore == "sqlite":
             datastore_cls = None  # default
         elif datastore == "sqlite_parquet":
@@ -98,7 +98,7 @@ class ParalleLLMGateway:
         else:
             raise NotImplementedError(f"Strategy '{strategy}' is not implemented yet")
 
-        # logger.debug("Creating provider")
+        logger.debug("Creating provider")
         if provider == "openai":
             from parallellm.provider.openai import (
                 AsyncOpenAIProvider,
@@ -122,18 +122,18 @@ class ParalleLLMGateway:
                 client = OpenAI()
                 provider = SyncOpenAIProvider(client=client)
         elif provider == "google":
-            from parallellm.provider.gemini import (
-                AsyncGeminiProvider,
-                SyncGeminiProvider,
+            from parallellm.provider.google import (
+                AsyncGoogleProvider,
+                SyncGoogleProvider,
             )
             from google import genai
 
             if strategy == "async":
                 client = genai.Client()
-                provider = AsyncGeminiProvider(client=client)
+                provider = AsyncGoogleProvider(client=client)
             else:
                 client = genai.Client()
-                provider = SyncGeminiProvider(client=client)
+                provider = SyncGoogleProvider(client=client)
         elif provider == "anthropic":
             from parallellm.provider.anthropic import (
                 AsyncAnthropicProvider,

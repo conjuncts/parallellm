@@ -1,17 +1,7 @@
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 from pydantic import BaseModel
-from parallellm.core.backend.async_backend import AsyncBackend
-from parallellm.core.backend.batch_backend import BatchBackend
-from parallellm.core.backend.sync_backend import SyncBackend
-from parallellm.core.exception import NotAvailable
 from parallellm.core.identity import LLMIdentity
-from parallellm.core.response import (
-    LLMResponse,
-    PendingLLMResponse,
-    ReadyLLMResponse,
-)
 from parallellm.provider.base import (
     AsyncProvider,
     BaseProvider,
@@ -69,6 +59,10 @@ class OpenAIProvider(BaseProvider):
         elif isinstance(raw_response, dict):
             # Dict response (e.g., from batch API)
             resp_id = raw_response.pop("id", None)
+
+            if "output_text" in raw_response:
+                # Used in testing
+                return raw_response["output_text"], resp_id, raw_response
 
             # Extract text from OpenAI responses API format
             texts: List[str] = []

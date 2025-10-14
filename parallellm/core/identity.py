@@ -1,5 +1,6 @@
 from typing import Optional
 from parallellm.provider.hardcoded import guess_provider_and_name
+from parallellm.types import ProviderType
 
 
 class LLMIdentity:
@@ -7,7 +8,7 @@ class LLMIdentity:
         self,
         identity: str,
         *,
-        provider: Optional[str] = None,
+        provider: Optional[ProviderType] = None,
         model_name: Optional[str] = None,
     ):
         """
