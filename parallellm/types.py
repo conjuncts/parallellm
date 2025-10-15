@@ -78,9 +78,10 @@ class BatchResult:
     status: BatchStatus
 
     raw_output: Optional[str]
-    resp_texts: Optional[List[str]]
-    custom_ids: Optional[List[str]]
-    metadatas: Optional[List[dict]]
+    """The raw output from the provider (for debugging/logging purposes)."""
+
+    parsed_responses: Optional[List["ParsedResponse"]]
+    """List of parsed responses, if available."""
 
 
 # Type alias for documents that can be either text or images

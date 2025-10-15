@@ -1,7 +1,7 @@
 import json
 import sqlite3
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import polars as pl
 
@@ -10,6 +10,9 @@ from parallellm.core.datastore.sqlite import SQLiteDatastore, _sql_table_to_data
 from parallellm.core.lake.sequester import sequester_df_to_parquet
 from parallellm.file_io.file_manager import FileManager
 from parallellm.types import CallIdentifier
+
+if TYPE_CHECKING:
+    from parallellm.types import ParsedResponse
 
 
 class SQLiteParquetDatastore(Datastore):
@@ -151,25 +154,18 @@ class SQLiteParquetDatastore(Datastore):
     def store(
         self,
         call_id: CallIdentifier,
-        response: str,
-        response_id: str,
-        *,
-        metadata: Optional[dict] = None,
+        parsed_response: "ParsedResponse",
     ) -> Optional[int]:
         """
         Store a response in SQLite (transactional).
 
         :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
-        :param response: The response content to store.
-        :param response_id: The response ID to store.
-        :param metadata: Optional metadata dictionary to store alongside the response.
+        :param parsed_response: The parsed response object containing text, response_id, and metadata.
         :returns: The seq_id where the response was stored.
         """
 
         # Store in SQLite for transactional integrity
-        return self._sqlite_datastore.store(
-            call_id, response, response_id, metadata=metadata
-        )
+        return self._sqlite_datastore.store(call_id, parsed_response)
 
     def _transfer_tables_to_parquet(self) -> None:
         """

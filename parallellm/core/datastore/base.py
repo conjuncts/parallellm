@@ -6,7 +6,7 @@ from pathlib import Path
 import polars as pl
 
 from parallellm.file_io.file_manager import FileManager
-from parallellm.types import CallIdentifier
+from parallellm.types import CallIdentifier, ParsedResponse
 
 
 class Datastore(ABC):
@@ -35,18 +35,13 @@ class Datastore(ABC):
     def store(
         self,
         call_id: CallIdentifier,
-        response: str,
-        response_id: str,
-        *,
-        metadata: Optional[dict] = None,
+        parsed_response: ParsedResponse,
     ) -> Optional[int]:
         """
         Store a response in the backend.
 
         :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
-        :param response: The response content to store.
-        :param response_id: The response ID to store.
-        :param metadata: Optional metadata dictionary to store alongside the response.
+        :param parsed_response: The parsed response object containing text, response_id, and metadata.
         :returns: The seq_id where the response was stored (if applicable).
         """
         raise NotImplementedError

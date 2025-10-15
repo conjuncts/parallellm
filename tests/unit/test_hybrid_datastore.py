@@ -8,7 +8,7 @@ from pathlib import Path
 
 from parallellm.core.datastore.semi_sql_parquet import SQLiteParquetDatastore
 from parallellm.file_io.file_manager import FileManager
-from parallellm.types import CallIdentifier
+from parallellm.types import CallIdentifier, ParsedResponse
 
 
 def test_mixed_sqlite_parquet_retrieve():
@@ -36,8 +36,13 @@ def test_mixed_sqlite_parquet_retrieve():
             "provider_type": "openai",
         }
 
-        datastore.store(call_id_1, "response_1", "resp_1")
-        datastore.store(call_id_chk, "This is a checkpoint response", "resp_456")
+        parsed_1 = ParsedResponse(text="response_1", response_id="resp_1", metadata={})
+        parsed_chk = ParsedResponse(
+            text="This is a checkpoint response", response_id="resp_456", metadata={}
+        )
+
+        datastore.store(call_id_1, parsed_1)
+        datastore.store(call_id_chk, parsed_chk)
 
         datastore.persist()
 
@@ -53,7 +58,9 @@ def test_mixed_sqlite_parquet_retrieve():
             "provider_type": "openai",
         }
 
-        datastore.store(call_id_2, "response_2", "resp_2")
+        parsed_2 = ParsedResponse(text="response_2", response_id="resp_2", metadata={})
+
+        datastore.store(call_id_2, parsed_2)
 
         response_2 = datastore.retrieve(call_id_2)  # from SQLite
         response_1 = datastore.retrieve(call_id_1)  # from Parquet

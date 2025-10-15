@@ -292,18 +292,17 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
                 for line in out_content.strip().split("\n")
                 if line
             ]
-            contents = [p.text for p in parsed_results]
-            custom_ids = [p.response_id for p in parsed_results]
-            metadatas = [p.metadata for p in parsed_results]
             suc_res = BatchResult(
-                "ready",
-                out_content,
-                contents,
-                custom_ids,
-                metadatas,
+                status="ready",
+                raw_output=out_content,
+                parsed_responses=parsed_results,
             )
         except json.JSONDecodeError:
-            suc_res = BatchResult("error", out_content, None, None, None)
+            suc_res = BatchResult(
+                status="error",
+                raw_output=out_content,
+                parsed_responses=None,
+            )
         results.append(suc_res)
 
         # Errors
@@ -316,17 +315,16 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
                     for line in err_content.strip().split("\n")
                     if line
                 ]
-                contents = [p.text for p in parsed_errors]
-                custom_ids = [p.response_id for p in parsed_errors]
-                metadatas = [p.metadata for p in parsed_errors]
                 err_res = BatchResult(
-                    "error",
-                    err_content,
-                    contents,
-                    custom_ids,
-                    metadatas,
+                    status="error",
+                    raw_output=err_content,
+                    parsed_responses=parsed_errors,
                 )
             except json.JSONDecodeError:
-                err_res = BatchResult("error", err_content, None, None, None)
+                err_res = BatchResult(
+                    status="error",
+                    raw_output=err_content,
+                    parsed_responses=None,
+                )
             results.append(err_res)
         return results

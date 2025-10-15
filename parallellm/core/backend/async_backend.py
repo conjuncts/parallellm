@@ -207,12 +207,7 @@ class AsyncBackend(BaseBackend):
             call_id: CallIdentifier = metadata.copy()
             # No need to extract provider anymore - response is already parsed!
 
-            # Extract the parsed components
-            resp_text = parsed.text
-            resp_id = parsed.response_id
-            resp_metadata = parsed.metadata
-
-            self._async_ds.store(call_id, resp_text, resp_id, metadata=resp_metadata)
+            self._async_ds.store(call_id, parsed)
             done_tasks.append(metadata)
 
             # do logging

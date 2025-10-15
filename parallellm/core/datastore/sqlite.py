@@ -1,7 +1,7 @@
 import sqlite3
 import json
 import threading
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from pathlib import Path
 
 import polars as pl
@@ -14,6 +14,9 @@ from parallellm.core.datastore.sql_migrate import (
 from parallellm.core.lake.sequester import sequester_openai_metadata
 from parallellm.file_io.file_manager import FileManager
 from parallellm.types import BatchIdentifier, BatchResult, CallIdentifier
+
+if TYPE_CHECKING:
+    from parallellm.types import ParsedResponse
 
 
 def _sql_table_to_dataframe(
@@ -363,18 +366,13 @@ class SQLiteDatastore(Datastore):
     def store(
         self,
         call_id: CallIdentifier,
-        response: str,
-        response_id: str,
-        *,
-        metadata: Optional[dict] = None,
+        parsed_response: "ParsedResponse",
     ) -> Optional[int]:
         """
         Store a response in SQLite.
 
         :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
-        :param response: The response content to store.
-        :param response_id: The response ID to store.
-        :param metadata: Optional metadata to store alongside the response.
+        :param parsed_response: The parsed response object containing text, response_id, and metadata.
         :returns: The seq_id where the response was stored.
         """
         checkpoint = call_id["checkpoint"]
@@ -383,6 +381,11 @@ class SQLiteDatastore(Datastore):
         session_id = call_id["session_id"]
         agent_name = call_id["agent_name"]
         provider_type = call_id.get("provider_type")
+
+        # Extract fields from parsed_response
+        response = parsed_response.text
+        response_id = parsed_response.response_id
+        metadata = parsed_response.metadata
 
         # Get main database connection
         conn = self._get_connection(None)
@@ -529,16 +532,15 @@ class SQLiteDatastore(Datastore):
 
         :param batch_result: The completed batch results to store
         """
-        if not batch_result.resp_texts or not batch_result.custom_ids:
+        if not batch_result.parsed_responses:
             return  # Nothing to store
 
         conn = self._get_connection(None)
 
         try:
             # Process each response in the batch
-            for i, (custom_id, resp_text) in enumerate(
-                zip(batch_result.custom_ids, batch_result.resp_texts)
-            ):
+            for i, parsed in enumerate(batch_result.parsed_responses):
+                custom_id = parsed.response_id
                 # Look up the call_id using custom_id from batch_pending
                 cursor = conn.execute(
                     """
@@ -566,8 +568,10 @@ class SQLiteDatastore(Datastore):
                 # Determine table
                 table_name = "chk_responses" if checkpoint else "anon_responses"
 
-                # Get metadata if available
-                metadata = batch_result.metadatas[i] if batch_result.metadatas else None
+                # Get response components from parsed_response
+                resp_text = parsed.text
+                response_id = parsed.response_id
+                metadata = parsed.metadata
 
                 # Prepare columns and values
                 columns = [
