@@ -107,15 +107,22 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
         """Prepare a synchronous callable for OpenAI API"""
         documents = self._fix_docs_for_openai(documents)
 
-        def sync_openai_call():
+        if "text_format" in kwargs:
+            return self.client.responses.parse(
+                model=llm.model_name,
+                instructions=instructions,
+                input=documents,
+                text_format=kwargs.pop("text_format"),
+                **kwargs,
+            )
+        else:
+            # self.client.responses.parse
             return self.client.responses.create(
                 model=llm.model_name,
                 instructions=instructions,
                 input=documents,
                 **kwargs,
             )
-
-        return sync_openai_call
 
 
 class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):

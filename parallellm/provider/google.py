@@ -108,14 +108,11 @@ class SyncGoogleProvider(SyncProvider, GoogleProvider):
         if instructions:
             config["system_instruction"] = instructions
 
-        def sync_gemini_call():
-            return self.client.models.generate_content(
-                model=llm.model_name if llm else "gemini-2.5-flash",
-                contents=contents,
-                config=config,
-            )
-
-        return sync_gemini_call
+        return self.client.models.generate_content(
+            model=llm.model_name if llm else "gemini-2.5-flash",
+            contents=contents,
+            config=config,
+        )
 
 
 class AsyncGoogleProvider(AsyncProvider, GoogleProvider):

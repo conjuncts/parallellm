@@ -50,26 +50,7 @@ class SyncBackend(BaseBackend):
         New control flow: Backend calls provider to get callable, then executes it.
         This inverts control from provider calling backend.
         """
-        # Get the callable from the provider
-        sync_function = provider.prepare_sync_call(
-            instructions,
-            documents,
-            llm=llm,
-            _hoist_images=_hoist_images,
-            **kwargs,
-        )
 
-        # Execute the call synchronously and store the result
-        resp_text, _, _ = self.submit_sync_call(
-            call_id, provider=provider, sync_function=sync_function
-        )
-
-        # Return a ready response since the operation completed immediately
-        return ReadyLLMResponse(call_id=call_id, value=resp_text)
-
-    def submit_sync_call(
-        self, call_id: CallIdentifier, sync_function, provider=None, *args, **kwargs
-    ):
         """Submit a synchronous function call and store the result immediately"""
         checkpoint = call_id["checkpoint"] or ""
         doc_hash = call_id["doc_hash"]
@@ -80,7 +61,13 @@ class SyncBackend(BaseBackend):
                 self._dash_logger.update_hash(doc_hash, HashStatus.SENT)
 
             # The below function typically calls the LLM
-            result = sync_function(*args, **kwargs)
+            result = provider.prepare_sync_call(
+                instructions,
+                documents,
+                llm=llm,
+                _hoist_images=_hoist_images,
+                **kwargs,
+            )
             if self._dash_logger is not None:
                 self._dash_logger.update_hash(doc_hash, HashStatus.RECEIVED)
 
@@ -99,7 +86,7 @@ class SyncBackend(BaseBackend):
             key = f"{checkpoint}:{doc_hash}:{seq_id}"
             self._pending_results[key] = parsed.text
 
-            return parsed
+            return ReadyLLMResponse(call_id=call_id, value=parsed.text)
 
         except Exception as e:
             # Store the exception for later retrieval

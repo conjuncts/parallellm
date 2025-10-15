@@ -45,9 +45,9 @@ class SyncProvider(BaseProvider):
         **kwargs,
     ):
         """
-        Prepare a synchronous callable for the backend to execute.
+        Eagerly makes the API call.
 
-        :return: A callable that when invoked will make the API call and return the raw response
+        :return: Raw response from the API call
         """
         raise NotImplementedError
 

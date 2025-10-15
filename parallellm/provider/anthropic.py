@@ -115,15 +115,12 @@ class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
         if instructions:
             config["system"] = instructions
 
-        def sync_anthropic_call():
-            return self.client.messages.create(
-                model=llm.model_name,
-                max_tokens=config.pop("max_tokens", 4096),
-                messages=messages,
-                **config,
-            )
-
-        return sync_anthropic_call
+        return self.client.messages.create(
+            model=llm.model_name,
+            max_tokens=config.pop("max_tokens", 4096),
+            messages=messages,
+            **config,
+        )
 
 
 class AsyncAnthropicProvider(AsyncProvider, AnthropicProvider):

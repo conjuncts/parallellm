@@ -1,3 +1,4 @@
+import json
 from parallellm.core.backend import BaseBackend
 from parallellm.types import CallIdentifier
 
@@ -15,6 +16,17 @@ class LLMResponse:
             execution should stop gracefully and proceed to the next batch.
         """
         return self.value
+
+    def resolve_json(self) -> dict:
+        """
+        Resolve the response to a JSON object.
+
+        :returns: The resolved JSON response. If this value is not available,
+            execution should stop gracefully and proceed to the next batch.
+        """
+
+        value = self.resolve()
+        return json.loads(value)
 
     def __getstate__(self):
         """
