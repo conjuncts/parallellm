@@ -23,6 +23,14 @@ def _fix_docs_for_anthropic(
                 "content": doc,
             }
             formatted_docs.append(msg)
+        elif isinstance(doc, tuple) and len(doc) == 2:
+            # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
+            role, content = doc
+            msg = {
+                "role": role,
+                "content": content,
+            }
+            formatted_docs.append(msg)
         elif isinstance(doc, dict):
             # If it's already a proper message dict, keep it
             if "role" in doc and "content" in doc:

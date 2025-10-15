@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Literal, TypedDict, Optional, Union
+from typing import List, Literal, TypedDict, Optional, Union, Tuple
 
 from PIL import Image
 
@@ -84,7 +84,9 @@ class BatchResult:
 
 
 # Type alias for documents that can be either text or images
-LLMDocument = Union[str, Image.Image]
+LLMDocument = Union[
+    str, Image.Image, Tuple[Literal["user", "assistant", "system", "developer"], str]
+]
 
 
 ProviderType = Literal["openai", "anthropic", "google"]

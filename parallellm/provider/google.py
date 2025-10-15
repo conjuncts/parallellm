@@ -25,6 +25,21 @@ def _fix_docs_for_google(
     for doc in documents:
         if isinstance(doc, str):
             formatted_docs.append(doc)
+        elif isinstance(doc, tuple) and len(doc) == 2:
+            # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
+            role, content = doc
+            # For Google, we might need to format this differently
+            # For now, just append the content with a prefix
+            if role == "assistant":
+                role = "model"
+            elif role != "user":
+                raise ValueError(f"Unsupported role for Google: {role}")
+            formatted_docs.append(
+                {
+                    "role": role,
+                    "parts": [{"text": content}],
+                }
+            )
         elif isinstance(doc, dict):
             # If it's already a proper content dict, keep it
             if "parts" in doc and "role" in doc:

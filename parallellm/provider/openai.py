@@ -41,6 +41,14 @@ class OpenAIProvider(BaseProvider):
                     "content": doc,
                 }
                 documents[i] = msg
+            elif isinstance(doc, tuple) and len(doc) == 2:
+                # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
+                role, content = doc
+                msg: "Message" = {
+                    "role": role,
+                    "content": content,
+                }
+                documents[i] = msg
         return documents
 
     def get_default_llm_identity(self) -> LLMIdentity:

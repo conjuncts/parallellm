@@ -20,7 +20,8 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 - [ ] dedicated SQLite storage for requests that error
 - [ ] retrieve() should also be able to return if a value is pending (in addition to present/absent)
 - [ ] right now, (for batch) bookkeep_call() is the one that emits an error if a value is pending but not available, but this seems unelegant and should probably be moved out
-    
+- [ ] "cohort locking": for consistency, if seq_id is "strict" (if we really care that seq_id is consistent across runs), then we need to "lock" based on cohort (wait until all batches in a cohort complete. This can be implemented simply by refusing to proceed - ie. ).
+    - this is like a rendezvous in threading
 
 - Automatically persist upon pllm exit
 

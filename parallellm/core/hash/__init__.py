@@ -24,6 +24,11 @@ def compute_hash(instructions: Optional[str], documents: List[LLMDocument]) -> s
             with BytesIO() as img_buffer:
                 doc.save(img_buffer, format="PNG")
                 hasher.update(img_buffer.getvalue())
+        elif isinstance(doc, tuple) and len(doc) == 2:
+            # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
+            role, content = doc
+            hasher.update(role.encode("utf-8"))
+            hasher.update(content.encode("utf-8"))
         else:
             raise ValueError(f"Unsupported document type: {type(doc)}")
 
