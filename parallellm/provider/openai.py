@@ -8,6 +8,7 @@ from parallellm.provider.base import (
     BatchProvider,
     SyncProvider,
 )
+from parallellm.provider.openai_tools import to_strict_json_schema
 from parallellm.types import ParsedResponse
 from parallellm.provider.schemas import guess_schema
 from parallellm.types import (
@@ -102,27 +103,37 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
         *,
         llm: LLMIdentity,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
         """Prepare a synchronous callable for OpenAI API"""
         documents = self._fix_docs_for_openai(documents)
 
-        if "text_format" in kwargs:
+        if text_format is not None:
             return self.client.responses.parse(
                 model=llm.model_name,
                 instructions=instructions,
                 input=documents,
-                text_format=kwargs.pop("text_format"),
+                text_format=text_format,
                 **kwargs,
             )
-        else:
-            # self.client.responses.parse
-            return self.client.responses.create(
-                model=llm.model_name,
-                instructions=instructions,
-                input=documents,
-                **kwargs,
-            )
+
+            # if "text" not in kwargs:
+            #     kwargs["text"] = {}
+
+            # schema = to_strict_json_schema(text_format)
+            # kwargs["text"]["format"] = {
+            #     "type": "json_schema",
+            #     "strict": True,
+            #     "name": schema.get("title", "UnknownSchema"),
+            #     "schema": schema,
+            # }
+        return self.client.responses.create(
+            model=llm.model_name,
+            instructions=instructions,
+            input=documents,
+            **kwargs,
+        )
 
 
 class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
@@ -136,17 +147,27 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
         *,
         llm: LLMIdentity,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
         """Prepare an async coroutine for OpenAI API"""
         documents = self._fix_docs_for_openai(documents)
 
-        coro = self.client.responses.create(
-            model=llm.model_name,
-            instructions=instructions,
-            input=documents,
-            **kwargs,
-        )
+        if text_format is not None:
+            coro = self.client.responses.parse(
+                model=llm.model_name,
+                instructions=instructions,
+                input=documents,
+                text_format=text_format,
+                **kwargs,
+            )
+        else:
+            coro = self.client.responses.create(
+                model=llm.model_name,
+                instructions=instructions,
+                input=documents,
+                **kwargs,
+            )
 
         return coro
 
@@ -162,8 +183,24 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         *,
         llm: LLMIdentity,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
+        if text_format is not None:
+            if "text" not in kwargs:
+                kwargs["text"] = {}
+
+            assert not kwargs["text"].get("format"), (
+                "Cannot supply both text_format and text.format"
+            )
+            schema = to_strict_json_schema(text_format)
+            kwargs["text"]["format"] = {
+                "type": "json_schema",
+                "strict": True,
+                "name": schema.get("title", "UnknownSchema"),
+                "schema": schema,
+            }
+
         body = {
             "model": llm.model_name,
             "instructions": instructions,
@@ -179,6 +216,7 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         *,
         llm: LLMIdentity,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
         """Prepare batch call data for OpenAI"""
@@ -189,6 +227,7 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
             documents,
             llm=llm,
             _hoist_images=_hoist_images,
+            text_format=text_format,
             **kwargs,
         )
 

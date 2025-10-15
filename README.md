@@ -23,5 +23,23 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 - [ ] "cohort locking": for consistency, if seq_id is "strict" (if we really care that seq_id is consistent across runs), then we need to "lock" based on cohort (wait until all batches in a cohort complete. This can be implemented simply by refusing to proceed - ie. ).
     - this is like a rendezvous in threading
 
-- Automatically persist upon pllm exit
+- [x] Automatically persist upon pllm exit
 
+| Plain Completions | Sync | Async | Batch |
+| --- | --- | --- | --- |
+| OpenAI | ✅ | ✅ | ✅ |
+| Anthropic | ✅ | ✅ | TODO |
+| Google | ✅ | ✅ | TODO |
+
+
+| Structured Output | Sync | Async | Batch |
+| --- | --- | --- | --- |
+| OpenAI | ✅ | ✅ | ✅? |
+| Anthropic | ❌ | ❌ | ❌ |
+| Google | ✅ | ✅ | TODO |
+
+| Tool Calls | Sync | Async | Batch |
+| --- | --- | --- | --- |
+| OpenAI | TODO | TODO | TODO |
+| Anthropic | TODO | TODO | TODO |
+| Google | TODO | TODO | TODO |

@@ -99,6 +99,7 @@ class SyncGoogleProvider(SyncProvider, GoogleProvider):
         *,
         llm: LLMIdentity,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
         """Prepare a synchronous callable for Gemini API"""
@@ -108,6 +109,9 @@ class SyncGoogleProvider(SyncProvider, GoogleProvider):
         if instructions:
             config["system_instruction"] = instructions
 
+        if text_format is not None:
+            config["response_mime_type"] = "application/json"
+            config["response_schema"] = text_format
         return self.client.models.generate_content(
             model=llm.model_name if llm else "gemini-2.5-flash",
             contents=contents,
@@ -126,6 +130,7 @@ class AsyncGoogleProvider(AsyncProvider, GoogleProvider):
         *,
         llm: LLMIdentity,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
         """Prepare an async coroutine for Gemini API"""
@@ -135,6 +140,10 @@ class AsyncGoogleProvider(AsyncProvider, GoogleProvider):
         config = kwargs.copy()
         if instructions:
             config["system_instruction"] = instructions
+
+        if text_format is not None:
+            config["response_mime_type"] = "application/json"
+            config["response_schema"] = text_format
 
         coro = self.client.aio.models.generate_content(
             model=llm.model_name if llm else "gemini-2.5-flash",

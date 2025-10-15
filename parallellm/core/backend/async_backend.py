@@ -112,6 +112,7 @@ class AsyncBackend(BaseBackend):
         call_id: CallIdentifier,
         llm,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
         """
@@ -124,6 +125,7 @@ class AsyncBackend(BaseBackend):
             documents,
             llm=llm,
             _hoist_images=_hoist_images,
+            text_format=text_format,
             **kwargs,
         )
 

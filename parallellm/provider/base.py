@@ -42,6 +42,7 @@ class SyncProvider(BaseProvider):
         *,
         llm: LLMIdentity,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
         """
@@ -60,6 +61,7 @@ class AsyncProvider(BaseProvider):
         *,
         llm: LLMIdentity,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
         """
@@ -78,6 +80,7 @@ class BatchProvider(BaseProvider):
         *,
         llm: LLMIdentity,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
         """

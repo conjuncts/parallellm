@@ -105,6 +105,7 @@ class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
         *,
         llm: LLMIdentity,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
         """Prepare a synchronous callable for Anthropic API"""
@@ -134,6 +135,7 @@ class AsyncAnthropicProvider(AsyncProvider, AnthropicProvider):
         *,
         llm: LLMIdentity,
         _hoist_images=None,
+        text_format: Optional[str] = None,
         **kwargs,
     ):
         """Prepare an async coroutine for Anthropic API"""
