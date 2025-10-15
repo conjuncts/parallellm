@@ -1,7 +1,8 @@
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 from pydantic import BaseModel
 from parallellm.core.identity import LLMIdentity
 from parallellm.provider.base import AsyncProvider, BaseProvider, SyncProvider
+from parallellm.types import ParsedResponse
 from parallellm.types import CallIdentifier, LLMDocument
 
 if TYPE_CHECKING:
@@ -53,9 +54,7 @@ class AnthropicProvider(BaseProvider):
     def get_default_llm_identity(self) -> LLMIdentity:
         return LLMIdentity("claude-3-haiku-20240307", provider=self.provider_type)
 
-    def parse_response(
-        self, raw_response: Union[BaseModel, dict]
-    ) -> Tuple[str, Optional[str], dict]:
+    def parse_response(self, raw_response: Union[BaseModel, dict]) -> ParsedResponse:
         """Parse Anthropic API response into common format"""
         if isinstance(raw_response, BaseModel):
             # Pydantic model (e.g., anthropic.types.Message)
@@ -67,10 +66,12 @@ class AnthropicProvider(BaseProvider):
             else:
                 text_content = str(content)
 
-            res = text_content, raw_response.id
+            response_id = raw_response.id
             obj = raw_response.model_dump(mode="json")
             obj.pop("id", None)
-            return (*res, obj)
+            return ParsedResponse(
+                text=text_content, response_id=response_id, metadata=obj
+            )
         elif isinstance(raw_response, dict):
             # Dict response
             resp_id = raw_response.pop("id", None)
@@ -86,7 +87,9 @@ class AnthropicProvider(BaseProvider):
             else:
                 text_content = str(content)
 
-            return text_content, resp_id, raw_response
+            return ParsedResponse(
+                text=text_content, response_id=resp_id, metadata=raw_response
+            )
         else:
             raise ValueError(f"Unsupported response type: {type(raw_response)}")
 

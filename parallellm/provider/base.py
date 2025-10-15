@@ -1,7 +1,8 @@
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Union
 from pydantic import BaseModel
 
 from parallellm.core.identity import LLMIdentity
+from parallellm.types import ParsedResponse
 from parallellm.types import (
     BatchIdentifier,
     BatchResult,
@@ -23,14 +24,12 @@ class BaseProvider:
         """Returns a default LLMIdentity for this provider."""
         raise NotImplementedError
 
-    def parse_response(
-        self, raw_response: Union[BaseModel, dict]
-    ) -> Tuple[str, Optional[str], dict]:
+    def parse_response(self, raw_response: Union[BaseModel, dict]) -> ParsedResponse:
         """
         Parse a raw API response into a common format.
 
         :param raw_response: The raw response from the API (Pydantic model or dict)
-        :return: Tuple of (response_text, response_id, metadata_dict)
+        :return: ParsedResponse containing response_text, response_id, and metadata_dict
         """
         raise NotImplementedError
 

@@ -1,7 +1,8 @@
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 from pydantic import BaseModel
 from parallellm.core.identity import LLMIdentity
 from parallellm.provider.base import AsyncProvider, BaseProvider, SyncProvider
+from parallellm.types import ParsedResponse
 from parallellm.types import CallIdentifier, LLMDocument
 
 if TYPE_CHECKING:
@@ -62,16 +63,15 @@ class GoogleProvider(BaseProvider):
     def get_default_llm_identity(self) -> LLMIdentity:
         return LLMIdentity("gemini-2.5-flash", provider=self.provider_type)
 
-    def parse_response(
-        self, raw_response: Union[BaseModel, dict]
-    ) -> Tuple[str, Optional[str], dict]:
+    def parse_response(self, raw_response: Union[BaseModel, dict]) -> ParsedResponse:
         """Parse Gemini API response into common format"""
         if isinstance(raw_response, BaseModel):
             # Pydantic model (e.g., google.genai.types.GenerateContentResponse)
-            res = raw_response.text, raw_response.response_id
+            text = raw_response.text
+            response_id = raw_response.response_id
             obj = raw_response.model_dump(mode="json")
             obj.pop("response_id", None)
-            return (*res, obj)
+            return ParsedResponse(text=text, response_id=response_id, metadata=obj)
         elif isinstance(raw_response, dict):
             # Dict response
             resp_id = raw_response.pop("response_id", None) or raw_response.pop(
@@ -81,7 +81,9 @@ class GoogleProvider(BaseProvider):
             # Extract text from Gemini response
             text_content = raw_response.get("text", str(raw_response))
 
-            return text_content, resp_id, raw_response
+            return ParsedResponse(
+                text=text_content, response_id=resp_id, metadata=raw_response
+            )
         else:
             raise ValueError(f"Unsupported response type: {type(raw_response)}")
 

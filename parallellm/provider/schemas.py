@@ -1,32 +1,35 @@
 from typing import List, Optional, Union
 from pydantic import BaseModel
+from parallellm.types import ParsedResponse
 
 
 def guess_schema(
     inp: Union[BaseModel, dict], provider_type: str = None
-) -> tuple[str, str, dict]:
+) -> ParsedResponse:
     """
 
     Guess the schema of the given object and convert it to a dictionary.
     :param obj: The object to guess the schema for. Can be a Pydantic BaseModel or a dictionary.
     Warning: will modify the input dict in place.
 
-    :returns: A tuple containing the response text, response ID, and metadata dictionary.
+    :returns: ParsedResponse containing the response text, response ID, and metadata dictionary.
     """
     # hardcoded
     try:
         if isinstance(inp, BaseModel):
             if provider_type == "openai":
                 # from openai.types.responses.response import Response
-                res = inp.output_text, inp.id
+                text = inp.output_text
+                response_id = inp.id
                 obj = inp.model_dump(mode="json")
                 obj.pop("id")
-                return (*res, obj)
+                return ParsedResponse(text=text, response_id=response_id, metadata=obj)
             elif provider_type == "google":
-                res = inp.text, inp.response_id
+                text = inp.text
+                response_id = inp.response_id
                 obj = inp.model_dump(mode="json")
                 obj.pop("response_id")
-                return (*res, obj)
+                return ParsedResponse(text=text, response_id=response_id, metadata=obj)
             elif provider_type == "anthropic":
                 # Anthropic response typically has content as a list with text blocks
                 content = inp.content
@@ -38,10 +41,12 @@ def guess_schema(
                     )
                 else:
                     text_content = str(content)
-                res = text_content, inp.id
+                response_id = inp.id
                 obj = inp.model_dump(mode="json")
                 obj.pop("id")
-                return (*res, obj)
+                return ParsedResponse(
+                    text=text_content, response_id=response_id, metadata=obj
+                )
         elif isinstance(inp, dict):
             if provider_type == "openai":
                 # responses API
@@ -60,7 +65,9 @@ def guess_schema(
                             if content["type"] == "output_text":
                                 texts.append(content["text"])
 
-                return "".join(texts), resp_id, inp
+                return ParsedResponse(
+                    text="".join(texts), response_id=resp_id, metadata=inp
+                )
     except Exception as e:
         print(
             f"Unexpected error while processing known provider type {provider_type}",
@@ -120,4 +127,4 @@ def guess_schema(
     if not resp_text:
         raise ValueError("Could not find response text in object", obj)
 
-    return resp_text, resp_id, obj
+    return ParsedResponse(text=resp_text, response_id=resp_id, metadata=obj)

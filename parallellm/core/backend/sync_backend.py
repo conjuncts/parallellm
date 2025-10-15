@@ -86,11 +86,21 @@ class SyncBackend(BaseBackend):
 
             # Process and store the result - use provider.parse_response if available
             if provider is not None:
-                resp_text, resp_id, resp_metadata = provider.parse_response(result)
+                parsed = provider.parse_response(result)
+                resp_text, resp_id, resp_metadata = (
+                    parsed.text,
+                    parsed.response_id,
+                    parsed.metadata,
+                )
             else:
                 # Fallback to guess_schema for backward compatibility
-                resp_text, resp_id, resp_metadata = guess_schema(
+                parsed = guess_schema(
                     result, provider_type=call_id.get("provider_type", None)
+                )
+                resp_text, resp_id, resp_metadata = (
+                    parsed.text,
+                    parsed.response_id,
+                    parsed.metadata,
                 )
 
             self._ds.store(call_id, resp_text, resp_id, metadata=resp_metadata)

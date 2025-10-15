@@ -90,3 +90,28 @@ LLMDocument = Union[
 
 
 ProviderType = Literal["openai", "anthropic", "google"]
+
+
+@dataclass
+class ParsedResponse:
+    """
+    Represents a parsed response from an LLM provider.
+
+    This dataclass encapsulates the three key components of a parsed response:
+    - The response text content
+    - The response ID (if available from the provider)
+    - Additional metadata from the provider
+    """
+
+    text: str
+    """The main text content of the response."""
+
+    response_id: Optional[str]
+    """The unique identifier for this response from the provider."""
+
+    metadata: dict
+    """Additional metadata from the provider (usage stats, model info, etc.)."""
+
+    def __iter__(self):
+        """Allow unpacking into tuple for backward compatibility."""
+        return iter((self.text, self.response_id, self.metadata))

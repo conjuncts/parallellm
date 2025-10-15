@@ -1,5 +1,5 @@
 import json
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 from pydantic import BaseModel
 from parallellm.core.identity import LLMIdentity
 from parallellm.provider.base import (
@@ -8,6 +8,7 @@ from parallellm.provider.base import (
     BatchProvider,
     SyncProvider,
 )
+from parallellm.types import ParsedResponse
 from parallellm.provider.schemas import guess_schema
 from parallellm.types import (
     BatchIdentifier,
@@ -54,23 +55,26 @@ class OpenAIProvider(BaseProvider):
     def get_default_llm_identity(self) -> LLMIdentity:
         return LLMIdentity("gpt-4.1-nano", provider=self.provider_type)
 
-    def parse_response(
-        self, raw_response: Union[BaseModel, dict]
-    ) -> Tuple[str, Optional[str], dict]:
+    def parse_response(self, raw_response: Union[BaseModel, dict]) -> ParsedResponse:
         """Parse OpenAI API response into common format"""
         if isinstance(raw_response, BaseModel):
             # Pydantic model (e.g., from openai.types.responses.response.Response)
-            res = raw_response.output_text, raw_response.id
+            text = raw_response.output_text
+            response_id = raw_response.id
             obj = raw_response.model_dump(mode="json")
             obj.pop("id", None)
-            return (*res, obj)
+            return ParsedResponse(text=text, response_id=response_id, metadata=obj)
         elif isinstance(raw_response, dict):
             # Dict response (e.g., from batch API)
             resp_id = raw_response.pop("id", None)
 
             if "output_text" in raw_response:
                 # Used in testing
-                return raw_response["output_text"], resp_id, raw_response
+                return ParsedResponse(
+                    text=raw_response["output_text"],
+                    response_id=resp_id,
+                    metadata=raw_response,
+                )
 
             # Extract text from OpenAI responses API format
             texts: List[str] = []
@@ -80,7 +84,9 @@ class OpenAIProvider(BaseProvider):
                         if content["type"] == "output_text":
                             texts.append(content["text"])
 
-            return "".join(texts), resp_id, raw_response
+            return ParsedResponse(
+                text="".join(texts), response_id=resp_id, metadata=raw_response
+            )
         else:
             raise ValueError(f"Unsupported response type: {type(raw_response)}")
 
@@ -179,7 +185,7 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
             **kwargs,
         )
 
-    def _decode_openai_batch_result(self, result: dict) -> tuple[str, str, dict]:
+    def _decode_openai_batch_result(self, result: dict) -> ParsedResponse:
         """Decode a single result from OpenAI batch response"""
         custom_id = result["custom_id"]
 
@@ -193,13 +199,16 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         #   result["response"]["request_id"]
         #   result["response"]["body"]["id"]
 
-        resp_text, _, resp_meta = guess_schema(body, provider_type="openai")
-        return resp_text, custom_id, resp_meta
+        parsed = guess_schema(body, provider_type="openai")
+        # Note: custom_id overrides the response_id from the body
+        return ParsedResponse(
+            text=parsed.text, response_id=custom_id, metadata=parsed.metadata
+        )
 
-    def _decode_openai_batch_error(self, result: dict) -> tuple[str, str, dict]:
+    def _decode_openai_batch_error(self, result: dict) -> ParsedResponse:
         """Decode a single error from OpenAI batch response
 
-        The main content (resp_text) is actually the error code.
+        The text field contains the error code.
         """
         custom_id = result.pop("custom_id", None)
         # destroyed metadata:
@@ -216,12 +225,16 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
 
         if err_obj is not None:
             # unusually, the error is indeed here
-            return error_code, custom_id, err_obj
+            return ParsedResponse(
+                text=error_code or "", response_id=custom_id, metadata=err_obj
+            )
 
         # need to retrieve error from response body
         body = resp_obj.get("body", {})
         body_error = body.get("error", {})
-        return error_code, custom_id, body_error
+        return ParsedResponse(
+            text=error_code or "", response_id=custom_id, metadata=body_error
+        )
 
     def submit_batch_to_provider(
         self, call_ids: list[CallIdentifier], stuff: list[dict]
@@ -274,18 +287,20 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         # Successful completion
         out_content = self.client.files.content(out_file_id).text
         try:
-            oks = [
+            parsed_results = [
                 self._decode_openai_batch_result(json.loads(line))
                 for line in out_content.strip().split("\n")
                 if line
             ]
-            contents, custom_ids, metadatas = zip(*oks)
+            contents = [p.text for p in parsed_results]
+            custom_ids = [p.response_id for p in parsed_results]
+            metadatas = [p.metadata for p in parsed_results]
             suc_res = BatchResult(
                 "ready",
                 out_content,
-                list(contents),
-                list(custom_ids),
-                list(metadatas),
+                contents,
+                custom_ids,
+                metadatas,
             )
         except json.JSONDecodeError:
             suc_res = BatchResult("error", out_content, None, None, None)
@@ -296,18 +311,20 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
             err_content = self.client.files.content(err_file_id).text
 
             try:
-                errors = [
+                parsed_errors = [
                     self._decode_openai_batch_error(json.loads(line))
                     for line in err_content.strip().split("\n")
                     if line
                 ]
-                contents, custom_ids, metadatas = zip(*errors)
+                contents = [p.text for p in parsed_errors]
+                custom_ids = [p.response_id for p in parsed_errors]
+                metadatas = [p.metadata for p in parsed_errors]
                 err_res = BatchResult(
                     "error",
                     err_content,
-                    list(contents),
-                    list(custom_ids),
-                    list(metadatas),
+                    contents,
+                    custom_ids,
+                    metadatas,
                 )
             except json.JSONDecodeError:
                 err_res = BatchResult("error", err_content, None, None, None)

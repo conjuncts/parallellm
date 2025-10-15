@@ -9,7 +9,6 @@ from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.response import PendingLLMResponse
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
-from parallellm.provider.schemas import guess_schema
 from parallellm.types import CallIdentifier
 
 if TYPE_CHECKING:
@@ -182,13 +181,13 @@ class AsyncBackend(BaseBackend):
     ):
         """Helper to create and store a task in the event loop"""
 
-        # Wrap the coro to include metadata
+        # Wrap the coro to parse response immediately
         metadata = call_id.copy()
-        metadata["_provider"] = provider  # Store provider for response parsing
 
         async def wrapped_coro():
             result = await coro
-            return result, metadata
+            parsed = provider.parse_response(result)
+            return parsed, metadata
 
         task = asyncio.create_task(wrapped_coro())
         self.tasks.append(task)
@@ -203,18 +202,15 @@ class AsyncBackend(BaseBackend):
         # need to keep track of which ones we process (otherwise, race condition)
         done_tasks = []
         for coro in asyncio.as_completed(self.tasks):
-            result, metadata = await coro
+            parsed, metadata = await coro
 
             call_id: CallIdentifier = metadata.copy()
-            provider = call_id.pop("_provider", None)  # Extract provider from metadata
+            # No need to extract provider anymore - response is already parsed!
 
-            # Use provider.parse_response if available, otherwise fallback to guess_schema
-            if provider is not None:
-                resp_text, resp_id, resp_metadata = provider.parse_response(result)
-            else:
-                resp_text, resp_id, resp_metadata = guess_schema(
-                    result, provider_type=call_id.get("provider_type", None)
-                )
+            # Extract the parsed components
+            resp_text = parsed.text
+            resp_id = parsed.response_id
+            resp_metadata = parsed.metadata
 
             self._async_ds.store(call_id, resp_text, resp_id, metadata=resp_metadata)
             done_tasks.append(metadata)

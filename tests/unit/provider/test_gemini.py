@@ -85,7 +85,7 @@ class TestGeminiProviders:
 
         # Execute the callable
         result = sync_callable()
-        parsed, _, _ = provider.parse_response(result)
+        parsed = provider.parse_response(result)
 
         # Verify result
-        assert parsed == "Hello World!"
+        assert parsed.text == "Hello World!"
