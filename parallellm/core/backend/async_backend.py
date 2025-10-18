@@ -9,7 +9,7 @@ from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.response import PendingLLMResponse
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
-from parallellm.types import CallIdentifier
+from parallellm.types import CallIdentifier, ParsedResponse, ParsedResponse
 
 if TYPE_CHECKING:
     from parallellm.provider.base import AsyncProvider
@@ -228,11 +228,13 @@ class AsyncBackend(BaseBackend):
                 self.task_metas.pop(i)
                 # print(f"Completed {meta['checkpoint']}:{meta['doc_hash'][:8]}:{meta['seq_id']}")
 
-    async def aretrieve(self, call_id: CallIdentifier) -> Optional[str]:
+    async def aretrieve(
+        self, call_id: CallIdentifier, metadata=False
+    ) -> Optional[ParsedResponse]:
         # only poll for changes if we have a matching task
         if any(_call_matches(m, call_id) for m in self.task_metas):
             await self._poll_changes(call_id)
-        return self._async_ds.retrieve(call_id)
+        return self._async_ds.retrieve(call_id, metadata=metadata)
 
     def persist(self, timeout=30.0):
         """
@@ -257,9 +259,11 @@ class AsyncBackend(BaseBackend):
         # Close datastore connections to ensure proper cleanup, especially important on Windows
         self.cleanup_datastore_sync()
 
-    def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
+    def retrieve(
+        self, call_id: CallIdentifier, metadata=False
+    ) -> Optional[ParsedResponse]:
         """Synchronous retrieve that uses the backend's event loop"""
-        return self._run_coroutine(self.aretrieve(call_id))
+        return self._run_coroutine(self.aretrieve(call_id, metadata=metadata))
 
     def __del__(self):
         """Clean up resources when the AsyncBackend is destroyed"""

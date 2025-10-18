@@ -93,7 +93,7 @@ LLMDocument = Union[
 ProviderType = Literal["openai", "anthropic", "google"]
 
 
-@dataclass
+@dataclass(slots=True)
 class ParsedResponse:
     """
     Represents a parsed response from an LLM provider.
@@ -110,7 +110,7 @@ class ParsedResponse:
     response_id: Optional[str]
     """The unique identifier for this response from the provider."""
 
-    metadata: dict
+    metadata: Optional[dict]
     """Additional metadata from the provider (usage stats, model info, etc.)."""
 
     def __iter__(self):

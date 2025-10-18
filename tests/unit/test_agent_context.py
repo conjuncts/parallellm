@@ -14,7 +14,7 @@ from unittest.mock import Mock, MagicMock, patch
 from parallellm.core.agent.agent import AgentContext, AgentDashboardContext
 from parallellm.core.exception import NotAvailable, WrongCheckpoint, GotoCheckpoint
 from parallellm.core.response import ReadyLLMResponse, PendingLLMResponse
-from parallellm.types import CallIdentifier
+from parallellm.types import CallIdentifier, ParsedResponse
 
 
 class TestAgentContextBasics:
@@ -88,7 +88,11 @@ class TestAskLLMMethod:
 
     def test_ask_llm_with_cache_hit(self, mock_orchestrator):
         """Test ask_llm when response is cached"""
-        mock_orchestrator._backend.retrieve.return_value = "Cached response"
+        mock_orchestrator._backend.retrieve.return_value = ParsedResponse(
+            text="Cached response",
+            response_id="resp_123",
+            metadata=None,
+        )
 
         agent = AgentContext("test_agent", mock_orchestrator)
 

@@ -66,9 +66,9 @@ def test_mixed_sqlite_parquet_retrieve():
         response_1 = datastore.retrieve(call_id_1)  # from Parquet
         response_chk = datastore.retrieve(call_id_chk)  # from Parquet
 
-        assert response_1 == "response_1"
-        assert response_chk == "This is a checkpoint response"
-        assert response_2 == "response_2"
+        assert response_1.text == "response_1"
+        assert response_chk.text == "This is a checkpoint response"
+        assert response_2.text == "response_2"
 
         assert datastore._get_parquet_paths()["chk_responses"].exists()
 

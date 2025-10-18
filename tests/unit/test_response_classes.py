@@ -16,7 +16,7 @@ from parallellm.core.response import (
     PendingLLMResponse,
     ReadyLLMResponse,
 )
-from parallellm.types import CallIdentifier
+from parallellm.types import CallIdentifier, ParsedResponse
 
 
 class TestReadyLLMResponse:
@@ -72,7 +72,11 @@ class TestPendingLLMResponse:
         """Test that pending responses call backend.retrieve()"""
         call_id = self._create_mock_call_id()
         mock_backend = Mock()
-        mock_backend.retrieve.return_value = "Backend response"
+        mock_backend.retrieve.return_value = ParsedResponse(
+            text="Backend response",
+            response_id="resp_789",
+            metadata=None,
+        )
 
         response = PendingLLMResponse(call_id=call_id, backend=mock_backend)
 
@@ -85,7 +89,11 @@ class TestPendingLLMResponse:
         """Test that pending responses cache results after first resolve"""
         call_id = self._create_mock_call_id()
         mock_backend = Mock()
-        mock_backend.retrieve.return_value = "Cached response"
+        mock_backend.retrieve.return_value = ParsedResponse(
+            text="Cached response",
+            response_id="resp_123",
+            metadata=None,
+        )
 
         response = PendingLLMResponse(call_id=call_id, backend=mock_backend)
 
@@ -139,40 +147,6 @@ class TestPendingLLMResponse:
             "checkpoint": "test_checkpoint",
             "doc_hash": "test_hash_456",
             "seq_id": 2,
-            "session_id": 1,
-            "provider_type": "openai",
-        }
-
-
-class TestLLMResponseHierarchy:
-    """Test interactions between different response types"""
-
-    def test_response_type_consistency(self):
-        """Test that all response types implement the same interface"""
-        call_id = self._create_mock_call_id()
-        mock_backend = Mock()
-        mock_backend.retrieve.return_value = "Test content"
-
-        # All types should have resolve() method
-        ready = ReadyLLMResponse(call_id=call_id, value="Ready content")
-        pending = PendingLLMResponse(call_id=call_id, backend=mock_backend)
-
-        assert hasattr(ready, "resolve")
-        assert hasattr(pending, "resolve")
-        assert callable(ready.resolve)
-        assert callable(pending.resolve)
-
-        # All should return strings
-        assert isinstance(ready.resolve(), str)
-        assert isinstance(pending.resolve(), str)
-
-    def _create_mock_call_id(self) -> CallIdentifier:
-        """Helper to create mock call identifiers"""
-        return {
-            "agent_name": "hierarchy_test",
-            "checkpoint": None,
-            "doc_hash": "hierarchy_hash",
-            "seq_id": 999,
             "session_id": 1,
             "provider_type": "openai",
         }

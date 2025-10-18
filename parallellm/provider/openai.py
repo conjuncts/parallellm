@@ -9,7 +9,6 @@ from parallellm.provider.base import (
     SyncProvider,
 )
 from parallellm.provider.openai_tools import to_strict_json_schema
-from parallellm.types import ParsedResponse
 from parallellm.provider.schemas import guess_schema
 from parallellm.types import (
     BatchIdentifier,
@@ -17,6 +16,7 @@ from parallellm.types import (
     BatchStatus,
     CallIdentifier,
     LLMDocument,
+    ParsedResponse,
 )
 
 if TYPE_CHECKING:

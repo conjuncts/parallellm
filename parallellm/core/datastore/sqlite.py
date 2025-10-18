@@ -13,10 +13,12 @@ from parallellm.core.datastore.sql_migrate import (
 )
 from parallellm.core.lake.sequester import sequester_openai_metadata
 from parallellm.file_io.file_manager import FileManager
-from parallellm.types import BatchIdentifier, BatchResult, CallIdentifier
-
-if TYPE_CHECKING:
-    from parallellm.types import ParsedResponse
+from parallellm.types import (
+    BatchIdentifier,
+    BatchResult,
+    CallIdentifier,
+    ParsedResponse,
+)
 
 
 def _sql_table_to_dataframe(
@@ -243,7 +245,9 @@ class SQLiteDatastore(Datastore):
         self._is_dirty = True
         return connections[connection_key]
 
-    def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
+    def retrieve(
+        self, call_id: CallIdentifier, metadata=False
+    ) -> Optional[ParsedResponse]:
         """
         Retrieve a response from SQLite.
 
@@ -283,19 +287,26 @@ class SQLiteDatastore(Datastore):
         full_params = params + [seq_id]
 
         cursor = conn.execute(
-            f"SELECT response FROM {table_name} WHERE {full_where}", full_params
+            f"SELECT response, response_id FROM {table_name} WHERE {full_where}",
+            full_params,
         )
         row = cursor.fetchone()
-        if row:
-            return row["response"]
+        if not row:
+            # Fallback: try without seq_id (less specific)
+            base_where = " AND ".join(where_conditions)
+            cursor = conn.execute(
+                f"SELECT response, response_id FROM {table_name} WHERE {base_where}",
+                params,
+            )
+            row = cursor.fetchone()
 
-        # Fallback: try without seq_id (less specific)
-        base_where = " AND ".join(where_conditions)
-        cursor = conn.execute(
-            f"SELECT response FROM {table_name} WHERE {base_where}", params
+        if row is None:
+            return None
+        return ParsedResponse(
+            text=row["response"],
+            response_id=row["response_id"],
+            metadata=self.retrieve_metadata(call_id) if metadata else None,
         )
-        row = cursor.fetchone()
-        return row["response"] if row else None
 
     def retrieve_metadata(self, call_id: CallIdentifier) -> Optional[dict]:
         """

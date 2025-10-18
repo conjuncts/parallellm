@@ -21,7 +21,7 @@ from parallellm.provider.openai import (
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.response import PendingLLMResponse, ReadyLLMResponse
-from parallellm.types import CallIdentifier, LLMDocument
+from parallellm.types import CallIdentifier, LLMDocument, ParsedResponse
 from parallellm.testing.simple_mock import MockOpenAIClient, MockAsyncOpenAIClient
 from PIL import Image
 
@@ -65,11 +65,18 @@ class MockSyncBackend:
         except Exception as e:
             raise e
 
-    def retrieve(self, call_id: CallIdentifier) -> Any:
+    def retrieve(self, call_id: CallIdentifier, metadata=False) -> Any:
         """Retrieve cached response if available"""
         cache_key = self._get_cache_key(call_id)
         if cache_key in self.stored_responses:
-            return self.stored_responses[cache_key][0]  # Return just the response text
+            response_text, response_id, response_metadata = self.stored_responses[
+                cache_key
+            ]
+            return ParsedResponse(
+                text=response_text,
+                response_id=response_id,
+                metadata=response_metadata if metadata else None,
+            )
         return None
 
     def _get_cache_key(self, call_id: CallIdentifier) -> str:
@@ -108,10 +115,13 @@ class MockAsyncBackend:
 
         raise ValueError(f"No pending call for {call_id}")
 
-    def retrieve(self, call_id: CallIdentifier) -> Any:
+    def retrieve(self, call_id: CallIdentifier, metadata=False) -> Any:
         """Retrieve cached response if available"""
         cache_key = self._get_cache_key(call_id)
-        return self.completed_calls.get(cache_key)
+        response_text = self.completed_calls.get(cache_key)
+        if response_text is not None:
+            return ParsedResponse(text=response_text, response_id=None, metadata=None)
+        return None
 
     def _get_cache_key(self, call_id: CallIdentifier) -> str:
         """Generate cache key from call_id"""

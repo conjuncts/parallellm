@@ -97,10 +97,10 @@ class AgentOrchestrator:
         if isinstance(data, PendingLLMResponse):
             data._backend = self._backend
         elif isinstance(data, ReadyLLMResponse):
-            value = self._backend.retrieve(data.call_id)
-            if value is None:
+            parsed_response = self._backend.retrieve(data.call_id)
+            if parsed_response is None:
                 raise IntegrityError("Cached value is no longer available")
-            data.value = value
+            data.value = parsed_response.text
 
         return data
 

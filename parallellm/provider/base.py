@@ -2,13 +2,13 @@ from typing import Any, List, Optional, Union
 from pydantic import BaseModel
 
 from parallellm.core.identity import LLMIdentity
-from parallellm.types import ParsedResponse
 from parallellm.types import (
     BatchIdentifier,
     BatchResult,
     CallIdentifier,
     LLMDocument,
     ProviderType,
+    ParsedResponse,
 )
 
 

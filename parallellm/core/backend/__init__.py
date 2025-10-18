@@ -1,5 +1,5 @@
 from typing import Optional
-from parallellm.types import CallIdentifier
+from parallellm.types import CallIdentifier, ParsedResponse
 
 
 class BaseBackend:
@@ -17,7 +17,9 @@ class BaseBackend:
         """Persist data and clean up resources"""
         pass
 
-    def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
+    def retrieve(
+        self, call_id: CallIdentifier, metadata=False
+    ) -> Optional[ParsedResponse]:
         raise NotImplementedError
 
     def store(self, call_id: CallIdentifier, response: str) -> int:

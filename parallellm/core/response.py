@@ -59,7 +59,8 @@ class PendingLLMResponse(LLMResponse):
         if self.value is not None:
             return self.value
 
-        self.value = self._backend.retrieve(self.call_id)
+        parsed_response = self._backend.retrieve(self.call_id)
+        self.value = parsed_response.text if parsed_response else None
         return self.value
 
     def __getstate__(self):

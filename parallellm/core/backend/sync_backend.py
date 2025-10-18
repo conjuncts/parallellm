@@ -5,7 +5,7 @@ from parallellm.core.response import ReadyLLMResponse
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 from parallellm.provider.schemas import guess_schema
-from parallellm.types import CallIdentifier
+from parallellm.types import CallIdentifier, ParsedResponse
 
 if TYPE_CHECKING:
     from parallellm.provider.base import SyncProvider
@@ -104,7 +104,9 @@ class SyncBackend(BaseBackend):
         # So there's nothing to poll for
         pass
 
-    def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
+    def retrieve(
+        self, call_id: CallIdentifier, metadata=False
+    ) -> Optional[ParsedResponse]:
         """Synchronous retrieve that checks pending results first, then datastore"""
         # Check if we have a pending result
         key = f"{call_id['checkpoint']}:{call_id['doc_hash']}:{call_id['seq_id']}"
@@ -112,10 +114,11 @@ class SyncBackend(BaseBackend):
             result = self._pending_results[key]
             if isinstance(result, Exception):
                 raise result
-            return result
+            # If we have a pending result (which is just text), wrap it in ParsedResponse
+            return ParsedResponse(text=result, response_id=None, metadata=None)
 
         # Fall back to datastore
-        return self._ds.retrieve(call_id)
+        return self._ds.retrieve(call_id, metadata=metadata)
 
     def persist(self):
         """Persist any remaining data and datastore"""

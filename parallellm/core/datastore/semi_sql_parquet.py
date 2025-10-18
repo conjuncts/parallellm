@@ -9,10 +9,7 @@ from parallellm.core.datastore.base import Datastore
 from parallellm.core.datastore.sqlite import SQLiteDatastore, _sql_table_to_dataframe
 from parallellm.core.lake.sequester import sequester_df_to_parquet
 from parallellm.file_io.file_manager import FileManager
-from parallellm.types import CallIdentifier
-
-if TYPE_CHECKING:
-    from parallellm.types import ParsedResponse
+from parallellm.types import CallIdentifier, ParsedResponse
 
 
 class SQLiteParquetDatastore(Datastore):
@@ -125,18 +122,31 @@ class SQLiteParquetDatastore(Datastore):
 
         return None
 
-    def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
+    def retrieve(
+        self, call_id: CallIdentifier, metadata=False
+    ) -> Optional[ParsedResponse]:
         """
         Retrieve a response, checking parquet first, then SQLite.
 
         :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
-        :returns: The retrieved response content.
+        :param metadata: Whether to include metadata in the response.
+        :returns: The retrieved ParsedResponse containing text, response_id, and optionally metadata.
         """
         row = self._retrieve_row_from_parquet(call_id)
         if row is not None:
-            return row["response"]
+            response_text = row["response"]
+            response_id = row.get("response_id")
 
-        return self._sqlite_datastore.retrieve(call_id)
+            # Get metadata if requested
+            response_metadata = None
+            if metadata:
+                response_metadata = self._retrieve_metadata_from_parquet(call_id)
+
+            return ParsedResponse(
+                text=response_text, response_id=response_id, metadata=response_metadata
+            )
+
+        return self._sqlite_datastore.retrieve(call_id, metadata=metadata)
 
     def retrieve_metadata(self, call_id: CallIdentifier) -> Optional[dict]:
         """

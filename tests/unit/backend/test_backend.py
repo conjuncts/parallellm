@@ -17,6 +17,7 @@ from pathlib import Path
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.file_io.file_manager import FileManager
+from parallellm.types import ParsedResponse
 
 
 pytest.skip("Takes ~1s", allow_module_level=True)
@@ -71,7 +72,7 @@ class TestAsyncBackend:
         # retrieve() will wait for completion and verify result
         result = backend.retrieve(sample_call_id)
         assert result is not None
-        assert "test_result" in result
+        assert "test_result" in result.text
 
         # Clean up
         backend.shutdown()
@@ -131,7 +132,7 @@ class TestAsyncBackend:
         # Verify we can retrieve the first result
         first_result = backend.retrieve(sample_call_id)
         assert first_result is not None
-        assert "first response" in first_result
+        assert "first response" in first_result.text
 
         # Verify backend is still functional by submitting another task
         second_call_id = sample_call_id.copy()
@@ -154,7 +155,7 @@ class TestAsyncBackend:
         # Retrieve second result
         second_result = backend.retrieve(second_call_id)
         assert second_result is not None
-        assert "second response" in second_result
+        assert "second response" in second_result.text
 
         # Clean up
         backend.shutdown()
@@ -192,7 +193,7 @@ class TestAsyncBackend:
         elapsed_time = time.time() - start_time
 
         assert fast_result is not None
-        assert "very fast response" in fast_result
+        assert "very fast response" in fast_result.text
         assert elapsed_time < 0.1  # Should be very fast, not waiting 2 seconds
 
         # The slow task should still be running
@@ -242,8 +243,8 @@ class TestSyncBackend:
         result = backend.retrieve(sample_call_id)
 
         assert result is not None
-        assert isinstance(result, str)
-        assert "retrieve test" in result
+        assert isinstance(result, ParsedResponse)
+        assert "retrieve test" in result.text
 
     def test_sync_backend_persist(self, file_manager, sample_call_id):
         """Test SyncBackend persist functionality"""

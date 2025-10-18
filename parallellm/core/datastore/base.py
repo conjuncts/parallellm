@@ -14,12 +14,15 @@ class Datastore(ABC):
     Stores responses
     """
 
-    def retrieve(self, call_id: CallIdentifier) -> Optional[str]:
+    def retrieve(
+        self, call_id: CallIdentifier, metadata=False
+    ) -> Optional[ParsedResponse]:
         """
         Retrieve a response from the backend.
 
         :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
-        :returns: The retrieved LLMResponse.
+        :param metadata: Whether to include metadata in the response.
+        :returns: The retrieved ParsedResponse containing text, response_id, and optionally metadata.
         """
         raise NotImplementedError
 
