@@ -305,72 +305,29 @@ class SQLiteDatastore(Datastore):
         return ParsedResponse(
             text=row["response"],
             response_id=row["response_id"],
-            metadata=self.retrieve_metadata(call_id) if metadata else None,
+            metadata=self.retrieve_metadata(row["response_id"])
+            if metadata and row["response_id"]
+            else None,
         )
 
-    def retrieve_metadata(self, call_id: CallIdentifier) -> Optional[dict]:
+    def retrieve_metadata(self, response_id: str) -> Optional[dict]:
         """
-        Retrieve metadata from SQLite.
+        Retrieve metadata from SQLite using response_id.
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
+        :param response_id: The response ID to look up metadata for.
         :returns: The retrieved metadata as a dictionary, or None if not found.
         """
-        # TODO: does not work because does not read from parquet
-
-        checkpoint = call_id["checkpoint"]
-        doc_hash = call_id["doc_hash"]
-        seq_id = call_id["seq_id"]
-        agent_name = call_id["agent_name"]
-
         # Get main database connection
         conn = self._get_connection(None)
 
-        # Determine table and build WHERE clause components
-        table_name = "chk_responses" if checkpoint is not None else "anon_responses"
-
-        # Base WHERE conditions (always present)
-        where_conditions = ["doc_hash = ?"]
-        params = [doc_hash]
-
-        # Add agent_name condition
-        if agent_name is not None:
-            where_conditions.append("agent_name = ?")
-            params.append(agent_name)
-        else:
-            where_conditions.append("agent_name IS NULL")
-
-        # Add checkpoint condition if using checkpoint table
-        if checkpoint is not None:
-            where_conditions.append("checkpoint = ?")
-            params.append(checkpoint)
-
-        # Try with seq_id first (most specific)
-        full_where = " AND ".join(where_conditions + ["seq_id = ?"])
-        full_params = params + [seq_id]
-
+        # Get the metadata directly using response_id
         cursor = conn.execute(
-            f"SELECT response_id FROM {table_name} WHERE {full_where}", full_params
+            "SELECT metadata FROM metadata WHERE response_id = ?",
+            (response_id,),
         )
-        row = cursor.fetchone()
-
-        # If not found, try without seq_id (less specific)
-        if not row or not row["response_id"]:
-            base_where = " AND ".join(where_conditions)
-            cursor = conn.execute(
-                f"SELECT response_id FROM {table_name} WHERE {base_where}", params
-            )
-            row = cursor.fetchone()
-
-        # If we have a response_id, get the metadata
-        if row and row["response_id"]:
-            response_id = row["response_id"]
-            cursor = conn.execute(
-                "SELECT metadata FROM metadata WHERE response_id = ?",
-                (response_id,),
-            )
-            metadata_row = cursor.fetchone()
-            if metadata_row and metadata_row["metadata"]:
-                return json.loads(metadata_row["metadata"])
+        metadata_row = cursor.fetchone()
+        if metadata_row and metadata_row["metadata"]:
+            return json.loads(metadata_row["metadata"])
 
         return None
 

@@ -95,6 +95,24 @@ class SQLiteParquetDatastore(Datastore):
 
         return None
 
+    def _retrieve_metadata_from_parquet_by_response_id(
+        self, response_id: str
+    ) -> Optional[dict]:
+        """Retrieve metadata from parquet files using response_id."""
+
+        # Get metadata using response_id
+        metadata_df = self._load_parquet_dataframe("metadata")
+        if metadata_df is None or metadata_df.is_empty():
+            return None
+
+        metadata_result = metadata_df.filter(pl.col("response_id") == response_id)
+        if not metadata_result.is_empty():
+            metadata_json = metadata_result.select("metadata").to_series().to_list()[0]
+            if metadata_json:
+                return json.loads(metadata_json)
+
+        return None
+
     def _retrieve_metadata_from_parquet(
         self, call_id: CallIdentifier
     ) -> Optional[dict]:
@@ -109,18 +127,7 @@ class SQLiteParquetDatastore(Datastore):
         if response_id is None:
             return None
 
-        # Now get metadata using response_id
-        metadata_df = self._load_parquet_dataframe("metadata")
-        if metadata_df is None or metadata_df.is_empty():
-            return None
-
-        metadata_result = metadata_df.filter(pl.col("response_id") == response_id)
-        if not metadata_result.is_empty():
-            metadata_json = metadata_result.select("metadata").to_series().to_list()[0]
-            if metadata_json:
-                return json.loads(metadata_json)
-
-        return None
+        return self._retrieve_metadata_from_parquet_by_response_id(response_id)
 
     def retrieve(
         self, call_id: CallIdentifier, metadata=False
@@ -139,8 +146,10 @@ class SQLiteParquetDatastore(Datastore):
 
             # Get metadata if requested
             response_metadata = None
-            if metadata:
-                response_metadata = self._retrieve_metadata_from_parquet(call_id)
+            if metadata and response_id:
+                response_metadata = self._retrieve_metadata_from_parquet_by_response_id(
+                    response_id
+                )
 
             return ParsedResponse(
                 text=response_text, response_id=response_id, metadata=response_metadata
@@ -148,18 +157,18 @@ class SQLiteParquetDatastore(Datastore):
 
         return self._sqlite_datastore.retrieve(call_id, metadata=metadata)
 
-    def retrieve_metadata(self, call_id: CallIdentifier) -> Optional[dict]:
+    def retrieve_metadata(self, response_id: str) -> Optional[dict]:
         """
         Retrieve metadata, checking parquet first, then SQLite.
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
+        :param response_id: The response ID to look up metadata for.
         :returns: The retrieved metadata as a dictionary, or None if not found.
         """
-        metadata = self._retrieve_metadata_from_parquet(call_id)
+        metadata = self._retrieve_metadata_from_parquet_by_response_id(response_id)
         if metadata is not None:
             return metadata
 
-        return self._sqlite_datastore.retrieve_metadata(call_id)
+        return self._sqlite_datastore.retrieve_metadata(response_id)
 
     def store(
         self,

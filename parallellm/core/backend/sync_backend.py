@@ -73,14 +73,7 @@ class SyncBackend(BaseBackend):
             if self._dash_logger is not None:
                 self._dash_logger.update_hash(doc_hash, HashStatus.RECEIVED)
 
-            # Process and store the result - use provider.parse_response if available
-            if provider is not None:
-                parsed = provider.parse_response(result)
-            else:
-                # Fallback to guess_schema for backward compatibility
-                parsed = guess_schema(
-                    result, provider_type=call_id.get("provider_type", None)
-                )
+            parsed = provider.parse_response(result)
 
             self._ds.store(call_id, parsed)
 

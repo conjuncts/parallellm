@@ -26,11 +26,11 @@ class Datastore(ABC):
         """
         raise NotImplementedError
 
-    def retrieve_metadata(self, call_id: CallIdentifier) -> Optional[dict]:
+    def retrieve_metadata(self, response_id: str) -> Optional[dict]:
         """
-        Retrieve metadata from the backend.
+        Retrieve metadata from the backend using response_id.
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
+        :param response_id: The response ID to look up metadata for.
         :returns: The retrieved metadata as a dictionary, or None if not found.
         """
         raise NotImplementedError
