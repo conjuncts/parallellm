@@ -158,7 +158,7 @@ class TestSQLite:
         assert retrieved.text == "Fallback response"
 
 
-@pytest.mark.skip("Takes extra time")
+# @pytest.mark.skip("Takes extra time")
 class TestSQLiteBatch:
     def test_batch_operations(self, temp_datastore):
         """Test batch-related operations"""
@@ -286,7 +286,7 @@ class TestSQLiteBatch:
             temp_datastore.store_ready_batch(batch_result)
 
 
-@pytest.mark.skip("Takes extra time")
+# @pytest.mark.skip("Takes extra time")
 class TestSQLiteExtras:
     """Test suite for SQLiteDatastore"""
 
@@ -358,7 +358,7 @@ class TestSQLiteExtras:
         temp_datastore.store(call_id, parsed_response)
 
         # Retrieve metadata separately
-        retrieved_metadata = temp_datastore.retrieve_metadata(call_id)
+        retrieved_metadata = temp_datastore.retrieve_metadata("meta_123")
         assert retrieved_metadata == metadata
 
     def test_persist_and_close(self, temp_datastore):

@@ -11,6 +11,7 @@ from parallellm.core.datastore.sql_migrate import (
     _check_and_migrate,
     _migrate_sql_schema,
 )
+from parallellm.core.datastore.parquet_manager import ParquetManager
 from parallellm.core.lake.sequester import sequester_openai_metadata
 from parallellm.file_io.file_manager import FileManager
 from parallellm.types import (
@@ -61,6 +62,9 @@ class SQLiteDatastore(Datastore):
         # Use threading.local to ensure each thread has its own connections
         self._local = threading.local()
         self._is_dirty = False
+
+        # Initialize parquet manager for sequestered metadata access
+        self._parquet_manager: Optional[ParquetManager] = None
 
         # Check if migration is needed (only on first initialization)
         self._check_and_migrate()
@@ -312,7 +316,9 @@ class SQLiteDatastore(Datastore):
 
     def retrieve_metadata(self, response_id: str) -> Optional[dict]:
         """
-        Retrieve metadata from SQLite using response_id.
+        Retrieve metadata from SQLite and parquet cache using response_id.
+
+        Checks SQLite first, then falls back to cached parquet metadata.
 
         :param response_id: The response ID to look up metadata for.
         :returns: The retrieved metadata as a dictionary, or None if not found.
@@ -320,7 +326,7 @@ class SQLiteDatastore(Datastore):
         # Get main database connection
         conn = self._get_connection(None)
 
-        # Get the metadata directly using response_id
+        # First try SQLite database
         cursor = conn.execute(
             "SELECT metadata FROM metadata WHERE response_id = ?",
             (response_id,),
@@ -329,7 +335,10 @@ class SQLiteDatastore(Datastore):
         if metadata_row and metadata_row["metadata"]:
             return json.loads(metadata_row["metadata"])
 
-        return None
+        # If not found in SQLite, check the parquet manager's metadata cache
+        if not self._parquet_manager:
+            self._parquet_manager = ParquetManager(self.file_manager)
+        return self._parquet_manager.get_metadata(response_id)
 
     def store(
         self,
@@ -780,6 +789,9 @@ class SQLiteDatastore(Datastore):
         if hasattr(self, "_local") and hasattr(self._local, "connections"):
             try:
                 self._transfer_metadata_to_parquet()
+                # Refresh parquet manager cache after sequestering
+                if self._parquet_manager:
+                    self._parquet_manager.reload_cache()
             except Exception as e:
                 # Log the error but don't fail the persist operation
                 print(f"Warning: Failed to transfer metadata to Parquet: {e}")

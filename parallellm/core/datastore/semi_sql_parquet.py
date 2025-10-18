@@ -7,6 +7,7 @@ import polars as pl
 
 from parallellm.core.datastore.base import Datastore
 from parallellm.core.datastore.sqlite import SQLiteDatastore, _sql_table_to_dataframe
+from parallellm.core.datastore.parquet_manager import ParquetManager
 from parallellm.core.lake.sequester import sequester_df_to_parquet
 from parallellm.file_io.file_manager import FileManager
 from parallellm.types import CallIdentifier, ParsedResponse
@@ -30,88 +31,26 @@ class SQLiteParquetDatastore(Datastore):
         self.file_manager = file_manager
         self._sqlite_datastore = SQLiteDatastore(file_manager)
 
-        # Cache for loaded parquet dataframes. Eagerly load
-        self._eager_tables = {}
-        self._load_parquet_cache()
+        # Use shared parquet manager for consistency with SQLite datastore
+        self._parquet_manager = ParquetManager(file_manager)
 
     def _get_parquet_paths(self) -> dict[str, Path]:
         """Get paths for parquet files."""
-        datastore_dir = self.file_manager.allocate_datastore()
-        parquet_dir = datastore_dir / "datalake"
-        parquet_dir.mkdir(parents=True, exist_ok=True)
-
-        return {
-            "anon_responses": parquet_dir / "anon_responses.parquet",
-            "chk_responses": parquet_dir / "chk_responses.parquet",
-            "metadata": parquet_dir / "metadata.parquet",
-        }
+        return self._parquet_manager.get_parquet_paths()
 
     def _load_parquet_cache(self):
-        """Load a parquet dataframe with caching."""
-
-        parquet_paths = self._get_parquet_paths()
-        for table_name, parquet_path in parquet_paths.items():
-            if parquet_path.exists():
-                try:
-                    df = pl.read_parquet(parquet_path)
-                    self._eager_tables[table_name] = df
-                except Exception as e:
-                    print(f"Warning: Failed to load {table_name} parquet: {e}")
+        """Reload parquet cache."""
+        self._parquet_manager.reload_cache()
 
     def _retrieve_row_from_parquet(self, call_id: CallIdentifier) -> Optional[dict]:
         """Retrieve response from parquet files."""
-        checkpoint = call_id["checkpoint"]
-        doc_hash = call_id["doc_hash"]
-        seq_id = call_id["seq_id"]
-        agent_name = call_id["agent_name"]
-
-        # Determine which table to check
-        table_name = "chk_responses" if checkpoint is not None else "anon_responses"
-        df = self._eager_tables.get(table_name)
-
-        if df is None or df.is_empty():
-            return None
-
-        filters = [pl.col("doc_hash") == doc_hash]
-
-        if agent_name is not None:
-            filters.append(pl.col("agent_name") == agent_name)
-        else:
-            filters.append(pl.col("agent_name").is_null())
-
-        if checkpoint is not None:
-            filters.append(pl.col("checkpoint") == checkpoint)
-
-        specific_filters = filters + [pl.col("seq_id") == seq_id]
-        result = df.filter(pl.all_horizontal(specific_filters))
-
-        if not result.is_empty():
-            return result.row(0, named=True)
-
-        # Fallback: try without seq_id (less specific)
-        result = df.filter(pl.all_horizontal(filters))
-        if not result.is_empty():
-            return result.row(0, named=True)
-
-        return None
+        return self._parquet_manager.retrieve_response_row(call_id)
 
     def _retrieve_metadata_from_parquet_by_response_id(
         self, response_id: str
     ) -> Optional[dict]:
         """Retrieve metadata from parquet files using response_id."""
-
-        # Get metadata using response_id
-        metadata_df = self._load_parquet_dataframe("metadata")
-        if metadata_df is None or metadata_df.is_empty():
-            return None
-
-        metadata_result = metadata_df.filter(pl.col("response_id") == response_id)
-        if not metadata_result.is_empty():
-            metadata_json = metadata_result.select("metadata").to_series().to_list()[0]
-            if metadata_json:
-                return json.loads(metadata_json)
-
-        return None
+        return self._parquet_manager.get_metadata(response_id)
 
     def _retrieve_metadata_from_parquet(
         self, call_id: CallIdentifier
@@ -164,7 +103,7 @@ class SQLiteParquetDatastore(Datastore):
         :param response_id: The response ID to look up metadata for.
         :returns: The retrieved metadata as a dictionary, or None if not found.
         """
-        metadata = self._retrieve_metadata_from_parquet_by_response_id(response_id)
+        metadata = self._parquet_manager.get_metadata(response_id)
         if metadata is not None:
             return metadata
 
@@ -238,8 +177,8 @@ class SQLiteParquetDatastore(Datastore):
 
             conn.commit()
 
-            # Clear parquet cache to force reload on next access
-            self._eager_tables.clear()
+            # Reload parquet cache after transfer
+            self._parquet_manager.reload_cache()
 
         except Exception as e:
             raise RuntimeError(f"Error transferring tables to Parquet: {e}")
@@ -266,7 +205,7 @@ class SQLiteParquetDatastore(Datastore):
 
         :param checkpoint: The checkpoint connection to close (if None, close all connections).
         """
-        self._eager_tables.clear()
+        # Parquet manager will handle its own cleanup
         self._sqlite_datastore.close(checkpoint)
 
     def __del__(self):
