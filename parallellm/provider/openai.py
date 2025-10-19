@@ -22,6 +22,7 @@ from parallellm.types import (
 if TYPE_CHECKING:
     from openai import OpenAI, AsyncOpenAI
     from openai.types.responses.response_input_param import Message
+    from openai.types.responses.response import Response
 
 
 class OpenAIProvider(BaseProvider):
@@ -60,36 +61,64 @@ class OpenAIProvider(BaseProvider):
         """Parse OpenAI API response into common format"""
         if isinstance(raw_response, BaseModel):
             # Pydantic model (e.g., from openai.types.responses.response.Response)
-            text = raw_response.output_text
-            response_id = raw_response.id
-            obj = raw_response.model_dump(mode="json")
+            response: Response = raw_response
+            text = response.output_text
+            obj = response.model_dump(mode="json")
+            resp_id = response.id
             obj.pop("id", None)
-            return ParsedResponse(text=text, response_id=response_id, metadata=obj)
+
+            tool_calls = []
+            for item in response.output:
+                if item.type == "function_call":
+                    tool_calls.append((item.name, item.arguments, item.call_id))
+                elif item.type == "custom_tool_call":
+                    tool_calls.append((item.name, item.input, item.call_id))
+
+            parsed_metadata = obj
         elif isinstance(raw_response, dict):
             # Dict response (e.g., from batch API)
-            resp_id = raw_response.pop("id", None)
 
             if "output_text" in raw_response:
                 # Used in testing
-                return ParsedResponse(
-                    text=raw_response["output_text"],
-                    response_id=resp_id,
-                    metadata=raw_response,
-                )
+                text = raw_response["output_text"]
+                tool_calls = []
+            else:
+                # Extract text from OpenAI responses API format
+                tool_calls = []
+                texts: List[str] = []
+                for output in raw_response.get("output", []):
+                    if output["type"] == "message":
+                        for content in output["content"]:
+                            if content["type"] == "output_text":
+                                texts.append(content["text"])
+                            elif content["type"] == "function_call":
+                                tool_calls.append(
+                                    (
+                                        content["name"],
+                                        content["arguments"],
+                                        content.get("call_id"),
+                                    )
+                                )
+                            elif content["type"] == "custom_tool_call":
+                                tool_calls.append(
+                                    (
+                                        content["name"],
+                                        content["input"],
+                                        content.get("call_id"),
+                                    )
+                                )
+                text = "".join(texts)
 
-            # Extract text from OpenAI responses API format
-            texts: List[str] = []
-            for output in raw_response.get("output", []):
-                if output["type"] == "message":
-                    for content in output["content"]:
-                        if content["type"] == "output_text":
-                            texts.append(content["text"])
-
-            return ParsedResponse(
-                text="".join(texts), response_id=resp_id, metadata=raw_response
-            )
+            resp_id = raw_response.pop("id", None)
+            parsed_metadata = raw_response
         else:
             raise ValueError(f"Unsupported response type: {type(raw_response)}")
+        return ParsedResponse(
+            text=text,
+            response_id=resp_id,
+            metadata=parsed_metadata,
+            tool_calls=tool_calls,
+        )
 
 
 class SyncOpenAIProvider(SyncProvider, OpenAIProvider):

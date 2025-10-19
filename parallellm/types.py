@@ -113,6 +113,8 @@ class ParsedResponse:
     metadata: Optional[dict]
     """Additional metadata from the provider (usage stats, model info, etc.)."""
 
+    tool_calls: Optional[List[Tuple[str, str, str]]] = None
+
     def __iter__(self):
         """Allow unpacking into tuple for backward compatibility."""
         return iter((self.text, self.response_id, self.metadata))

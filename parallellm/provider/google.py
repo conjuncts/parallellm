@@ -1,3 +1,4 @@
+import json
 from typing import TYPE_CHECKING, List, Optional, Union
 from pydantic import BaseModel
 from parallellm.core.identity import LLMIdentity
@@ -5,8 +6,8 @@ from parallellm.provider.base import AsyncProvider, BaseProvider, SyncProvider
 from parallellm.types import ParsedResponse
 from parallellm.types import CallIdentifier, LLMDocument
 
-if TYPE_CHECKING:
-    from google import genai
+from google import genai
+from google.genai import types
 
 
 def _fix_docs_for_google(
@@ -67,11 +68,30 @@ class GoogleProvider(BaseProvider):
         """Parse Gemini API response into common format"""
         if isinstance(raw_response, BaseModel):
             # Pydantic model (e.g., google.genai.types.GenerateContentResponse)
-            text = raw_response.text
-            response_id = raw_response.response_id
-            obj = raw_response.model_dump(mode="json")
+
+            response: types.GenerateContentResponse = raw_response
+            text = response.text
+            response_id = response.response_id
+            obj = response.model_dump(mode="json")
             obj.pop("response_id", None)
-            return ParsedResponse(text=text, response_id=response_id, metadata=obj)
+
+            tools = []
+            for part in response.candidates[0].content.parts:
+                if part.function_call:
+                    func_call: types.FunctionCall = part.function_call
+                    tools.append(
+                        (
+                            func_call.name,
+                            # a bit annoying because we're doing str -> dict -> str -> dict
+                            json.dumps(func_call.args),
+                            func_call.id,
+                        )
+                    )
+            if tools and text is None:
+                text = ""  # I guess this can happen
+            return ParsedResponse(
+                text=text, response_id=response_id, metadata=obj, tool_calls=tools
+            )
         elif isinstance(raw_response, dict):
             # Dict response
             resp_id = raw_response.pop("response_id", None) or raw_response.pop(
@@ -81,8 +101,29 @@ class GoogleProvider(BaseProvider):
             # Extract text from Gemini response
             text_content = raw_response.get("text", str(raw_response))
 
+            tools = []
+            for part in (
+                raw_response.get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [])
+            ):
+                if "function_call" in part:
+                    func_call = part["function_call"]
+                    tools.append(
+                        (
+                            func_call["name"],
+                            func_call["args"],
+                            func_call["id"],
+                        )
+                    )
+
+            if tools and text_content is None:
+                text_content = ""  # I guess this can happen
             return ParsedResponse(
-                text=text_content, response_id=resp_id, metadata=raw_response
+                text=text_content,
+                response_id=resp_id,
+                metadata=raw_response,
+                tool_calls=tools,
             )
         else:
             raise ValueError(f"Unsupported response type: {type(raw_response)}")
@@ -100,6 +141,7 @@ class SyncGoogleProvider(SyncProvider, GoogleProvider):
         llm: LLMIdentity,
         _hoist_images=None,
         text_format: Optional[str] = None,
+        tools=None,
         **kwargs,
     ):
         """Prepare a synchronous callable for Gemini API"""
@@ -112,6 +154,11 @@ class SyncGoogleProvider(SyncProvider, GoogleProvider):
         if text_format is not None:
             config["response_mime_type"] = "application/json"
             config["response_schema"] = text_format
+
+        if tools:
+            if not isinstance(tools[0], types.Tool):
+                tools = [types.Tool(function_declarations=[tool]) for tool in tools]
+            config["tools"] = tools
         return self.client.models.generate_content(
             model=llm.model_name if llm else "gemini-2.5-flash",
             contents=contents,
@@ -131,6 +178,7 @@ class AsyncGoogleProvider(AsyncProvider, GoogleProvider):
         llm: LLMIdentity,
         _hoist_images=None,
         text_format: Optional[str] = None,
+        tools=None,
         **kwargs,
     ):
         """Prepare an async coroutine for Gemini API"""
@@ -144,6 +192,11 @@ class AsyncGoogleProvider(AsyncProvider, GoogleProvider):
         if text_format is not None:
             config["response_mime_type"] = "application/json"
             config["response_schema"] = text_format
+
+        if tools:
+            if not isinstance(tools[0], types.Tool):
+                tools = [types.Tool(function_declarations=tool) for tool in tools]
+            config["tools"] = tools
 
         coro = self.client.aio.models.generate_content(
             model=llm.model_name if llm else "gemini-2.5-flash",

@@ -40,6 +40,6 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 
 | Tool Calls | Sync | Async | Batch |
 | --- | --- | --- | --- |
-| OpenAI | TODO | TODO | TODO |
-| Anthropic | TODO | TODO | TODO |
-| Google | TODO | TODO | TODO |
+| OpenAI | ✅ | ✅ | TODO |
+| Anthropic | ✅ | ✅ | TODO |
+| Google | ✅ | ✅ | TODO |

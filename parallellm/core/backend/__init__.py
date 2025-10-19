@@ -1,4 +1,5 @@
 from typing import Optional
+from parallellm.provider.base import BaseProvider
 from parallellm.types import CallIdentifier, ParsedResponse
 
 
@@ -26,4 +27,19 @@ class BaseBackend:
         :param call_id: The task identifier containing agent_name, checkpoint, doc_hash, and seq_id.
         :returns: The retrieved ParsedResponse.
         """
+        raise NotImplementedError
+
+    def submit_query(
+        self,
+        provider: BaseProvider,
+        instructions: Optional[str],
+        documents,
+        *,
+        call_id: CallIdentifier,
+        llm,
+        _hoist_images=None,
+        text_format: Optional[str] = None,
+        tools=None,
+        **kwargs,
+    ):
         raise NotImplementedError

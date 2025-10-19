@@ -121,6 +121,7 @@ class SQLiteDatastore(Datastore):
                         response TEXT NOT NULL,
                         response_id TEXT,
                         provider_type TEXT,
+                        tool_calls TEXT,
                         UNIQUE(agent_name, doc_hash)
                     )
                 """)
@@ -137,6 +138,7 @@ class SQLiteDatastore(Datastore):
                         response TEXT NOT NULL,
                         response_id TEXT,
                         provider_type TEXT,
+                        tool_calls TEXT,
                         UNIQUE(agent_name, checkpoint, doc_hash)
                     )
                 """)
@@ -291,7 +293,7 @@ class SQLiteDatastore(Datastore):
         full_params = params + [seq_id]
 
         cursor = conn.execute(
-            f"SELECT response, response_id FROM {table_name} WHERE {full_where}",
+            f"SELECT response, response_id, tool_calls FROM {table_name} WHERE {full_where}",
             full_params,
         )
         row = cursor.fetchone()
@@ -299,19 +301,29 @@ class SQLiteDatastore(Datastore):
             # Fallback: try without seq_id (less specific)
             base_where = " AND ".join(where_conditions)
             cursor = conn.execute(
-                f"SELECT response, response_id FROM {table_name} WHERE {base_where}",
+                f"SELECT response, response_id, tool_calls FROM {table_name} WHERE {base_where}",
                 params,
             )
             row = cursor.fetchone()
 
         if row is None:
             return None
+
+        # Parse tool_calls from JSON if present
+        tool_calls = None
+        if row["tool_calls"]:
+            try:
+                tool_calls = json.loads(row["tool_calls"])
+            except (json.JSONDecodeError, TypeError):
+                tool_calls = None
+
         return ParsedResponse(
             text=row["response"],
             response_id=row["response_id"],
             metadata=self.retrieve_metadata(row["response_id"])
             if metadata and row["response_id"]
             else None,
+            tool_calls=tool_calls,
         )
 
     def retrieve_metadata(self, response_id: str) -> Optional[dict]:
@@ -362,6 +374,7 @@ class SQLiteDatastore(Datastore):
         response = parsed_response.text
         response_id = parsed_response.response_id
         metadata = parsed_response.metadata
+        tool_calls = parsed_response.tool_calls
 
         # Get main database connection
         conn = self._get_connection(None)
@@ -395,6 +408,11 @@ class SQLiteDatastore(Datastore):
             existing = cursor.fetchone()
 
             # Prepare column names and values for INSERT/UPDATE
+            # Serialize tool_calls to JSON if present
+            tool_calls_json = None
+            if tool_calls is not None:
+                tool_calls_json = json.dumps(tool_calls)
+
             columns = [
                 "agent_name",
                 "seq_id",
@@ -403,6 +421,7 @@ class SQLiteDatastore(Datastore):
                 "response",
                 "response_id",
                 "provider_type",
+                "tool_calls",
             ]
             values = [
                 agent_name,
@@ -412,6 +431,7 @@ class SQLiteDatastore(Datastore):
                 response,
                 response_id,
                 provider_type,
+                tool_calls_json,
             ]
 
             if checkpoint is not None:
@@ -547,6 +567,12 @@ class SQLiteDatastore(Datastore):
                 resp_text = parsed.text
                 response_id = parsed.response_id
                 metadata = parsed.metadata
+                tool_calls = parsed.tool_calls
+
+                # Serialize tool_calls to JSON if present
+                tool_calls_json = None
+                if tool_calls is not None:
+                    tool_calls_json = json.dumps(tool_calls)
 
                 # Prepare columns and values
                 columns = [
@@ -557,6 +583,7 @@ class SQLiteDatastore(Datastore):
                     "response",
                     "response_id",
                     "provider_type",
+                    "tool_calls",
                 ]
                 values = [
                     agent_name,
@@ -566,6 +593,7 @@ class SQLiteDatastore(Datastore):
                     resp_text,
                     custom_id,  # Use custom_id as response_id for batch results
                     provider_type,
+                    tool_calls_json,
                 ]
 
                 if checkpoint:

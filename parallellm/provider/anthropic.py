@@ -7,6 +7,7 @@ from parallellm.types import CallIdentifier, LLMDocument
 
 if TYPE_CHECKING:
     from anthropic import Anthropic, AsyncAnthropic
+    from anthropic.types import Message
 
 
 def _fix_docs_for_anthropic(
@@ -56,42 +57,68 @@ class AnthropicProvider(BaseProvider):
 
     def parse_response(self, raw_response: Union[BaseModel, dict]) -> ParsedResponse:
         """Parse Anthropic API response into common format"""
+
+        # https://docs.claude.com/en/docs/agents-and-tools/tool-use/implement-tool-use
         if isinstance(raw_response, BaseModel):
             # Pydantic model (e.g., anthropic.types.Message)
-            content = raw_response.content
-            if isinstance(content, list) and len(content) > 0:
-                text_content = (
-                    content[0].text if hasattr(content[0], "text") else str(content[0])
-                )
-            else:
-                text_content = str(content)
+            response: Message = raw_response
+            text_contents = []
+            tool_calls = []
+            for content_item in response.content:
+                if content_item.type == "text":
+                    text_contents.append(content_item.text)
+                elif content_item.type == "tool_use":
+                    tool_calls.append(
+                        (content_item.name, content_item.input, content_item.id)
+                    )
+            text_content = "".join(text_contents)
 
-            response_id = raw_response.id
-            obj = raw_response.model_dump(mode="json")
+            resp_id = response.id
+            obj = response.model_dump(mode="json")
             obj.pop("id", None)
-            return ParsedResponse(
-                text=text_content, response_id=response_id, metadata=obj
-            )
+            parsed_metadata = obj
+
         elif isinstance(raw_response, dict):
             # Dict response
-            resp_id = raw_response.pop("id", None)
+            resp_id = raw_response.get("id", None)
 
-            # Extract text from content
+            # Extract text and tool calls from content
             content = raw_response.get("content", [])
-            if isinstance(content, list) and len(content) > 0:
-                first_block = content[0]
-                if isinstance(first_block, dict) and "text" in first_block:
-                    text_content = first_block["text"]
-                else:
-                    text_content = str(first_block)
-            else:
-                text_content = str(content)
+            text_contents = []
+            tool_calls = []
 
-            return ParsedResponse(
-                text=text_content, response_id=resp_id, metadata=raw_response
-            )
+            if isinstance(content, list):
+                for content_item in content:
+                    if not isinstance(content_item, dict):
+                        text_contents.append(str(content_item))
+                        continue
+
+                    if content_item.get("type") == "text":
+                        text_contents.append(content_item["text"])
+                    elif content_item.get("type") == "tool_use":
+                        tool_calls.append(
+                            (
+                                content_item.get("name"),
+                                content_item.get("input"),
+                                content_item.get("id"),
+                            )
+                        )
+            else:
+                text_contents.append(str(content))
+
+            text_content = "".join(text_contents)
+
+            # Create a copy for metadata to avoid mutating the original
+            parsed_metadata = raw_response.copy()
+            parsed_metadata.pop("id", None)
         else:
             raise ValueError(f"Unsupported response type: {type(raw_response)}")
+        return ParsedResponse(
+            text=text_content,
+            response_id=resp_id,
+            metadata=parsed_metadata,
+            tool_calls=tool_calls,
+        )
 
 
 class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
@@ -106,6 +133,7 @@ class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
         llm: LLMIdentity,
         _hoist_images=None,
         text_format: Optional[str] = None,
+        tools=None,
         **kwargs,
     ):
         """Prepare a synchronous callable for Anthropic API"""
@@ -120,6 +148,7 @@ class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
             model=llm.model_name,
             max_tokens=config.pop("max_tokens", 4096),
             messages=messages,
+            tools=tools,
             **config,
         )
 
@@ -136,6 +165,7 @@ class AsyncAnthropicProvider(AsyncProvider, AnthropicProvider):
         llm: LLMIdentity,
         _hoist_images=None,
         text_format: Optional[str] = None,
+        tools=None,
         **kwargs,
     ):
         """Prepare an async coroutine for Anthropic API"""
@@ -150,6 +180,7 @@ class AsyncAnthropicProvider(AsyncProvider, AnthropicProvider):
             model=llm.model_name,
             max_tokens=config.pop("max_tokens", 1024),
             messages=messages,
+            tools=tools,
             **config,
         )
 

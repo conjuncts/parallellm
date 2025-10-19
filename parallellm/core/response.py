@@ -31,6 +31,20 @@ class LLMResponse:
         value = self.resolve()
         return json.loads(value)
 
+    def resolve_tool_calls(self) -> list[tuple[str, str, str]]:
+        """
+        Resolve the tool calls associated with this response.
+
+        :returns: A list of tool calls (tool_name, inputs, call_id)
+        """
+        if self._pr and self._pr.tool_calls:
+            # return [{
+            #     "tool_name": name,
+            #     "inputs": inputs
+            # } for name, inputs in self._pr.tool_calls]
+            return self._pr.tool_calls
+        return []
+
     def __getstate__(self):
         """
         Support for pickling. Only store the call_id since that uniquely identifies the response.

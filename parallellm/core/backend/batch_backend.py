@@ -62,6 +62,7 @@ class BatchBackend(BaseBackend):
         llm,
         _hoist_images=None,
         text_format: Optional[str] = None,
+        tools=None,
         **kwargs,
     ):
         """
@@ -84,6 +85,7 @@ class BatchBackend(BaseBackend):
             llm=llm,
             _hoist_images=_hoist_images,
             text_format=text_format,
+            tools=tools,
             **kwargs,
         )
 
