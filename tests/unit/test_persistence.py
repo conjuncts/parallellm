@@ -19,7 +19,13 @@ from unittest.mock import Mock, patch
 from parallellm.file_io.file_manager import FileManager
 from parallellm.core.agent.orchestrator import AgentOrchestrator
 from parallellm.core.response import ReadyLLMResponse, PendingLLMResponse
-from parallellm.types import WorkingMetadata, AgentMetadata, CallIdentifier
+from parallellm.testing.simple_backend import MockBackend
+from parallellm.types import (
+    ParsedResponse,
+    WorkingMetadata,
+    AgentMetadata,
+    CallIdentifier,
+)
 
 
 class TestFileManagerBasics:
@@ -301,25 +307,33 @@ class TestAgentOrchestratorIntegration:
             loaded_data = orchestrator.load_userdata("test_data")
             assert loaded_data == test_data
 
-    def test_orchestrator_response_injection(self):
-        """Test that orchestrator injects backend into loaded responses"""
+    def test_userdata_llm_responses(self):
+        """Test that orchestrator injects backend into LLMResponses"""
         with tempfile.TemporaryDirectory() as temp_dir:
             fm = FileManager(temp_dir)
-            mock_backend = Mock()
             mock_provider = Mock()
             mock_logger = Mock()
             mock_dash_logger = Mock()
 
+            backend = MockBackend()
+
             orchestrator = AgentOrchestrator(
                 file_manager=fm,
-                backend=mock_backend,
+                backend=backend,
                 provider=mock_provider,
                 logger=mock_logger,
                 dash_logger=mock_dash_logger,
             )
 
             call_id = self._create_mock_call_id()
-            pending_response = PendingLLMResponse(call_id=call_id, backend=None)
+            pr = ParsedResponse(
+                text="backend_test_value",
+                response_id="resp_123",
+                metadata=None,
+            )
+            backend.store(call_id, pr)
+
+            pending_response = PendingLLMResponse(call_id=call_id, backend=backend)
             ready_response = ReadyLLMResponse(call_id=call_id, value="test_value")
 
             # Save responses
@@ -331,10 +345,12 @@ class TestAgentOrchestratorIntegration:
             loaded_ready = orchestrator.load_userdata("ready")
 
             assert isinstance(loaded_pending, PendingLLMResponse)
-            assert loaded_pending._backend == mock_backend
+            assert loaded_pending._backend == backend
+            assert loaded_pending.resolve() == "backend_test_value"
 
             assert isinstance(loaded_ready, ReadyLLMResponse)
-            mock_backend.retrieve.assert_called_with(ready_response.call_id)
+            # Both depend solely on backend
+            assert loaded_ready.resolve() == "backend_test_value"
 
     def test_orchestrator_ignore_cache_parameter(self):
         """Test that ignore_cache parameter works correctly"""

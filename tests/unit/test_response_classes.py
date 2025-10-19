@@ -10,6 +10,7 @@ Tests the LLMResponse hierarchy including:
 
 import pytest
 from unittest.mock import Mock, MagicMock
+from parallellm.core.calls import _call_to_concise_dict
 from parallellm.core.identity import LLMIdentity
 from parallellm.core.response import (
     LLMResponse,
@@ -123,7 +124,7 @@ class TestPendingLLMResponse:
         # Test __setstate__ restores call_id but backend is None
         new_response = PendingLLMResponse.__new__(PendingLLMResponse)
         new_response.__setstate__(state)
-        assert new_response.call_id == call_id
+        assert new_response.call_id == _call_to_concise_dict(call_id)
         assert new_response._backend is None
 
     def test_pending_response_backend_none_handling(self):

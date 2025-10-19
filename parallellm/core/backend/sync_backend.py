@@ -81,7 +81,7 @@ class SyncBackend(BaseBackend):
             key = f"{checkpoint}:{doc_hash}:{seq_id}"
             self._pending_results[key] = parsed.text
 
-            return ReadyLLMResponse(call_id=call_id, value=parsed.text)
+            return ReadyLLMResponse(call_id=call_id, pr=parsed)
 
         except Exception as e:
             # Store the exception for later retrieval
@@ -100,9 +100,17 @@ class SyncBackend(BaseBackend):
     def retrieve(
         self, call_id: CallIdentifier, metadata=False
     ) -> Optional[ParsedResponse]:
-        """Synchronous retrieve that checks pending results first, then datastore"""
+        """
+        Synchronous retrieve that checks pending results first, then datastore.
+
+        The required fields from call_id are:
+        - agent_name, checkpoint, doc_hash, seq_id
+        """
         # Check if we have a pending result
-        key = f"{call_id['checkpoint']}:{call_id['doc_hash']}:{call_id['seq_id']}"
+        # Within one session, doc_hash should not be necessary
+        key = f"{call_id['agent_name']}:{call_id['seq_id']}"
+        if call_id["checkpoint"]:
+            key += f":{call_id['checkpoint']}"
         if key in self._pending_results:
             result = self._pending_results[key]
             if isinstance(result, Exception):

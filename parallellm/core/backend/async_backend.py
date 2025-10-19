@@ -4,7 +4,8 @@ import types
 import threading
 import atexit
 from typing import Optional, TYPE_CHECKING
-from parallellm.core.backend import BaseBackend, _call_matches
+from parallellm.core.backend import BaseBackend
+from parallellm.core.calls import _call_matches
 from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.response import PendingLLMResponse
 from parallellm.file_io.file_manager import FileManager

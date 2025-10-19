@@ -255,7 +255,7 @@ class SQLiteDatastore(Datastore):
         """
         Retrieve a response from SQLite.
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing agent_name, checkpoint, doc_hash, and seq_id.
         :returns: The retrieved response content.
         """
         checkpoint = call_id["checkpoint"]

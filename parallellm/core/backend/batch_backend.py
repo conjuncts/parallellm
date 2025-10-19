@@ -106,7 +106,6 @@ class BatchBackend(BaseBackend):
     def retrieve(
         self, call_id: CallIdentifier, metadata=False
     ) -> Optional[ParsedResponse]:
-        """Synchronous retrieve that checks pending results first, then datastore"""
         # Fall back to datastore
         return self._ds.retrieve(call_id, metadata=metadata)
 

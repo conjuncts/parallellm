@@ -74,9 +74,9 @@ class SQLiteParquetDatastore(Datastore):
         """
         Retrieve a response, checking parquet first, then SQLite.
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing agent_name, checkpoint, doc_hash, and seq_id.
         :param metadata: Whether to include metadata in the response.
-        :returns: The retrieved ParsedResponse containing text, response_id, and optionally metadata.
+        :returns: The retrieved response content.
         """
         row = self._retrieve_row_from_parquet(call_id)
         if row is not None:

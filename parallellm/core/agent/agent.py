@@ -247,7 +247,7 @@ class AgentContext:
             self.update_hash_status(hashed, HashStatus.CACHED)
             return ReadyLLMResponse(
                 call_id=call_id,
-                value=cached.text,  # Extract text from ParsedResponse
+                pr=cached,  # Extract text from ParsedResponse
             )
 
         # Make sure the LLM is compatible with the provider
