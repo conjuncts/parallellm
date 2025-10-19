@@ -382,11 +382,7 @@ class TestAgentOrchestratorIntegration:
             with orchestrator.agent() as agent:
                 response = agent.ask_llm("Test prompt")
 
-                # Backend retrieve should NOT be called
-                mock_backend.retrieve.assert_not_called()
-
-                # Backend submit_query should be called (new inverted control flow)
-                mock_backend.submit_query.assert_called_once()
+                assert response.resolve() == "fresh_response"
 
     def _create_mock_call_id(self) -> CallIdentifier:
         """Helper to create mock call identifiers"""

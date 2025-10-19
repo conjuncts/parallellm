@@ -113,13 +113,12 @@ class SQLiteParquetDatastore(Datastore):
         self,
         call_id: CallIdentifier,
         parsed_response: "ParsedResponse",
-    ) -> Optional[int]:
+    ):
         """
         Store a response in SQLite (transactional).
 
         :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
         :param parsed_response: The parsed response object containing text, response_id, and metadata.
-        :returns: The seq_id where the response was stored.
         """
 
         # Store in SQLite for transactional integrity

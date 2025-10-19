@@ -39,7 +39,7 @@ class Datastore(ABC):
         self,
         call_id: CallIdentifier,
         parsed_response: ParsedResponse,
-    ) -> Optional[int]:
+    ):
         """
         Store a response in the backend.
 

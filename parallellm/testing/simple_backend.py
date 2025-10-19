@@ -1,6 +1,10 @@
 from typing import Optional
 from parallellm.core.backend import BaseBackend
+from parallellm.core.backend.async_backend import AsyncBackend
+from parallellm.core.backend.batch_backend import BatchBackend
+from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.calls import _call_to_concise_dict
+from parallellm.core.datastore.base import Datastore
 from parallellm.types import CallIdentifier, ParsedResponse
 
 
@@ -31,3 +35,67 @@ class MockBackend(BaseBackend):
 
     def store(self, call_id: CallIdentifier, response: ParsedResponse):
         self._dict[tuple(_call_to_concise_dict(call_id).values())] = response
+
+
+class MockDatastore(Datastore):
+    """
+    Simple in-memory datastore for testing purposes.
+    """
+
+    def __init__(self, fm=None):
+        self._dict = {}
+
+    def retrieve(
+        self, call_id: CallIdentifier, metadata=False
+    ) -> Optional[ParsedResponse]:
+        """
+        Retrieve a response from the backend.
+
+        :param call_id: The task identifier containing agent_name, checkpoint, doc_hash, and seq_id.
+        :param metadata: Whether to include metadata in the response.
+        :returns: The retrieved response content.
+        """
+        return self._dict.get(tuple(_call_to_concise_dict(call_id).values()))
+
+    def retrieve_metadata(self, response_id: str) -> Optional[dict]:
+        """
+        Retrieve metadata from the backend using response_id.
+
+        :param response_id: The response ID to look up metadata for.
+        :returns: The retrieved metadata as a dictionary, or None if not found.
+        """
+        raise NotImplementedError
+
+    def store(
+        self,
+        call_id: CallIdentifier,
+        parsed_response: ParsedResponse,
+    ):
+        """
+        Store a response in the backend.
+
+        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
+        :param parsed_response: The parsed response object containing text, response_id, and metadata.
+        """
+        self._dict[tuple(_call_to_concise_dict(call_id).values())] = parsed_response
+
+    def persist(self) -> None:
+        """
+        Persist changes to file(s). Cleans up resources.
+        """
+        pass
+
+
+class MockSyncBackend(SyncBackend):
+    def __init__(self):
+        super().__init__(None, None, datastore_cls=MockDatastore)
+
+
+class MockAsyncBackend(AsyncBackend):
+    def __init__(self):
+        super().__init__(None, None, datastore_cls=MockDatastore)
+
+
+# class MockBatchBackend(BatchBackend):
+#     def __init__(self):
+#         super().__init__(None, None, datastore_cls=MockDatastore)

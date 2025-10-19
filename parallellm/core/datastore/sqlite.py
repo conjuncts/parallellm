@@ -344,13 +344,12 @@ class SQLiteDatastore(Datastore):
         self,
         call_id: CallIdentifier,
         parsed_response: "ParsedResponse",
-    ) -> Optional[int]:
+    ):
         """
         Store a response in SQLite.
 
         :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
         :param parsed_response: The parsed response object containing text, response_id, and metadata.
-        :returns: The seq_id where the response was stored.
         """
         checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
@@ -440,7 +439,6 @@ class SQLiteDatastore(Datastore):
 
             # Always commit immediately for thread safety
             conn.commit()
-            return seq_id
 
         except sqlite3.Error as e:
             conn.rollback()

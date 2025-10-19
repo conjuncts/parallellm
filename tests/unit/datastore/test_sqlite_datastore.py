@@ -47,8 +47,7 @@ class TestSQLite:
         )
 
         # Store the response
-        seq_id = temp_datastore.store(call_id, parsed_response)
-        assert seq_id == 1
+        temp_datastore.store(call_id, parsed_response)
 
         # Retrieve the response
         retrieved = temp_datastore.retrieve(call_id)
@@ -78,8 +77,7 @@ class TestSQLite:
         )
 
         # Store the response
-        seq_id = temp_datastore.store(call_id, parsed_response)
-        assert seq_id == 2
+        temp_datastore.store(call_id, parsed_response)
 
         # Retrieve the response
         retrieved = temp_datastore.retrieve(call_id)

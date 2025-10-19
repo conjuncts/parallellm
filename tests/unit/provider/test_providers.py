@@ -19,6 +19,7 @@ from parallellm.provider.openai import (
     AsyncOpenAIProvider,
 )
 from parallellm.core.backend.sync_backend import SyncBackend
+from parallellm.testing.simple_backend import MockSyncBackend, MockAsyncBackend
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.response import PendingLLMResponse, ReadyLLMResponse
 from parallellm.types import CallIdentifier, LLMDocument, ParsedResponse
@@ -32,100 +33,6 @@ pytest.skip("Not very informative", allow_module_level=True)
 _fix_docs_for_openai = lambda *args, **kwargs: SyncOpenAIProvider._fix_docs_for_openai(
     None, *args, **kwargs
 )
-
-
-class MockSyncBackend:
-    """Mock sync backend that actually executes sync functions"""
-
-    def __init__(self):
-        self.stored_responses = {}
-        self.call_history = []
-
-    def submit_sync_call(
-        self, call_id: CallIdentifier, sync_function: Callable[[], Any]
-    ) -> Tuple[Any, str, Dict]:
-        """Execute the sync function and return result like a real backend"""
-        self.call_history.append(call_id)
-
-        # Check if we have a cached response
-        cache_key = self._get_cache_key(call_id)
-        if cache_key in self.stored_responses:
-            return self.stored_responses[cache_key]
-
-        # Execute the function and store result
-        try:
-            result = sync_function()
-            response_data = (
-                result["output_text"],
-                f"resp_{len(self.call_history)}",
-                {"metadata": "test"},
-            )
-            self.stored_responses[cache_key] = response_data
-            return response_data
-        except Exception as e:
-            raise e
-
-    def retrieve(self, call_id: CallIdentifier, metadata=False) -> Any:
-        """Retrieve cached response if available"""
-        cache_key = self._get_cache_key(call_id)
-        if cache_key in self.stored_responses:
-            response_text, response_id, response_metadata = self.stored_responses[
-                cache_key
-            ]
-            return ParsedResponse(
-                text=response_text,
-                response_id=response_id,
-                metadata=response_metadata if metadata else None,
-            )
-        return None
-
-    def _get_cache_key(self, call_id: CallIdentifier) -> str:
-        """Generate cache key from call_id"""
-        return f"{call_id['agent_name']}_{call_id['checkpoint']}_{call_id['doc_hash']}_{call_id['seq_id']}"
-
-
-class MockAsyncBackend:
-    """Mock async backend that properly handles coroutines"""
-
-    def __init__(self):
-        self.pending_calls = {}
-        self.completed_calls = {}
-        self.call_history = []
-
-    def submit_coro(self, call_id: CallIdentifier, coro) -> None:
-        """Store coroutine for later execution"""
-        self.call_history.append(call_id)
-        self.pending_calls[self._get_cache_key(call_id)] = coro
-
-    async def resolve_call(self, call_id: CallIdentifier) -> Any:
-        """Resolve a pending coroutine (simulates what PendingLLMResponse.resolve() would do)"""
-        cache_key = self._get_cache_key(call_id)
-        if cache_key in self.completed_calls:
-            return self.completed_calls[cache_key]
-
-        if cache_key in self.pending_calls:
-            coro = self.pending_calls[cache_key]
-            result = await coro
-            response_text = (
-                result["output_text"] if isinstance(result, dict) else str(result)
-            )
-            self.completed_calls[cache_key] = response_text
-            del self.pending_calls[cache_key]
-            return response_text
-
-        raise ValueError(f"No pending call for {call_id}")
-
-    def retrieve(self, call_id: CallIdentifier, metadata=False) -> Any:
-        """Retrieve cached response if available"""
-        cache_key = self._get_cache_key(call_id)
-        response_text = self.completed_calls.get(cache_key)
-        if response_text is not None:
-            return ParsedResponse(text=response_text, response_id=None, metadata=None)
-        return None
-
-    def _get_cache_key(self, call_id: CallIdentifier) -> str:
-        """Generate cache key from call_id"""
-        return f"{call_id['agent_name']}_{call_id['checkpoint']}_{call_id['doc_hash']}_{call_id['seq_id']}"
 
 
 @pytest.fixture
