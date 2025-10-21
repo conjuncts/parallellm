@@ -131,6 +131,5 @@ class CommonQueryParameters(TypedDict):
     instructions: Optional[str]
     documents: Union[LLMDocument, List[LLMDocument]]
     llm: "LLMIdentity"
-    _hoist_images: Optional[bool]
     text_format: Optional[str]
     tools: Optional[List[dict]]

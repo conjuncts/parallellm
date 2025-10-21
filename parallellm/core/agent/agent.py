@@ -176,7 +176,6 @@ class AgentContext:
         llm: Union[LLMIdentity, str, None] = None,
         salt: Optional[str] = None,
         hash_by: Optional[List[Literal["llm"]]] = None,
-        _hoist_images=None,
         text_format: Optional[str] = None,
         tools: Optional[list] = None,
         **kwargs,
@@ -192,8 +191,6 @@ class AgentContext:
         :param salt: A value to include in the hash for differentiation.
         :param hash_by: The names of additional terms to include in the hash for differentiation.
             Example: "llm" will also include the LLM name.
-        :param _hoist_images: Gemini recommends that images be hoisted to the front of the message.
-            Set to True/False to explicitly enforce/disable.
         :param text_format: Schema or format specification for structured output.
             For OpenAI: uses structured output via responses.parse().
             For Google: sets response_mime_type and response_schema.
@@ -268,7 +265,6 @@ class AgentContext:
             "instructions": instructions,
             "documents": documents,
             "llm": llm,
-            "_hoist_images": _hoist_images,
             "text_format": text_format,
             "tools": tools,
         }
