@@ -5,7 +5,12 @@ from parallellm.core.response import ReadyLLMResponse
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
 from parallellm.provider.schemas import guess_schema
-from parallellm.types import CallIdentifier, ParsedResponse
+from parallellm.types import (
+    CallIdentifier,
+    CommonQueryParameters,
+    ParsedResponse,
+    CommonQueryParameters,
+)
 
 if TYPE_CHECKING:
     from parallellm.provider.base import SyncProvider
@@ -38,14 +43,9 @@ class SyncBackend(BaseBackend):
     def submit_query(
         self,
         provider: "SyncProvider",
-        instructions,
-        documents,
+        params: CommonQueryParameters,
         *,
         call_id: CallIdentifier,
-        llm,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
-        tools=None,
         **kwargs,
     ):
         """
@@ -64,12 +64,7 @@ class SyncBackend(BaseBackend):
 
             # The below function typically calls the LLM
             result = provider.prepare_sync_call(
-                instructions,
-                documents,
-                llm=llm,
-                _hoist_images=_hoist_images,
-                text_format=text_format,
-                tools=tools,
+                params,
                 **kwargs,
             )
             if self._dash_logger is not None:

@@ -1,7 +1,10 @@
 from dataclasses import dataclass
-from typing import List, Literal, TypedDict, Optional, Union, Tuple
+from typing import TYPE_CHECKING, List, Literal, TypedDict, Optional, Union, Tuple
 
 from PIL import Image
+
+if TYPE_CHECKING:
+    from parallellm.core.identity import LLMIdentity
 
 
 class AgentMetadata(TypedDict):
@@ -118,3 +121,16 @@ class ParsedResponse:
     def __iter__(self):
         """Allow unpacking into tuple for backward compatibility."""
         return iter((self.text, self.response_id, self.metadata))
+
+
+class CommonQueryParameters(TypedDict):
+    """
+    Common parameters for LLM calls across providers.
+    """
+
+    instructions: Optional[str]
+    documents: Union[LLMDocument, List[LLMDocument]]
+    llm: "LLMIdentity"
+    _hoist_images: Optional[bool]
+    text_format: Optional[str]
+    tools: Optional[List[dict]]

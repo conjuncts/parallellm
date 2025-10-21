@@ -10,7 +10,12 @@ from parallellm.core.response import (
     ReadyLLMResponse,
 )
 from parallellm.logging.dash_logger import HashStatus
-from parallellm.types import AskParameters, CallIdentifier, LLMDocument
+from parallellm.types import (
+    AskParameters,
+    CallIdentifier,
+    CommonQueryParameters,
+    LLMDocument,
+)
 
 if TYPE_CHECKING:
     from parallellm.core.agent.orchestrator import AgentOrchestrator
@@ -258,16 +263,21 @@ class AgentContext:
                 + f" with provider {self._bm._provider.provider_type}"
             )
 
+        # Create CommonQueryParameters dict
+        params: CommonQueryParameters = {
+            "instructions": instructions,
+            "documents": documents,
+            "llm": llm,
+            "_hoist_images": _hoist_images,
+            "text_format": text_format,
+            "tools": tools,
+        }
+
         # Not cached, submit via backend (inverted control flow)
         return self._bm._backend.submit_query(
             self._bm._provider,
-            instructions,
-            documents,
+            params,
             call_id=call_id,
-            llm=llm,
-            _hoist_images=_hoist_images,
-            text_format=text_format,
-            tools=tools,
             **kwargs,
         )
 

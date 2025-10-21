@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, List, Optional, Union
 from pydantic import BaseModel
 from parallellm.core.identity import LLMIdentity
 from parallellm.provider.base import AsyncProvider, BaseProvider, SyncProvider
-from parallellm.types import ParsedResponse
+from parallellm.types import ParsedResponse, CommonQueryParameters
 from parallellm.types import CallIdentifier, LLMDocument
 
 if TYPE_CHECKING:
@@ -127,16 +127,15 @@ class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
 
     def prepare_sync_call(
         self,
-        instructions,
-        documents: Union[LLMDocument, List[LLMDocument]] = [],
-        *,
-        llm: LLMIdentity,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
-        tools=None,
+        params: CommonQueryParameters,
         **kwargs,
     ):
         """Prepare a synchronous callable for Anthropic API"""
+        instructions = params["instructions"]
+        documents = params["documents"]
+        llm = params["llm"]
+        tools = params.get("tools")
+
         messages = _fix_docs_for_anthropic(documents)
 
         # Add system instruction if provided
@@ -159,16 +158,15 @@ class AsyncAnthropicProvider(AsyncProvider, AnthropicProvider):
 
     def prepare_async_call(
         self,
-        instructions,
-        documents: Union[LLMDocument, List[LLMDocument]] = [],
-        *,
-        llm: LLMIdentity,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
-        tools=None,
+        params: CommonQueryParameters,
         **kwargs,
     ):
         """Prepare an async coroutine for Anthropic API"""
+        instructions = params["instructions"]
+        documents = params["documents"]
+        llm = params["llm"]
+        tools = params.get("tools")
+
         messages = _fix_docs_for_anthropic(documents)
 
         # Add system instruction if provided

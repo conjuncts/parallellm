@@ -1,6 +1,6 @@
 from typing import Optional
 from parallellm.provider.base import BaseProvider
-from parallellm.types import CallIdentifier, ParsedResponse
+from parallellm.types import CallIdentifier, CommonQueryParameters, ParsedResponse
 
 
 class BaseBackend:
@@ -32,14 +32,9 @@ class BaseBackend:
     def submit_query(
         self,
         provider: BaseProvider,
-        instructions: Optional[str],
-        documents,
+        params: CommonQueryParameters,
         *,
         call_id: CallIdentifier,
-        llm,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
-        tools=None,
         **kwargs,
     ):
         raise NotImplementedError

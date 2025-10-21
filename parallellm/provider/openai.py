@@ -15,6 +15,7 @@ from parallellm.types import (
     BatchResult,
     BatchStatus,
     CallIdentifier,
+    CommonQueryParameters,
     LLMDocument,
     ParsedResponse,
 )
@@ -127,16 +128,14 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
 
     def prepare_sync_call(
         self,
-        instructions,
-        documents: Union[LLMDocument, List[LLMDocument]] = [],
-        *,
-        llm: LLMIdentity,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
+        params: CommonQueryParameters,
         **kwargs,
     ):
         """Prepare a synchronous callable for OpenAI API"""
-        documents = self._fix_docs_for_openai(documents)
+        instructions = params["instructions"]
+        documents = self._fix_docs_for_openai(params["documents"])
+        llm = params["llm"]
+        text_format = params.get("text_format")
 
         if text_format is not None:
             return self.client.responses.parse(
@@ -171,16 +170,14 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
 
     def prepare_async_call(
         self,
-        instructions,
-        documents: Union[LLMDocument, List[LLMDocument]] = [],
-        *,
-        llm: LLMIdentity,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
+        params: CommonQueryParameters,
         **kwargs,
     ):
         """Prepare an async coroutine for OpenAI API"""
-        documents = self._fix_docs_for_openai(documents)
+        instructions = params["instructions"]
+        documents = self._fix_docs_for_openai(params["documents"])
+        llm = params["llm"]
+        text_format = params.get("text_format")
 
         if text_format is not None:
             coro = self.client.responses.parse(
@@ -207,14 +204,14 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
 
     def _turn_to_openai_batch(
         self,
-        instructions,
-        fixed_documents: List[LLMDocument],
-        *,
-        llm: LLMIdentity,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
+        params: CommonQueryParameters,
         **kwargs,
     ):
+        instructions = params["instructions"]
+        fixed_documents = self._fix_docs_for_openai(params["documents"])
+        llm = params["llm"]
+        text_format = params.get("text_format")
+
         if text_format is not None:
             if "text" not in kwargs:
                 kwargs["text"] = {}
@@ -240,23 +237,12 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
 
     def prepare_batch_call(
         self,
-        instructions,
-        documents: Union[LLMDocument, List[LLMDocument]] = [],
-        *,
-        llm: LLMIdentity,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
+        params: CommonQueryParameters,
         **kwargs,
     ):
         """Prepare batch call data for OpenAI"""
-        documents = self._fix_docs_for_openai(documents)
-
         return self._turn_to_openai_batch(
-            instructions,
-            documents,
-            llm=llm,
-            _hoist_images=_hoist_images,
-            text_format=text_format,
+            params,
             **kwargs,
         )
 

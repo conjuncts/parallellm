@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, List, Optional, Union
 from pydantic import BaseModel
 from parallellm.core.identity import LLMIdentity
 from parallellm.provider.base import AsyncProvider, BaseProvider, SyncProvider
-from parallellm.types import ParsedResponse
+from parallellm.types import ParsedResponse, CommonQueryParameters
 from parallellm.types import CallIdentifier, LLMDocument
 
 from google import genai
@@ -135,16 +135,16 @@ class SyncGoogleProvider(SyncProvider, GoogleProvider):
 
     def prepare_sync_call(
         self,
-        instructions,
-        documents: Union[LLMDocument, List[LLMDocument]] = [],
-        *,
-        llm: LLMIdentity,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
-        tools=None,
+        params: CommonQueryParameters,
         **kwargs,
     ):
         """Prepare a synchronous callable for Gemini API"""
+        instructions = params["instructions"]
+        documents = params["documents"]
+        llm = params["llm"]
+        text_format = params.get("text_format")
+        tools = params.get("tools")
+
         contents = _fix_docs_for_google(documents)
 
         config = kwargs.copy()
@@ -172,16 +172,16 @@ class AsyncGoogleProvider(AsyncProvider, GoogleProvider):
 
     def prepare_async_call(
         self,
-        instructions,
-        documents: Union[LLMDocument, List[LLMDocument]] = [],
-        *,
-        llm: LLMIdentity,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
-        tools=None,
+        params: CommonQueryParameters,
         **kwargs,
     ):
         """Prepare an async coroutine for Gemini API"""
+        instructions = params["instructions"]
+        documents = params["documents"]
+        llm = params["llm"]
+        text_format = params.get("text_format")
+        tools = params.get("tools")
+
         contents = _fix_docs_for_google(documents)
 
         # Prepare generation config with system instructions

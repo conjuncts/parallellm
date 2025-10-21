@@ -10,7 +10,12 @@ from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.response import PendingLLMResponse
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus
-from parallellm.types import CallIdentifier, ParsedResponse, ParsedResponse
+from parallellm.types import (
+    CallIdentifier,
+    CommonQueryParameters,
+    ParsedResponse,
+    CommonQueryParameters,
+)
 
 if TYPE_CHECKING:
     from parallellm.provider.base import AsyncProvider
@@ -107,28 +112,19 @@ class AsyncBackend(BaseBackend):
     def submit_query(
         self,
         provider: "AsyncProvider",
-        instructions,
-        documents,
+        params: CommonQueryParameters,
         *,
         call_id: CallIdentifier,
-        llm,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
-        tools=None,
         **kwargs,
     ):
         """
         New control flow: Backend calls provider to get coroutine, then executes it.
         This inverts control from provider calling backend.
         """
+
         # Get the coroutine from the provider
         coro = provider.prepare_async_call(
-            instructions,
-            documents,
-            llm=llm,
-            _hoist_images=_hoist_images,
-            text_format=text_format,
-            tools=tools,
+            params,
             **kwargs,
         )
 

@@ -14,6 +14,7 @@ from parallellm.types import (
     BatchResult,
     BatchStatus,
     CallIdentifier,
+    CommonQueryParameters,
     CohortIdentifier,
     ParsedResponse,
 )
@@ -55,14 +56,9 @@ class BatchBackend(BaseBackend):
     def submit_query(
         self,
         provider: "BatchProviderType",
-        instructions,
-        documents,
+        params: CommonQueryParameters,
         *,
         call_id: CallIdentifier,
-        llm,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
-        tools=None,
         **kwargs,
     ):
         """
@@ -80,19 +76,14 @@ class BatchBackend(BaseBackend):
 
         # Get the batch call data from the provider
         stuff = provider.prepare_batch_call(
-            instructions,
-            documents,
-            llm=llm,
-            _hoist_images=_hoist_images,
-            text_format=text_format,
-            tools=tools,
+            params,
             **kwargs,
         )
 
         # Bookkeep the call
         self.bookkeep_call(
             call_id,
-            llm,
+            params["llm"],
             stuff=stuff,
             auto_assign_id="custom_id",
         )

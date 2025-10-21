@@ -6,6 +6,7 @@ from parallellm.types import (
     BatchIdentifier,
     BatchResult,
     CallIdentifier,
+    CommonQueryParameters,
     LLMDocument,
     ProviderType,
     ParsedResponse,
@@ -37,17 +38,13 @@ class BaseProvider:
 class SyncProvider(BaseProvider):
     def prepare_sync_call(
         self,
-        instructions,
-        documents: Union[LLMDocument, List[LLMDocument]] = [],
-        *,
-        llm: LLMIdentity,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
+        params: CommonQueryParameters,
         **kwargs,
     ):
         """
         Eagerly makes the API call.
 
+        :param params: Common query parameters containing instructions, documents, llm, etc.
         :return: Raw response from the API call
         """
         raise NotImplementedError
@@ -56,17 +53,13 @@ class SyncProvider(BaseProvider):
 class AsyncProvider(BaseProvider):
     def prepare_async_call(
         self,
-        instructions,
-        documents: Union[LLMDocument, List[LLMDocument]] = [],
-        *,
-        llm: LLMIdentity,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
+        params: CommonQueryParameters,
         **kwargs,
     ):
         """
         Prepare an async coroutine for the backend to execute.
 
+        :param params: Common query parameters containing instructions, documents, llm, etc.
         :return: A coroutine that when awaited will make the API call and return the raw response
         """
         raise NotImplementedError
@@ -75,17 +68,13 @@ class AsyncProvider(BaseProvider):
 class BatchProvider(BaseProvider):
     def prepare_batch_call(
         self,
-        instructions,
-        documents: Union[LLMDocument, List[LLMDocument]] = [],
-        *,
-        llm: LLMIdentity,
-        _hoist_images=None,
-        text_format: Optional[str] = None,
+        params: CommonQueryParameters,
         **kwargs,
     ):
         """
         Prepare batch call data for the backend to bookkeep.
 
+        :param params: Common query parameters containing instructions, documents, llm, etc.
         :return: A dict/object representing the batch request format for this provider
         """
         raise NotImplementedError
