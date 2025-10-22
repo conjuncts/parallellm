@@ -9,8 +9,6 @@ Better errors when a bad request (ie. openai.BadRequest) is made
 explicitly not-agentic philosophy (more of an input/output machine) although agents / responsibility isolation can be implemented with LLMIdentity
 
 
-- [x] fix if checkpoint name is invalid name for folder
-- [x] store session id
 - [x] difference between checkpoint-control and non-checkpoint-control
 - [x] different execution counters
 - [x] condition_hash (salt-by)
@@ -22,8 +20,8 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 - [ ] right now, (for batch) bookkeep_call() is the one that emits an error if a value is pending but not available, but this seems unelegant and should probably be moved out
 - [ ] "cohort locking": for consistency, if seq_id is "strict" (if we really care that seq_id is consistent across runs), then we need to "lock" based on cohort (wait until all batches in a cohort complete. This can be implemented simply by refusing to proceed - ie. ).
     - this is like a rendezvous in threading
-
 - [x] Automatically persist upon pllm exit
+- [ ] resolve_tool_calls() should have a flag to json (also prevents unnecessary json load/unload)
 
 | Plain Completions | Sync | Async | Batch |
 | --- | --- | --- | --- |

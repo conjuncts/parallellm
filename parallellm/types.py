@@ -116,7 +116,7 @@ class ParsedResponse:
     metadata: Optional[dict]
     """Additional metadata from the provider (usage stats, model info, etc.)."""
 
-    tool_calls: Optional[List[Tuple[str, str, str]]] = None
+    tool_calls: Optional[List[Tuple[str, Union[str, dict], str]]] = None
 
     def __iter__(self):
         """Allow unpacking into tuple for backward compatibility."""

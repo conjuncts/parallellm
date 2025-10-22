@@ -11,7 +11,7 @@ class MyModel(BaseModel):
     final_answer: str
 
 
-tools_openai = [
+tools = [
     {
         "type": "function",
         "name": "count_files",
@@ -29,34 +29,19 @@ tools_openai = [
     }
 ]
 
-tools_anthropic = [
-    {
-        "name": "count_files",
-        "description": "Count the number of files in a directory.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "directory": {
-                    "type": "string",
-                    "description": "The path to the directory to count files in.",
-                },
-            },
-            "required": ["directory"],
-        },
-    }
-]
 
-tools_google = [x.copy() for x in tools_openai]
-[x.pop("type") for x in tools_google]
+def ls_tool(directory) -> str:
+    return f"There are 4 files in {directory}."
+
 
 with ParalleLLM.resume_directory(
     ".pllm/simplest-tool",
     # ".temp",
-    provider="google",  #
+    provider="anthropic",  #
     strategy="sync",
     log_level=logging.DEBUG,
     user_confirmation=True,
-    # ignore_cache=True,
+    ignore_cache=True,
 ) as pllm:
     with pllm.agent(dashboard=True) as dash:
         # Structured output
@@ -65,16 +50,48 @@ with ParalleLLM.resume_directory(
         # )
 
         # Tools
+        msgs = ["How many files are in '~/examples'?"]
         resp = dash.ask_llm(
-            "How many files are in '~/examples'?",
+            msgs,
             hash_by=["llm"],
-            tools=tools_google,
+            tools=tools,
         )
 
         dash.print(resp.resolve())
-        for name, args, call_id in resp.resolve_tool_calls():
+        tool_calls = resp.resolve_tool_calls(to_dict=False)
+        for name, args, call_id in tool_calls:
             dash.print(f"Tool call: `{name}` with args {args} call_id {call_id}")
 
+        assert len(tool_calls) == 1
+        assert tool_calls[0][0] == "count_files"
+
+        # openai
+        # https://platform.openai.com/docs/guides/function-calling#custom-tools
+        # computed_tool_output = {
+        #     "type": "function_call_output",
+        #     "call_id": tool_calls[0][2],
+        #     "output": ls_tool(tool_calls[0][1]),
+        # }
+
+        # anthropic
+        # https://docs.claude.com/en/docs/agents-and-tools/tool-use/implement-tool-use
+        # computed_tool_output = {
+        #     "role": "user",
+        #     "content": [
+        #         {
+        #             "type": "tool_result",
+        #             "tool_use_id": tool_calls[0][2],
+        #             "output": ls_tool(tool_calls[0][1]),
+        #         },
+        #         {
+        #             "type": "text",
+        #             "text": "What should I do next?",
+        #         },  # ✅ Text after tool_result
+        #     ],
+        # }
+
+        # resp = dash.ask_llm(msgs + [computed_tool_output], hash_by=["llm"])
+        # dash.print(resp.resolve())
         # Should respond by putting it in:
         # - function_call_output (openai)
         # - tool_result (anthropic)

@@ -56,6 +56,9 @@ def _prepare_anthropic_config(params: CommonQueryParameters, **kwargs) -> tuple:
     llm = params["llm"]
     tools = params.get("tools")
 
+    if tools:
+        tools = _prepare_tool_schema(tools)
+
     messages = _fix_docs_for_anthropic(documents)
 
     config = kwargs.copy()
@@ -65,6 +68,28 @@ def _prepare_anthropic_config(params: CommonQueryParameters, **kwargs) -> tuple:
     model_name = llm.model_name
 
     return model_name, messages, tools, config
+
+
+def _prepare_tool_schema(func_schemas: List[dict]) -> List[dict]:
+    """Convert tool definitions to Anthropic tool schema"""
+
+    anthropic_tools = []
+    for sch in func_schemas:
+        sch2 = None
+        if "type" in sch:
+            # remove type field (used by openai)
+            sch2 = sch.copy()
+            sch2.pop("type")
+
+        if "parameters" in sch:
+            sch2 = sch2 or sch.copy()
+            # rename parameters to input_schema
+            sch2["input_schema"] = sch2.pop("parameters")
+
+        if sch2 is not None:
+            sch = sch2
+        anthropic_tools.append(sch)
+    return anthropic_tools
 
 
 class AnthropicProvider(BaseProvider):

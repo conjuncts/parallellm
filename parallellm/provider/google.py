@@ -130,7 +130,8 @@ class GoogleProvider(BaseProvider):
                         (
                             func_call.name,
                             # a bit annoying because we're doing str -> dict -> str -> dict
-                            json.dumps(func_call.args),
+                            # json.dumps(func_call.args),
+                            func_call.args,
                             func_call.id,
                         )
                     )

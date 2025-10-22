@@ -31,17 +31,27 @@ class LLMResponse:
         value = self.resolve()
         return json.loads(value)
 
-    def resolve_tool_calls(self) -> list[tuple[str, str, str]]:
+    def resolve_tool_calls(self, to_dict=False) -> list[tuple[str, str, str]]:
         """
         Resolve the tool calls associated with this response.
 
+        :param to_dict: Whether to parse the tool calls into dictionaries
         :returns: A list of tool calls (tool_name, inputs, call_id)
         """
         if self._pr and self._pr.tool_calls:
-            # return [{
-            #     "tool_name": name,
-            #     "inputs": inputs
-            # } for name, inputs in self._pr.tool_calls]
+            # cast and jsonify if needed
+            if self._pr.tool_calls:
+                _, item, _ = self._pr.tool_calls[0]
+                if to_dict and isinstance(item, str):
+                    return [
+                        (name, json.loads(inputs), call_id)
+                        for name, inputs, call_id in self._pr.tool_calls
+                    ]
+                elif not to_dict and isinstance(item, dict):
+                    return [
+                        (name, inputs, call_id)
+                        for name, inputs, call_id in self._pr.tool_calls
+                    ]
             return self._pr.tool_calls
         return []
 
