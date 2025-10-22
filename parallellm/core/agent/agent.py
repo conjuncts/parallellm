@@ -269,7 +269,6 @@ class AgentContext:
             "tools": tools,
         }
 
-        # Not cached, submit via backend (inverted control flow)
         return self._bm._backend.submit_query(
             self._bm._provider,
             params,

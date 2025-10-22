@@ -21,7 +21,7 @@ class ParalleLLMGateway:
         log_level=logging.INFO,
         ignore_cache=False,
         user_confirmation=False,
-    ):
+    ) -> AgentOrchestrator:
         """
         Resume an AgentOrchestrator from a previously saved directory.
 

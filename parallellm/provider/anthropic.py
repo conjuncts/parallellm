@@ -49,6 +49,24 @@ def _fix_docs_for_anthropic(
     return formatted_docs
 
 
+def _prepare_anthropic_config(params: CommonQueryParameters, **kwargs) -> tuple:
+    """Prepare config and messages for Anthropic API calls"""
+    instructions = params["instructions"]
+    documents = params["documents"]
+    llm = params["llm"]
+    tools = params.get("tools")
+
+    messages = _fix_docs_for_anthropic(documents)
+
+    config = kwargs.copy()
+    if instructions:
+        config["system"] = instructions
+
+    model_name = llm.model_name
+
+    return model_name, messages, tools, config
+
+
 class AnthropicProvider(BaseProvider):
     provider_type: str = "anthropic"
 
@@ -131,20 +149,12 @@ class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
         **kwargs,
     ):
         """Prepare a synchronous callable for Anthropic API"""
-        instructions = params["instructions"]
-        documents = params["documents"]
-        llm = params["llm"]
-        tools = params.get("tools")
-
-        messages = _fix_docs_for_anthropic(documents)
-
-        # Add system instruction if provided
-        config = kwargs.copy()
-        if instructions:
-            config["system"] = instructions
+        model_name, messages, tools, config = _prepare_anthropic_config(
+            params, **kwargs
+        )
 
         return self.client.messages.create(
-            model=llm.model_name,
+            model=model_name,
             max_tokens=config.pop("max_tokens", 4096),
             messages=messages,
             tools=tools,
@@ -162,20 +172,12 @@ class AsyncAnthropicProvider(AsyncProvider, AnthropicProvider):
         **kwargs,
     ):
         """Prepare an async coroutine for Anthropic API"""
-        instructions = params["instructions"]
-        documents = params["documents"]
-        llm = params["llm"]
-        tools = params.get("tools")
-
-        messages = _fix_docs_for_anthropic(documents)
-
-        # Add system instruction if provided
-        config = kwargs.copy()
-        if instructions:
-            config["system"] = instructions
+        model_name, messages, tools, config = _prepare_anthropic_config(
+            params, **kwargs
+        )
 
         coro = self.client.messages.create(
-            model=llm.model_name,
+            model=model_name,
             max_tokens=config.pop("max_tokens", 1024),
             messages=messages,
             tools=tools,

@@ -58,6 +58,53 @@ def _fix_docs_for_google(
     return formatted_docs
 
 
+def _prepare_tool_schema(func_schemas: List[dict]) -> List[types.Tool]:
+    """Convert tool definitions to Google Tool schema"""
+
+    # if not isinstance(tools[0], types.Tool):
+    #     tools = [types.Tool(function_declarations=[tool]) for tool in tools]
+    google_tools = []
+    for sch in func_schemas:
+        if isinstance(sch, types.Tool):
+            google_tools.append(sch)
+            continue
+        if "type" in sch:
+            # remove type field (used by openai)
+            sch = sch.copy()
+            sch.pop("type")
+
+        # function_declarations = [types.FunctionDeclaration(**tool)]
+        google_tool = types.Tool(function_declarations=[sch])
+        google_tools.append(google_tool)
+    return google_tools
+
+
+def _prepare_google_config(params: CommonQueryParameters, **kwargs) -> tuple:
+    """Prepare config and contents for Google API calls"""
+    instructions = params["instructions"]
+    documents = params["documents"]
+    llm = params["llm"]
+    text_format = params.get("text_format")
+    tools = params.get("tools")
+
+    contents = _fix_docs_for_google(documents)
+
+    config = kwargs.copy()
+    if instructions:
+        config["system_instruction"] = instructions
+
+    if text_format is not None:
+        config["response_mime_type"] = "application/json"
+        config["response_schema"] = text_format
+
+    if tools:
+        config["tools"] = _prepare_tool_schema(tools)
+
+    model_name = llm.model_name if llm else "gemini-2.5-flash"
+
+    return model_name, contents, config
+
+
 class GoogleProvider(BaseProvider):
     provider_type: str = "google"
 
@@ -139,28 +186,10 @@ class SyncGoogleProvider(SyncProvider, GoogleProvider):
         **kwargs,
     ):
         """Prepare a synchronous callable for Gemini API"""
-        instructions = params["instructions"]
-        documents = params["documents"]
-        llm = params["llm"]
-        text_format = params.get("text_format")
-        tools = params.get("tools")
+        model_name, contents, config = _prepare_google_config(params, **kwargs)
 
-        contents = _fix_docs_for_google(documents)
-
-        config = kwargs.copy()
-        if instructions:
-            config["system_instruction"] = instructions
-
-        if text_format is not None:
-            config["response_mime_type"] = "application/json"
-            config["response_schema"] = text_format
-
-        if tools:
-            if not isinstance(tools[0], types.Tool):
-                tools = [types.Tool(function_declarations=[tool]) for tool in tools]
-            config["tools"] = tools
         return self.client.models.generate_content(
-            model=llm.model_name if llm else "gemini-2.5-flash",
+            model=model_name,
             contents=contents,
             config=config,
         )
@@ -176,30 +205,10 @@ class AsyncGoogleProvider(AsyncProvider, GoogleProvider):
         **kwargs,
     ):
         """Prepare an async coroutine for Gemini API"""
-        instructions = params["instructions"]
-        documents = params["documents"]
-        llm = params["llm"]
-        text_format = params.get("text_format")
-        tools = params.get("tools")
-
-        contents = _fix_docs_for_google(documents)
-
-        # Prepare generation config with system instructions
-        config = kwargs.copy()
-        if instructions:
-            config["system_instruction"] = instructions
-
-        if text_format is not None:
-            config["response_mime_type"] = "application/json"
-            config["response_schema"] = text_format
-
-        if tools:
-            if not isinstance(tools[0], types.Tool):
-                tools = [types.Tool(function_declarations=tool) for tool in tools]
-            config["tools"] = tools
+        model_name, contents, config = _prepare_google_config(params, **kwargs)
 
         coro = self.client.aio.models.generate_content(
-            model=llm.model_name if llm else "gemini-2.5-flash",
+            model=model_name,
             contents=contents,
             config=config,
         )
