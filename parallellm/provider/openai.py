@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from openai.types.responses.response_input_param import Message
     from openai.types.responses.response import Response
 
+from openai.types.responses.response_function_tool_call import ResponseFunctionToolCall
+
 
 class OpenAIProvider(BaseProvider):
     provider_type: str = "openai"
@@ -37,23 +39,48 @@ class OpenAIProvider(BaseProvider):
         if not isinstance(documents, list):
             documents = [documents]
 
-        documents = documents.copy()
-        for i, doc in enumerate(documents):
+        formatted_docs = []
+        for doc in documents:
             if isinstance(doc, str):
                 msg: "Message" = {
                     "role": "user",
                     "content": doc,
                 }
-                documents[i] = msg
+                formatted_docs.append(msg)
             elif isinstance(doc, tuple) and len(doc) == 2:
                 # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
+                # Valid roles for OpenAI are:
+                # from openai.types.responses.response_input_param import Message
+                # from openai.types.responses.response_output_message_param import ResponseOutputMessageParam
                 role, content = doc
-                msg: "Message" = {
-                    "role": role,
-                    "content": content,
-                }
-                documents[i] = msg
-        return documents
+
+                if role == "function_call":
+                    for call in content:
+                        formatted_docs.append(
+                            ResponseFunctionToolCall(
+                                name=call[0],
+                                arguments=call[1],
+                                call_id=call[2],
+                                type="function_call",
+                            )
+                        )
+                elif role == "function_call_output":
+                    stuff, call_id = content
+                    msg = {
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": stuff,
+                    }
+                    formatted_docs.append(msg)
+                else:
+                    msg: "Message" = {
+                        "role": role,
+                        "content": content,
+                    }
+                    formatted_docs.append(msg)
+            else:
+                raise ValueError(f"Unsupported document type: {type(doc)}")
+        return formatted_docs
 
     def get_default_llm_identity(self) -> LLMIdentity:
         return LLMIdentity("gpt-4.1-nano", provider=self.provider_type)
@@ -143,6 +170,7 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
                 instructions=instructions,
                 input=documents,
                 text_format=text_format,
+                tools=params.get("tools"),
                 **kwargs,
             )
 
@@ -160,6 +188,7 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
             model=llm.model_name,
             instructions=instructions,
             input=documents,
+            tools=params.get("tools"),
             **kwargs,
         )
 
@@ -185,6 +214,7 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
                 instructions=instructions,
                 input=documents,
                 text_format=text_format,
+                tools=params.get("tools"),
                 **kwargs,
             )
         else:
@@ -192,6 +222,7 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
                 model=llm.model_name,
                 instructions=instructions,
                 input=documents,
+                tools=params.get("tools"),
                 **kwargs,
             )
 

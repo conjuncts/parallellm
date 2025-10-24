@@ -1,0 +1,42 @@
+# Tools
+
+To see the diverse formats that need support:
+
+
+```python
+# openai
+# https://platform.openai.com/docs/guides/function-calling#custom-tools
+computed_tool_output = {
+    "type": "function_call_output",
+    "call_id": tool_calls[0][2],
+    "output": ls_tool(tool_calls[0][1]),
+}
+
+# anthropic
+# https://docs.claude.com/en/docs/agents-and-tools/tool-use/implement-tool-use
+computed_tool_output = {
+    "role": "user",
+    "content": [
+        {
+            "type": "tool_result",
+            "tool_use_id": tool_calls[0][2],
+            "output": ls_tool(tool_calls[0][1]),
+        },
+        {
+            "type": "text",
+            "text": "What should I do next?",
+        },  # ✅ Text after tool_result
+    ],
+}
+
+# gemini
+# https://ai.google.dev/gemini-api/docs/function-calling?example=meeting
+function_response_part = types.Part.from_function_response(
+    name=tool_call.name,
+    response={"result": result},
+)
+
+# Append function call and result of the function execution to contents
+contents.append(response.candidates[0].content) # Append the content from the model's response.
+contents.append(types.Content(role="user", parts=[function_response_part])) # Append the function response
+```

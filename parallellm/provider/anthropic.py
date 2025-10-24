@@ -25,27 +25,51 @@ def _fix_docs_for_anthropic(
                 "content": doc,
             }
             formatted_docs.append(msg)
+            continue
         elif isinstance(doc, tuple) and len(doc) == 2:
             # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
             role, content = doc
-            msg = {
-                "role": role,
-                "content": content,
-            }
+            if role == "function_call":
+                msg = {
+                    "role": "assistant",
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "name": call[0],
+                            "input": call[1],
+                            "id": call[2],
+                        }
+                        for call in content
+                    ],
+                }
+            elif role == "function_call_output":
+                output, call_id = content
+                msg = {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": call_id,
+                            "content": output,
+                        }
+                    ],
+                }
+            else:
+                msg = {
+                    "role": role,
+                    "content": content,
+                }
             formatted_docs.append(msg)
+            continue
         elif isinstance(doc, dict):
             # If it's already a proper message dict, keep it
             if "role" in doc and "content" in doc:
                 formatted_docs.append(doc)
-            elif "content" in doc:
-                formatted_docs.append({"role": "user", "content": doc["content"]})
-            elif "text" in doc:
-                formatted_docs.append({"role": "user", "content": doc["text"]})
-            else:
-                formatted_docs.append({"role": "user", "content": str(doc)})
-        else:
-            formatted_docs.append({"role": "user", "content": str(doc)})
+                continue
+        raise ValueError(f"Unsupported document type: {type(doc)}")
 
+    # TODO: roll up consecutive messages from the same role, especially for assistant role
+    # and for tool calls
     return formatted_docs
 
 
@@ -67,7 +91,9 @@ def _prepare_anthropic_config(params: CommonQueryParameters, **kwargs) -> tuple:
 
     model_name = llm.model_name
 
-    return model_name, messages, tools, config
+    if tools is not None and len(tools) > 0:
+        config["tools"] = tools
+    return model_name, messages, config
 
 
 def _prepare_tool_schema(func_schemas: List[dict]) -> List[dict]:
@@ -89,6 +115,7 @@ def _prepare_tool_schema(func_schemas: List[dict]) -> List[dict]:
         if sch2 is not None:
             sch = sch2
         anthropic_tools.append(sch)
+
     return anthropic_tools
 
 
@@ -174,15 +201,12 @@ class SyncAnthropicProvider(SyncProvider, AnthropicProvider):
         **kwargs,
     ):
         """Prepare a synchronous callable for Anthropic API"""
-        model_name, messages, tools, config = _prepare_anthropic_config(
-            params, **kwargs
-        )
+        model_name, messages, config = _prepare_anthropic_config(params, **kwargs)
 
         return self.client.messages.create(
             model=model_name,
             max_tokens=config.pop("max_tokens", 4096),
             messages=messages,
-            tools=tools,
             **config,
         )
 
@@ -197,15 +221,12 @@ class AsyncAnthropicProvider(AsyncProvider, AnthropicProvider):
         **kwargs,
     ):
         """Prepare an async coroutine for Anthropic API"""
-        model_name, messages, tools, config = _prepare_anthropic_config(
-            params, **kwargs
-        )
+        model_name, messages, config = _prepare_anthropic_config(params, **kwargs)
 
         coro = self.client.messages.create(
             model=model_name,
             max_tokens=config.pop("max_tokens", 1024),
             messages=messages,
-            tools=tools,
             **config,
         )
 

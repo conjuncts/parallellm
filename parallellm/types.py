@@ -87,10 +87,18 @@ class BatchResult:
     """List of parsed responses, if available."""
 
 
-# Type alias for documents that can be either text or images
 LLMDocument = Union[
-    str, Image.Image, Tuple[Literal["user", "assistant", "system", "developer"], str]
+    str,
+    Image.Image,
+    Tuple[Literal["user", "assistant", "system", "developer"], str],
+    Tuple[Literal["function_call"], List[Tuple[str, Union[str, dict], str]]],
+    Tuple[
+        Literal["function_call_output"], Tuple[str, str]
+    ],  # tuple of ("function_call_output", (content, call_id))
 ]
+"""
+Type alias for documents that can be either text or images.
+"""
 
 
 ProviderType = Literal["openai", "anthropic", "google"]

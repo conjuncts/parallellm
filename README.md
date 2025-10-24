@@ -22,8 +22,10 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
     - this is like a rendezvous in threading
 - [x] Automatically persist upon pllm exit
 - [ ] resolve_tool_calls() should have a flag to json (also prevents unnecessary json load/unload)
+- [ ] accept dict as a LLMDocument
+- [ ]
 
-| Plain Completions | Sync | Async | Batch |
+| Default | Sync | Async | Batch |
 | --- | --- | --- | --- |
 | OpenAI | ✅ | ✅ | ✅ |
 | Anthropic | ✅ | ✅ | TODO |

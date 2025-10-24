@@ -28,7 +28,11 @@ def compute_hash(instructions: Optional[str], documents: List[LLMDocument]) -> s
             # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
             role, content = doc
             hasher.update(role.encode("utf-8"))
-            hasher.update(content.encode("utf-8"))
+            if isinstance(content, str):
+                hasher.update(content.encode("utf-8"))
+            else:
+                for item in content:
+                    hasher.update(str(item).encode("utf-8"))
         else:
             raise ValueError(f"Unsupported document type: {type(doc)}")
 

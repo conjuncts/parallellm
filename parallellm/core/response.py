@@ -2,7 +2,7 @@ import json
 from typing import Optional
 from parallellm.core.backend import BaseBackend
 from parallellm.core.calls import _call_to_concise_dict, _concise_dict_to_call
-from parallellm.types import CallIdentifier, ParsedResponse
+from parallellm.types import CallIdentifier, LLMDocument, ParsedResponse
 
 
 class LLMResponse:
@@ -54,6 +54,13 @@ class LLMResponse:
                     ]
             return self._pr.tool_calls
         return []
+
+    def to_assistant_message(self) -> LLMDocument:
+        """Converts the self back into a LLMDocument."""
+        val = self.resolve()
+        if self._pr and self._pr.tool_calls:
+            return ("function_call", self.resolve_tool_calls(to_dict=False))
+        return ("assistant", val)
 
     def __getstate__(self):
         """

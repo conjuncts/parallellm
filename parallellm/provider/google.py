@@ -34,6 +34,38 @@ def _fix_docs_for_google(
             # For now, just append the content with a prefix
             if role == "assistant":
                 role = "model"
+            elif role == "function_call_output":
+                # https://ai.google.dev/gemini-api/docs/function-calling?example=meeting
+                name, value = content
+                function_response_part = types.Part(
+                    function_response=types.FunctionResponse(
+                        name=name,
+                        response=value,
+                    )
+                )
+                formatted_docs.append(
+                    types.Content(role="user", parts=[function_response_part])
+                )
+                continue
+            elif role == "function_call":
+                parts = [
+                    types.Part(
+                        function_call=types.FunctionCall(
+                            name=name,
+                            args=args,
+                            id=call_id,
+                        )
+                    )
+                    for name, args, call_id in content
+                ]
+                formatted_docs.append(
+                    types.Content(
+                        role="model",
+                        parts=parts,
+                    )
+                )
+                continue
+
             elif role != "user":
                 raise ValueError(f"Unsupported role for Google: {role}")
             formatted_docs.append(
