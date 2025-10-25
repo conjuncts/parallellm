@@ -76,7 +76,7 @@ class AskParameters(TypedDict):
 BatchStatus = Literal["pending", "ready", "error"]
 
 
-@dataclass
+@dataclass(slots=True)
 class BatchResult:
     status: BatchStatus
 
@@ -87,14 +87,60 @@ class BatchResult:
     """List of parsed responses, if available."""
 
 
+@dataclass(slots=True)
+class ToolCall:
+    """Represents a single tool/function call."""
+
+    name: str
+    """The name of the tool/function being called."""
+
+    arguments: Union[str, dict]
+    """The arguments for the tool call, either as a JSON string or dict."""
+
+    call_id: str
+    """The unique identifier for this tool call."""
+
+    def __iter__(self):
+        """Allow unpacking into tuple for backward compatibility."""
+        return iter((self.name, self.arguments, self.call_id))
+
+
+@dataclass(slots=True)
+class ToolCallRequest:
+    """Represents the LLM requesting function/tool call(s)"""
+
+    prior: str
+    """The prior text content before the tool calls."""
+
+    calls: List[ToolCall]
+    """List of tool calls."""
+
+    def __iter__(self):
+        """Allow unpacking into tuple for backward compatibility."""
+        return iter(("function_call", self.calls))
+
+
+@dataclass(slots=True)
+class ToolCallOutput:
+    """Represents the output/result of a function/tool call."""
+
+    content: str
+    """The output content from the function call."""
+
+    call_id: str
+    """The ID of the function call this output corresponds to."""
+
+    def __iter__(self):
+        """Allow unpacking into tuple for backward compatibility."""
+        return iter(("function_call_output", (self.content, self.call_id)))
+
+
 LLMDocument = Union[
     str,
     Image.Image,
     Tuple[Literal["user", "assistant", "system", "developer"], str],
-    Tuple[Literal["function_call"], List[Tuple[str, Union[str, dict], str]]],
-    Tuple[
-        Literal["function_call_output"], Tuple[str, str]
-    ],  # tuple of ("function_call_output", (content, call_id))
+    ToolCallRequest,
+    ToolCallOutput,
 ]
 """
 Type alias for documents that can be either text or images.
@@ -124,7 +170,7 @@ class ParsedResponse:
     metadata: Optional[dict]
     """Additional metadata from the provider (usage stats, model info, etc.)."""
 
-    tool_calls: Optional[List[Tuple[str, Union[str, dict], str]]] = None
+    tool_calls: Optional[List[ToolCall]] = None
 
     def __iter__(self):
         """Allow unpacking into tuple for backward compatibility."""

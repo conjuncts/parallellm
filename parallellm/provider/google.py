@@ -3,8 +3,15 @@ from typing import TYPE_CHECKING, List, Optional, Union
 from pydantic import BaseModel
 from parallellm.core.identity import LLMIdentity
 from parallellm.provider.base import AsyncProvider, BaseProvider, SyncProvider
-from parallellm.types import ParsedResponse, CommonQueryParameters
-from parallellm.types import CallIdentifier, LLMDocument
+from parallellm.types import (
+    ParsedResponse,
+    CommonQueryParameters,
+    CallIdentifier,
+    LLMDocument,
+    ToolCallRequest,
+    ToolCallOutput,
+    ToolCall,
+)
 
 from google import genai
 from google.genai import types
@@ -27,44 +34,41 @@ def _fix_docs_for_google(
     for doc in documents:
         if isinstance(doc, str):
             formatted_docs.append(doc)
+        elif isinstance(doc, ToolCallOutput):
+            # https://ai.google.dev/gemini-api/docs/function-calling?example=meeting
+            function_response_part = types.Part(
+                function_response=types.FunctionResponse(
+                    name=doc.call_id,
+                    response=doc.content,
+                )
+            )
+            formatted_docs.append(
+                types.Content(role="user", parts=[function_response_part])
+            )
+        elif isinstance(doc, ToolCallRequest):
+            parts = [
+                types.Part(
+                    function_call=types.FunctionCall(
+                        name=call.name,
+                        args=call.arguments,
+                        id=call.call_id,
+                    )
+                )
+                for call in doc.calls
+            ]
+            formatted_docs.append(
+                types.Content(
+                    role="model",
+                    parts=parts,
+                )
+            )
         elif isinstance(doc, tuple) and len(doc) == 2:
-            # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
+            # from google.genai.types import Content
+            # For google, only valid roles are ["user", "model"]
+
             role, content = doc
-            # For Google, we might need to format this differently
-            # For now, just append the content with a prefix
             if role == "assistant":
                 role = "model"
-            elif role == "function_call_output":
-                # https://ai.google.dev/gemini-api/docs/function-calling?example=meeting
-                name, value = content
-                function_response_part = types.Part(
-                    function_response=types.FunctionResponse(
-                        name=name,
-                        response=value,
-                    )
-                )
-                formatted_docs.append(
-                    types.Content(role="user", parts=[function_response_part])
-                )
-                continue
-            elif role == "function_call":
-                parts = [
-                    types.Part(
-                        function_call=types.FunctionCall(
-                            name=name,
-                            args=args,
-                            id=call_id,
-                        )
-                    )
-                    for name, args, call_id in content
-                ]
-                formatted_docs.append(
-                    types.Content(
-                        role="model",
-                        parts=parts,
-                    )
-                )
-                continue
 
             elif role != "user":
                 raise ValueError(f"Unsupported role for Google: {role}")
@@ -78,14 +82,10 @@ def _fix_docs_for_google(
             # If it's already a proper content dict, keep it
             if "parts" in doc and "role" in doc:
                 formatted_docs.append(doc)
-            elif "content" in doc:
-                formatted_docs.append(doc["content"])
-            elif "text" in doc:
-                formatted_docs.append(doc["text"])
             else:
-                formatted_docs.append(str(doc))
+                raise ValueError(f"Invalid document dict format for Google: {doc}")
         else:
-            formatted_docs.append(str(doc))
+            raise ValueError(f"Unsupported document type: {type(doc)}")
 
     return formatted_docs
 
@@ -159,12 +159,12 @@ class GoogleProvider(BaseProvider):
                 if part.function_call:
                     func_call: types.FunctionCall = part.function_call
                     tools.append(
-                        (
-                            func_call.name,
+                        ToolCall(
+                            name=func_call.name,
                             # a bit annoying because we're doing str -> dict -> str -> dict
                             # json.dumps(func_call.args),
-                            func_call.args,
-                            func_call.id,
+                            arguments=func_call.args,
+                            call_id=func_call.id,
                         )
                     )
             if tools and text is None:
@@ -190,10 +190,10 @@ class GoogleProvider(BaseProvider):
                 if "function_call" in part:
                     func_call = part["function_call"]
                     tools.append(
-                        (
-                            func_call["name"],
-                            func_call["args"],
-                            func_call["id"],
+                        ToolCall(
+                            name=func_call["name"],
+                            arguments=func_call["args"],
+                            call_id=func_call["id"],
                         )
                     )
 

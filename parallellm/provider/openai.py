@@ -16,8 +16,11 @@ from parallellm.types import (
     BatchStatus,
     CallIdentifier,
     CommonQueryParameters,
+    ToolCallRequest,
+    ToolCallOutput,
     LLMDocument,
     ParsedResponse,
+    ToolCall,
 )
 
 if TYPE_CHECKING:
@@ -47,6 +50,23 @@ class OpenAIProvider(BaseProvider):
                     "content": doc,
                 }
                 formatted_docs.append(msg)
+            elif isinstance(doc, ToolCallRequest):
+                for call in doc.calls:
+                    formatted_docs.append(
+                        ResponseFunctionToolCall(
+                            name=call.name,
+                            arguments=call.arguments,
+                            call_id=call.call_id,
+                            type="function_call",
+                        )
+                    )
+            elif isinstance(doc, ToolCallOutput):
+                msg = {
+                    "type": "function_call_output",
+                    "call_id": doc.call_id,
+                    "output": doc.content,
+                }
+                formatted_docs.append(msg)
             elif isinstance(doc, tuple) and len(doc) == 2:
                 # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
                 # Valid roles for OpenAI are:
@@ -54,30 +74,11 @@ class OpenAIProvider(BaseProvider):
                 # from openai.types.responses.response_output_message_param import ResponseOutputMessageParam
                 role, content = doc
 
-                if role == "function_call":
-                    for call in content:
-                        formatted_docs.append(
-                            ResponseFunctionToolCall(
-                                name=call[0],
-                                arguments=call[1],
-                                call_id=call[2],
-                                type="function_call",
-                            )
-                        )
-                elif role == "function_call_output":
-                    stuff, call_id = content
-                    msg = {
-                        "type": "function_call_output",
-                        "call_id": call_id,
-                        "output": stuff,
-                    }
-                    formatted_docs.append(msg)
-                else:
-                    msg: "Message" = {
-                        "role": role,
-                        "content": content,
-                    }
-                    formatted_docs.append(msg)
+                msg: "Message" = {
+                    "role": role,
+                    "content": content,
+                }
+                formatted_docs.append(msg)
             else:
                 raise ValueError(f"Unsupported document type: {type(doc)}")
         return formatted_docs
@@ -98,9 +99,19 @@ class OpenAIProvider(BaseProvider):
             tool_calls = []
             for item in response.output:
                 if item.type == "function_call":
-                    tool_calls.append((item.name, item.arguments, item.call_id))
+                    tool_calls.append(
+                        ToolCall(
+                            name=item.name,
+                            arguments=item.arguments,
+                            call_id=item.call_id,
+                        )
+                    )
                 elif item.type == "custom_tool_call":
-                    tool_calls.append((item.name, item.input, item.call_id))
+                    tool_calls.append(
+                        ToolCall(
+                            name=item.name, arguments=item.input, call_id=item.call_id
+                        )
+                    )
 
             parsed_metadata = obj
         elif isinstance(raw_response, dict):
@@ -121,18 +132,18 @@ class OpenAIProvider(BaseProvider):
                                 texts.append(content["text"])
                             elif content["type"] == "function_call":
                                 tool_calls.append(
-                                    (
-                                        content["name"],
-                                        content["arguments"],
-                                        content.get("call_id"),
+                                    ToolCall(
+                                        name=content["name"],
+                                        arguments=content["arguments"],
+                                        call_id=content.get("call_id"),
                                     )
                                 )
                             elif content["type"] == "custom_tool_call":
                                 tool_calls.append(
-                                    (
-                                        content["name"],
-                                        content["input"],
-                                        content.get("call_id"),
+                                    ToolCall(
+                                        name=content["name"],
+                                        arguments=content["input"],
+                                        call_id=content.get("call_id"),
                                     )
                                 )
                 text = "".join(texts)

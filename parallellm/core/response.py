@@ -2,7 +2,13 @@ import json
 from typing import Optional
 from parallellm.core.backend import BaseBackend
 from parallellm.core.calls import _call_to_concise_dict, _concise_dict_to_call
-from parallellm.types import CallIdentifier, LLMDocument, ParsedResponse
+from parallellm.types import (
+    CallIdentifier,
+    LLMDocument,
+    ParsedResponse,
+    ToolCallRequest,
+    ToolCall,
+)
 
 
 class LLMResponse:
@@ -31,26 +37,34 @@ class LLMResponse:
         value = self.resolve()
         return json.loads(value)
 
-    def resolve_tool_calls(self, to_dict=False) -> list[tuple[str, str, str]]:
+    def resolve_tool_calls(self, to_dict=False) -> list[ToolCall]:
         """
         Resolve the tool calls associated with this response.
 
-        :param to_dict: Whether to parse the tool calls into dictionaries
-        :returns: A list of tool calls (tool_name, inputs, call_id)
+        :param to_dict: Whether to parse the tool calls' arguments into dictionaries (if they're JSON strings)
+        :returns: A list of ToolCall objects
         """
         if self._pr and self._pr.tool_calls:
             # cast and jsonify if needed
             if self._pr.tool_calls:
-                _, item, _ = self._pr.tool_calls[0]
-                if to_dict and isinstance(item, str):
+                first_call = self._pr.tool_calls[0]
+                if to_dict and isinstance(first_call.arguments, str):
                     return [
-                        (name, json.loads(inputs), call_id)
-                        for name, inputs, call_id in self._pr.tool_calls
+                        ToolCall(
+                            name=call.name,
+                            arguments=json.loads(call.arguments),
+                            call_id=call.call_id,
+                        )
+                        for call in self._pr.tool_calls
                     ]
-                elif not to_dict and isinstance(item, dict):
+                elif not to_dict and isinstance(first_call.arguments, dict):
                     return [
-                        (name, inputs, call_id)
-                        for name, inputs, call_id in self._pr.tool_calls
+                        ToolCall(
+                            name=call.name,
+                            arguments=json.dumps(call.arguments),
+                            call_id=call.call_id,
+                        )
+                        for call in self._pr.tool_calls
                     ]
             return self._pr.tool_calls
         return []
@@ -59,7 +73,9 @@ class LLMResponse:
         """Converts the self back into a LLMDocument."""
         val = self.resolve()
         if self._pr and self._pr.tool_calls:
-            return ("function_call", self.resolve_tool_calls(to_dict=False))
+            return ToolCallRequest(
+                prior=val, calls=self.resolve_tool_calls(to_dict=False)
+            )
         return ("assistant", val)
 
     def __getstate__(self):

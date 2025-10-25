@@ -2,8 +2,15 @@ from typing import TYPE_CHECKING, List, Optional, Union
 from pydantic import BaseModel
 from parallellm.core.identity import LLMIdentity
 from parallellm.provider.base import AsyncProvider, BaseProvider, SyncProvider
-from parallellm.types import ParsedResponse, CommonQueryParameters
-from parallellm.types import CallIdentifier, LLMDocument
+from parallellm.types import (
+    ParsedResponse,
+    CommonQueryParameters,
+    CallIdentifier,
+    LLMDocument,
+    ToolCallRequest,
+    ToolCallOutput,
+    ToolCall,
+)
 
 if TYPE_CHECKING:
     from anthropic import Anthropic, AsyncAnthropic
@@ -26,39 +33,52 @@ def _fix_docs_for_anthropic(
             }
             formatted_docs.append(msg)
             continue
+        elif isinstance(doc, ToolCallRequest):
+            msg = {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": call.name,
+                        "input": call.arguments,
+                        "id": call.call_id,
+                    }
+                    for call in doc.calls
+                ],
+            }
+            formatted_docs.append(msg)
+            continue
+        elif isinstance(doc, ToolCallOutput):
+            msg = {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": doc.call_id,
+                        "content": doc.content,
+                    }
+                ],
+            }
+            formatted_docs.append(msg)
+            continue
         elif isinstance(doc, tuple) and len(doc) == 2:
-            # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
+            # from anthropic.types.message_param import MessageParam
+            # For anthropic, only valid roles are ["user", "assistant"]
+
             role, content = doc
-            if role == "function_call":
-                msg = {
-                    "role": "assistant",
-                    "content": [
-                        {
-                            "type": "tool_use",
-                            "name": call[0],
-                            "input": call[1],
-                            "id": call[2],
-                        }
-                        for call in content
-                    ],
-                }
-            elif role == "function_call_output":
-                output, call_id = content
+            if role in {"system", "developer"}:
+                # Anthropic does not have system/developer roles, map to user
                 msg = {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "tool_result",
-                            "tool_use_id": call_id,
-                            "content": output,
-                        }
-                    ],
+                    "content": content,
                 }
-            else:
+            elif role in {"user", "assistant"}:
                 msg = {
                     "role": role,
                     "content": content,
                 }
+            else:
+                raise ValueError(f"Unsupported role in document tuple: {role}")
             formatted_docs.append(msg)
             continue
         elif isinstance(doc, dict):
@@ -139,7 +159,11 @@ class AnthropicProvider(BaseProvider):
                     text_contents.append(content_item.text)
                 elif content_item.type == "tool_use":
                     tool_calls.append(
-                        (content_item.name, content_item.input, content_item.id)
+                        ToolCall(
+                            name=content_item.name,
+                            arguments=content_item.input,
+                            call_id=content_item.id,
+                        )
                     )
             text_content = "".join(text_contents)
 
@@ -167,10 +191,10 @@ class AnthropicProvider(BaseProvider):
                         text_contents.append(content_item["text"])
                     elif content_item.get("type") == "tool_use":
                         tool_calls.append(
-                            (
-                                content_item.get("name"),
-                                content_item.get("input"),
-                                content_item.get("id"),
+                            ToolCall(
+                                name=content_item.get("name"),
+                                arguments=content_item.get("input"),
+                                call_id=content_item.get("id"),
                             )
                         )
             else:

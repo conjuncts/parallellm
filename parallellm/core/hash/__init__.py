@@ -3,7 +3,7 @@ from typing import List, Optional
 from io import BytesIO
 from PIL import Image
 
-from parallellm.types import LLMDocument
+from parallellm.types import LLMDocument, ToolCallRequest, ToolCallOutput
 
 
 def compute_hash(instructions: Optional[str], documents: List[LLMDocument]) -> str:
@@ -24,6 +24,15 @@ def compute_hash(instructions: Optional[str], documents: List[LLMDocument]) -> s
             with BytesIO() as img_buffer:
                 doc.save(img_buffer, format="PNG")
                 hasher.update(img_buffer.getvalue())
+        elif isinstance(doc, ToolCallRequest):
+            hasher.update(b"function_call")
+            hasher.update(doc.prior.encode("utf-8"))
+            for call in doc.calls:
+                hasher.update(str(call).encode("utf-8"))
+        elif isinstance(doc, ToolCallOutput):
+            hasher.update(b"function_call_output")
+            for item in [doc.content, doc.call_id]:
+                hasher.update(str(item).encode("utf-8"))
         elif isinstance(doc, tuple) and len(doc) == 2:
             # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
             role, content = doc

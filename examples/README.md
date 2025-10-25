@@ -40,3 +40,28 @@ function_response_part = types.Part.from_function_response(
 contents.append(response.candidates[0].content) # Append the content from the model's response.
 contents.append(types.Content(role="user", parts=[function_response_part])) # Append the function response
 ```
+
+
+# Tool
+
+```
+tools_anthropic = [
+    {
+        "name": "count_files",
+        "description": "Count the number of files in a directory.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "directory": {
+                    "type": "string",
+                    "description": "The path to the directory to count files in.",
+                },
+            },
+            "required": ["directory"],
+        },
+    }
+]
+
+tools_google = [x.copy() for x in tools_openai]
+[x.pop("type") for x in tools_google]
+```

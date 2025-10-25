@@ -2,6 +2,7 @@ import logging
 
 from pydantic import BaseModel
 from parallellm.core.gateway import ParalleLLM
+from parallellm.types import ToolCallOutput
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -37,11 +38,11 @@ def ls_tool(directory) -> str:
 with ParalleLLM.resume_directory(
     ".pllm/simplest-tool",
     # ".temp",
-    provider="google",  #
+    provider="anthropic",  #
     strategy="sync",
     log_level=logging.DEBUG,
     user_confirmation=True,
-    ignore_cache=True,
+    # ignore_cache=True,
 ) as pllm:
     with pllm.agent(dashboard=True) as dash:
         # Structured output
@@ -60,16 +61,18 @@ with ParalleLLM.resume_directory(
 
         dash.print(resp.resolve())
         tool_calls = resp.resolve_tool_calls(to_dict=False)
-        for name, args, call_id in tool_calls:
-            dash.print(f"Tool call: `{name}` with args {args} call_id {call_id}")
+        for call in tool_calls:
+            dash.print(
+                f"Tool call: `{call.name}` with args {call.arguments} call_id {call.call_id}"
+            )
 
         assert len(tool_calls) == 1
-        assert tool_calls[0][0] == "count_files"
+        assert tool_calls[0].name == "count_files"
         msgs.append(resp.to_assistant_message())
 
-        computed_tool_output = (
-            "function_call_output",
-            (ls_tool(tool_calls[0][1]), tool_calls[0][2]),
+        computed_tool_output = ToolCallOutput(
+            content=ls_tool(tool_calls[0].arguments),
+            call_id=tool_calls[0].call_id,
         )
 
         resp = dash.ask_llm(msgs + [computed_tool_output], hash_by=["llm"])
