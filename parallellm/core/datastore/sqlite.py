@@ -6,6 +6,7 @@ from pathlib import Path
 
 import polars as pl
 
+from parallellm.core.cast.fix_tools import dump_tool_calls, load_tool_calls
 from parallellm.core.datastore.base import Datastore
 from parallellm.core.datastore.sql_migrate import (
     _check_and_migrate,
@@ -313,7 +314,7 @@ class SQLiteDatastore(Datastore):
         tool_calls = None
         if row["tool_calls"]:
             try:
-                tool_calls = json.loads(row["tool_calls"])
+                tool_calls = load_tool_calls(row["tool_calls"])
             except (json.JSONDecodeError, TypeError):
                 tool_calls = None
 
@@ -572,7 +573,7 @@ class SQLiteDatastore(Datastore):
                 # Serialize tool_calls to JSON if present
                 tool_calls_json = None
                 if tool_calls is not None:
-                    tool_calls_json = json.dumps(tool_calls)
+                    tool_calls_json = dump_tool_calls(tool_calls)
 
                 # Prepare columns and values
                 columns = [

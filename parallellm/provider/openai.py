@@ -51,11 +51,18 @@ class OpenAIProvider(BaseProvider):
                 }
                 formatted_docs.append(msg)
             elif isinstance(doc, ToolCallRequest):
+                if doc.text_content:
+                    formatted_docs.append(
+                        {
+                            "role": "assistant",
+                            "content": doc.text_content,
+                        }
+                    )
                 for call in doc.calls:
                     formatted_docs.append(
                         ResponseFunctionToolCall(
                             name=call.name,
-                            arguments=call.arguments,
+                            arguments=call.arg_str,
                             call_id=call.call_id,
                             type="function_call",
                         )

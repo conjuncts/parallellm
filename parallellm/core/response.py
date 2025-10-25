@@ -46,26 +46,6 @@ class LLMResponse:
         """
         if self._pr and self._pr.tool_calls:
             # cast and jsonify if needed
-            if self._pr.tool_calls:
-                first_call = self._pr.tool_calls[0]
-                if to_dict and isinstance(first_call.arguments, str):
-                    return [
-                        ToolCall(
-                            name=call.name,
-                            arguments=json.loads(call.arguments),
-                            call_id=call.call_id,
-                        )
-                        for call in self._pr.tool_calls
-                    ]
-                elif not to_dict and isinstance(first_call.arguments, dict):
-                    return [
-                        ToolCall(
-                            name=call.name,
-                            arguments=json.dumps(call.arguments),
-                            call_id=call.call_id,
-                        )
-                        for call in self._pr.tool_calls
-                    ]
             return self._pr.tool_calls
         return []
 
@@ -74,7 +54,7 @@ class LLMResponse:
         val = self.resolve()
         if self._pr and self._pr.tool_calls:
             return ToolCallRequest(
-                prior=val, calls=self.resolve_tool_calls(to_dict=False)
+                text_content=val, calls=self.resolve_tool_calls(to_dict=False)
             )
         return ("assistant", val)
 

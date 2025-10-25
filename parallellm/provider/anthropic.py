@@ -34,18 +34,24 @@ def _fix_docs_for_anthropic(
             formatted_docs.append(msg)
             continue
         elif isinstance(doc, ToolCallRequest):
-            msg = {
-                "role": "assistant",
-                "content": [
+            msg_contents = []
+            if doc.text_content:
+                msg_contents.append(
                     {
-                        "type": "tool_use",
-                        "name": call.name,
-                        "input": call.arguments,
-                        "id": call.call_id,
+                        "type": "text",
+                        "text": doc.text_content,
                     }
-                    for call in doc.calls
-                ],
-            }
+                )
+            msg_contents += [
+                {
+                    "type": "tool_use",
+                    "name": call.name,
+                    "input": call.args,
+                    "id": call.call_id,
+                }
+                for call in doc.calls
+            ]
+            msg = {"role": "assistant", "content": msg_contents}
             formatted_docs.append(msg)
             continue
         elif isinstance(doc, ToolCallOutput):

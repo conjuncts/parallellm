@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Literal, TypedDict, Optional, Union, Tuple
+import json
 
 from PIL import Image
 
@@ -87,30 +88,48 @@ class BatchResult:
     """List of parsed responses, if available."""
 
 
-@dataclass(slots=True)
 class ToolCall:
     """Represents a single tool/function call."""
 
-    name: str
-    """The name of the tool/function being called."""
+    __slots__ = ("name", "call_id", "args", "arg_str")
 
-    arguments: Union[str, dict]
-    """The arguments for the tool call, either as a JSON string or dict."""
+    def __init__(
+        self,
+        name: str,
+        arguments: Union[str, dict],
+        call_id: str,
+    ):
+        """
+        Initialize a ToolCall.
 
-    call_id: str
-    """The unique identifier for this tool call."""
+        Args:
+            name: The name of the tool/function being called.
+            call_id: The unique identifier for this tool call.
+            arguments: The arguments for the tool call as a dictionary.
+            arg_str: The arguments for the tool call as a JSON string.
+        """
+        self.name = name
+        self.call_id = call_id
+
+        if isinstance(arguments, str):
+            # Parse arg_str to arguments
+            self.args = json.loads(arguments)
+            self.arg_str = arguments
+        else:
+            self.args = arguments
+            self.arg_str = json.dumps(arguments)
 
     def __iter__(self):
         """Allow unpacking into tuple for backward compatibility."""
-        return iter((self.name, self.arguments, self.call_id))
+        return iter((self.name, self.args, self.call_id))
 
 
 @dataclass(slots=True)
 class ToolCallRequest:
     """Represents the LLM requesting function/tool call(s)"""
 
-    prior: str
-    """The prior text content before the tool calls."""
+    text_content: str
+    """Text content, like thoughts about invoking a tool."""
 
     calls: List[ToolCall]
     """List of tool calls."""
@@ -129,6 +148,9 @@ class ToolCallOutput:
 
     call_id: str
     """The ID of the function call this output corresponds to."""
+
+    name: str
+    """The name of the function call this output corresponds to."""
 
     def __iter__(self):
         """Allow unpacking into tuple for backward compatibility."""

@@ -6,6 +6,11 @@ from PIL import Image
 from parallellm.types import LLMDocument, ToolCallRequest, ToolCallOutput
 
 
+def _updateh(hasher, val: Optional[str]):
+    if val is not None:
+        hasher.update(val.encode("utf-8"))
+
+
 def compute_hash(instructions: Optional[str], documents: List[LLMDocument]) -> str:
     """
     Compute a hash for the given instructions and documents.
@@ -26,13 +31,17 @@ def compute_hash(instructions: Optional[str], documents: List[LLMDocument]) -> s
                 hasher.update(img_buffer.getvalue())
         elif isinstance(doc, ToolCallRequest):
             hasher.update(b"function_call")
-            hasher.update(doc.prior.encode("utf-8"))
+            _updateh(hasher, doc.text_content)
             for call in doc.calls:
-                hasher.update(str(call).encode("utf-8"))
+                # hasher.update(str(call).encode("utf-8"))
+                _updateh(hasher, call.name)
+                _updateh(hasher, call.arg_str)
+                _updateh(hasher, call.call_id)
         elif isinstance(doc, ToolCallOutput):
             hasher.update(b"function_call_output")
-            for item in [doc.content, doc.call_id]:
-                hasher.update(str(item).encode("utf-8"))
+            _updateh(hasher, doc.name)
+            _updateh(hasher, doc.content)
+            _updateh(hasher, doc.call_id)
         elif isinstance(doc, tuple) and len(doc) == 2:
             # Handle Tuple[Literal["user", "assistant", "system", "developer"], str]
             role, content = doc

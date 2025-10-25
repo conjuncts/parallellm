@@ -38,7 +38,7 @@ def ls_tool(directory) -> str:
 with ParalleLLM.resume_directory(
     ".pllm/simplest-tool",
     # ".temp",
-    provider="anthropic",  #
+    provider="openai",  #
     strategy="sync",
     log_level=logging.DEBUG,
     user_confirmation=True,
@@ -63,7 +63,7 @@ with ParalleLLM.resume_directory(
         tool_calls = resp.resolve_tool_calls(to_dict=False)
         for call in tool_calls:
             dash.print(
-                f"Tool call: `{call.name}` with args {call.arguments} call_id {call.call_id}"
+                f"Tool call: `{call.name}` with args {call.args} call_id {call.call_id}"
             )
 
         assert len(tool_calls) == 1
@@ -71,7 +71,8 @@ with ParalleLLM.resume_directory(
         msgs.append(resp.to_assistant_message())
 
         computed_tool_output = ToolCallOutput(
-            content=ls_tool(tool_calls[0].arguments),
+            name=tool_calls[0].name,
+            content=ls_tool(tool_calls[0].args),
             call_id=tool_calls[0].call_id,
         )
 

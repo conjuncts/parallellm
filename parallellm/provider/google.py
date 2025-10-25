@@ -38,19 +38,22 @@ def _fix_docs_for_google(
             # https://ai.google.dev/gemini-api/docs/function-calling?example=meeting
             function_response_part = types.Part(
                 function_response=types.FunctionResponse(
-                    name=doc.call_id,
-                    response=doc.content,
+                    name=doc.name,
+                    response={"output": doc.content},
                 )
             )
             formatted_docs.append(
                 types.Content(role="user", parts=[function_response_part])
             )
         elif isinstance(doc, ToolCallRequest):
-            parts = [
+            parts = []
+            if doc.text_content:
+                parts.append(types.Part(text=types.Text(content=doc.text_content)))
+            parts += [
                 types.Part(
                     function_call=types.FunctionCall(
                         name=call.name,
-                        args=call.arguments,
+                        args=call.args,
                         id=call.call_id,
                     )
                 )
