@@ -21,7 +21,6 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 - [ ] "cohort locking": for consistency, if seq_id is "strict" (if we really care that seq_id is consistent across runs), then we need to "lock" based on cohort (wait until all batches in a cohort complete. This can be implemented simply by refusing to proceed - ie. ).
     - this is like a rendezvous in threading
 - [x] Automatically persist upon pllm exit
-- [ ] resolve_tool_calls() should have a flag to json (also prevents unnecessary json load/unload)
 - [ ] accept dict as a LLMDocument
 - [ ]
 

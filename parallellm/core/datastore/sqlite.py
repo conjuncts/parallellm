@@ -353,6 +353,71 @@ class SQLiteDatastore(Datastore):
             self._parquet_manager = ParquetManager(self.file_manager)
         return self._parquet_manager.get_metadata(response_id)
 
+    def _build_where_clause(
+        self, agent_name: Optional[str], checkpoint: Optional[str], doc_hash: str
+    ) -> tuple[str, list]:
+        """
+        Build a WHERE clause for querying responses by agent_name, checkpoint, and doc_hash.
+
+        :param agent_name: The agent name (can be None)
+        :param checkpoint: The checkpoint (can be None)
+        :param doc_hash: The document hash
+        :returns: Tuple of (where_clause, params)
+        """
+        where_conditions = ["doc_hash = ?"]
+        params = [doc_hash]
+
+        if agent_name is not None:
+            where_conditions.append("agent_name = ?")
+            params.append(agent_name)
+        else:
+            where_conditions.append("agent_name IS NULL")
+
+        if checkpoint is not None:
+            where_conditions.append("checkpoint = ?")
+            params.append(checkpoint)
+
+        return " AND ".join(where_conditions), params
+
+    def _upsert_response(
+        self,
+        conn: sqlite3.Connection,
+        table_name: str,
+        record: dict[str, any],
+        where_clause: str,
+        where_params: list,
+    ) -> None:
+        """
+        Insert or update a response record in the specified table.
+
+        :param conn: SQLite connection
+        :param table_name: Name of the table to insert/update
+        :param record: Dictionary mapping column names to values
+        :param where_clause: WHERE clause for checking existence
+        :param where_params: Parameters for the WHERE clause
+        """
+        # Check if record already exists
+        cursor = conn.execute(
+            f"SELECT seq_id FROM {table_name} WHERE {where_clause}", where_params
+        )
+        existing = cursor.fetchone()
+
+        columns = list(record.keys())
+        values = list(record.values())
+
+        if existing:
+            # Update existing record
+            set_clauses = [f"{col} = ?" for col in columns]
+            update_sql = (
+                f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {where_clause}"
+            )
+            conn.execute(update_sql, values + where_params)
+        else:
+            # Insert new record
+            placeholders = ", ".join(["?" for _ in columns])
+            insert_sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+            conn.execute(insert_sql, values)
+
     def store(
         self,
         call_id: CallIdentifier,
@@ -380,75 +445,32 @@ class SQLiteDatastore(Datastore):
         # Get main database connection
         conn = self._get_connection(None)
 
-        # Determine table and build WHERE/INSERT clause components
+        # Determine table and build WHERE clause
         table_name = "chk_responses" if checkpoint is not None else "anon_responses"
-
-        # Build WHERE conditions for checking existing records
-        where_conditions = ["doc_hash = ?"]
-        where_params = [doc_hash]
-
-        # Add agent_name condition
-        if agent_name is not None:
-            where_conditions.append("agent_name = ?")
-            where_params.append(agent_name)
-        else:
-            where_conditions.append("agent_name IS NULL")
-
-        # Add checkpoint condition if using checkpoint table
-        if checkpoint is not None:
-            where_conditions.append("checkpoint = ?")
-            where_params.append(checkpoint)
-
-        where_clause = " AND ".join(where_conditions)
+        where_clause, where_params = self._build_where_clause(
+            agent_name, checkpoint, doc_hash
+        )
 
         try:
-            # Check if record already exists
-            cursor = conn.execute(
-                f"SELECT seq_id FROM {table_name} WHERE {where_clause}", where_params
-            )
-            existing = cursor.fetchone()
+            # Prepare record for INSERT/UPDATE
+            tool_calls_json = dump_tool_calls(tool_calls)
 
-            # Prepare column names and values for INSERT/UPDATE
-            # Serialize tool_calls to JSON if present
-            tool_calls_json = None
-            if tool_calls is not None:
-                tool_calls_json = json.dumps(tool_calls)
-
-            columns = [
-                "agent_name",
-                "seq_id",
-                "session_id",
-                "doc_hash",
-                "response",
-                "response_id",
-                "provider_type",
-                "tool_calls",
-            ]
-            values = [
-                agent_name,
-                seq_id,
-                session_id,
-                doc_hash,
-                response,
-                response_id,
-                provider_type,
-                tool_calls_json,
-            ]
+            record = {
+                "agent_name": agent_name,
+                "seq_id": seq_id,
+                "session_id": session_id,
+                "doc_hash": doc_hash,
+                "response": response,
+                "response_id": response_id,
+                "provider_type": provider_type,
+                "tool_calls": tool_calls_json,
+            }
 
             if checkpoint is not None:
-                columns.insert(1, "checkpoint")  # Insert after agent_name
-                values.insert(1, checkpoint)
+                record["checkpoint"] = checkpoint
 
-            if existing:
-                # Update existing record
-                set_clauses = [f"{col} = ?" for col in columns]
-                update_sql = f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {where_clause}"
-                conn.execute(update_sql, values + where_params)
-            else:
-                # Insert new record
-                placeholders = ", ".join(["?" for _ in columns])
-                insert_sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
-                conn.execute(insert_sql, values)
+            # Upsert the response
+            self._upsert_response(conn, table_name, record, where_clause, where_params)
 
             # Store metadata if provided
             if metadata:
@@ -571,69 +593,30 @@ class SQLiteDatastore(Datastore):
                 tool_calls = parsed.tool_calls
 
                 # Serialize tool_calls to JSON if present
-                tool_calls_json = None
-                if tool_calls is not None:
-                    tool_calls_json = dump_tool_calls(tool_calls)
+                tool_calls_json = dump_tool_calls(tool_calls)
 
-                # Prepare columns and values
-                columns = [
-                    "agent_name",
-                    "seq_id",
-                    "session_id",
-                    "doc_hash",
-                    "response",
-                    "response_id",
-                    "provider_type",
-                    "tool_calls",
-                ]
-                values = [
-                    agent_name,
-                    seq_id,
-                    session_id,
-                    doc_hash,
-                    resp_text,
-                    custom_id,  # Use custom_id as response_id for batch results
-                    provider_type,
-                    tool_calls_json,
-                ]
+                # Prepare record for INSERT/UPDATE
+                record = {
+                    "agent_name": agent_name,
+                    "seq_id": seq_id,
+                    "session_id": session_id,
+                    "doc_hash": doc_hash,
+                    "response": resp_text,
+                    "response_id": custom_id,  # Use custom_id as response_id for batch results
+                    "provider_type": provider_type,
+                    "tool_calls": tool_calls_json,
+                }
 
                 if checkpoint:
-                    columns.insert(1, "checkpoint")
-                    values.insert(1, checkpoint)
+                    record["checkpoint"] = checkpoint
 
-                # Build WHERE clause for checking existing records
-                where_conditions = ["doc_hash = ?"]
-                where_params = [doc_hash]
-
-                if agent_name is not None:
-                    where_conditions.append("agent_name = ?")
-                    where_params.append(agent_name)
-                else:
-                    where_conditions.append("agent_name IS NULL")
-
-                if checkpoint:
-                    where_conditions.append("checkpoint = ?")
-                    where_params.append(checkpoint)
-
-                where_clause = " AND ".join(where_conditions)
-
-                # Check if record exists
-                cursor = conn.execute(
-                    f"SELECT seq_id FROM {table_name} WHERE {where_clause}",
-                    where_params,
+                # Build WHERE clause and upsert
+                where_clause, where_params = self._build_where_clause(
+                    agent_name, checkpoint, doc_hash
                 )
-                existing = cursor.fetchone()
-
-                if existing:
-                    # Update existing record
-                    set_clauses = [f"{col} = ?" for col in columns]
-                    update_sql = f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {where_clause}"
-                    conn.execute(update_sql, values + where_params)
-                else:
-                    # Insert new record
-                    placeholders = ", ".join(["?" for _ in columns])
-                    insert_sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
-                    conn.execute(insert_sql, values)
+                self._upsert_response(
+                    conn, table_name, record, where_clause, where_params
+                )
 
                 # Store metadata if available
                 if metadata:

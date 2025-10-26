@@ -8,6 +8,8 @@ def dump_tool_calls(tool_calls: List[ToolCall]) -> str:
     """
     Serialize a list of ToolCall objects into a JSON-ified list of tuples.
     """
+    if tool_calls is None:
+        return None
     return json.dumps([[call.name, call.args, call.call_id] for call in tool_calls])
 
 
