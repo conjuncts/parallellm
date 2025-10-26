@@ -139,12 +139,15 @@ class ParalleLLMGateway:
                 AsyncAnthropicProvider,
                 SyncAnthropicProvider,
             )
-            from anthropic import Anthropic
 
             if strategy == "async":
-                client = Anthropic()
+                from anthropic import AsyncAnthropic
+
+                client = AsyncAnthropic()
                 provider = AsyncAnthropicProvider(client=client)
             else:
+                from anthropic import Anthropic
+
                 client = Anthropic()
                 provider = SyncAnthropicProvider(client=client)
         else:
