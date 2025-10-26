@@ -8,7 +8,7 @@ with ParalleLLM.resume_directory(
     ".pllm/simplest",
     # ".temp",
     provider="openai",  #
-    strategy="batch",
+    strategy="sync",
     log_level=logging.DEBUG,
     user_confirmation=True,
     # ignore_cache=True,

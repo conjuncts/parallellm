@@ -113,16 +113,19 @@ class SQLiteParquetDatastore(Datastore):
         self,
         call_id: CallIdentifier,
         parsed_response: "ParsedResponse",
+        *,
+        upsert: bool = False,
     ):
         """
         Store a response in SQLite (transactional).
 
         :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
         :param parsed_response: The parsed response object containing text, response_id, and metadata.
+        :param upsert: If True, update existing record instead of inserting duplicate (default: False)
         """
 
         # Store in SQLite for transactional integrity
-        return self._sqlite_datastore.store(call_id, parsed_response)
+        return self._sqlite_datastore.store(call_id, parsed_response, upsert=upsert)
 
     def _transfer_tables_to_parquet(self) -> None:
         """

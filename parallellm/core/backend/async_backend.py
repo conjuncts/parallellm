@@ -35,9 +35,11 @@ class AsyncBackend(BaseBackend):
         dash_logger: Optional[DashboardLogger] = None,
         *,
         datastore_cls=None,
+        rewrite_cache: bool = False,
     ):
         self._fm = fm
         self._dash_logger = dash_logger
+        self._rewrite_cache = rewrite_cache
 
         self.tasks: list[asyncio.Task] = []
         self.task_metas: list[dict] = []
@@ -206,9 +208,8 @@ class AsyncBackend(BaseBackend):
             parsed, metadata = await coro
 
             call_id: CallIdentifier = metadata.copy()
-            # No need to extract provider anymore - response is already parsed!
 
-            self._async_ds.store(call_id, parsed)
+            self._async_ds.store(call_id, parsed, upsert=self._rewrite_cache)
             done_tasks.append(metadata)
 
             # do logging

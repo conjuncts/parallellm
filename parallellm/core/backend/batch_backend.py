@@ -38,6 +38,7 @@ class BatchBackend(BaseBackend):
         datastore_cls=None,
         session_id: int,
         confirm_batch_submission: bool = False,
+        rewrite_cache: bool = False,
     ):
         self._fm = fm
         if datastore_cls is None:
@@ -46,6 +47,7 @@ class BatchBackend(BaseBackend):
             self._ds = datastore_cls(fm)
         self._dash_logger = dash_logger
         self._confirm_batch_submission = confirm_batch_submission
+        self._rewrite_cache = rewrite_cache
 
         self._batch_buffer: list[tuple[CallIdentifier, dict]] = []
         self._provider: BatchProvider = None
@@ -312,7 +314,7 @@ class BatchBackend(BaseBackend):
                 )
 
             if res.status == "ready":
-                self._ds.store_ready_batch(res)
+                self._ds.store_ready_batch(res, upsert=self._rewrite_cache)
                 # Log batch storage to dashboard
                 if self._dash_logger is not None:
                     self._dash_logger.update_hash(batch_uuid, HashStatus.STORED)

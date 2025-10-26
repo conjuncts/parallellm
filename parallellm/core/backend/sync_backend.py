@@ -28,6 +28,7 @@ class SyncBackend(BaseBackend):
         dash_logger: Optional[DashboardLogger] = None,
         *,
         datastore_cls=None,
+        rewrite_cache: bool = False,
     ):
         self._fm = fm
 
@@ -36,6 +37,7 @@ class SyncBackend(BaseBackend):
         else:
             self._ds = datastore_cls(self._fm)
         self._dash_logger = dash_logger
+        self._rewrite_cache = rewrite_cache
 
         # Store results directly instead of managing async tasks
         self._pending_results: Dict[str, Any] = {}
@@ -72,7 +74,7 @@ class SyncBackend(BaseBackend):
 
             parsed = provider.parse_response(result)
 
-            self._ds.store(call_id, parsed)
+            self._ds.store(call_id, parsed, upsert=self._rewrite_cache)
 
             # Store in pending results for immediate retrieval
             key = f"{checkpoint}:{doc_hash}:{seq_id}"

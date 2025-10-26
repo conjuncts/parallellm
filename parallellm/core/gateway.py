@@ -20,6 +20,7 @@ class ParalleLLMGateway:
         dry_run=False,
         log_level=logging.INFO,
         ignore_cache=False,
+        rewrite_cache=False,
         user_confirmation=False,
     ) -> AgentOrchestrator:
         """
@@ -33,6 +34,7 @@ class ParalleLLMGateway:
         :param dry_run: If True, validate setup without making actual API calls
         :param log_level: Logging level for the session
         :param ignore_cache: If True, always submit to API instead of using cached responses
+        :param rewrite_cache: If True, overwrite cached responses with new ones (uses upsert)
         :param user_confirmation: If True, ask for user confirmation before
             submitting batches (only applicable 'batch')
         :return: Configured AgentOrchestrator instance
@@ -77,13 +79,19 @@ class ParalleLLMGateway:
             from parallellm.core.backend.async_backend import AsyncBackend
 
             backend = AsyncBackend(
-                fm, dash_logger=dash_logger, datastore_cls=datastore_cls
+                fm,
+                dash_logger=dash_logger,
+                datastore_cls=datastore_cls,
+                rewrite_cache=rewrite_cache,
             )
         elif strategy == "sync":
             from parallellm.core.backend.sync_backend import SyncBackend
 
             backend = SyncBackend(
-                fm, dash_logger=dash_logger, datastore_cls=datastore_cls
+                fm,
+                dash_logger=dash_logger,
+                datastore_cls=datastore_cls,
+                rewrite_cache=rewrite_cache,
             )
         elif strategy == "batch":
             from parallellm.core.backend.batch_backend import BatchBackend
@@ -94,6 +102,7 @@ class ParalleLLMGateway:
                 datastore_cls=datastore_cls,
                 session_id=fm.metadata["session_counter"],
                 confirm_batch_submission=user_confirmation,
+                rewrite_cache=rewrite_cache,
             )
         else:
             raise NotImplementedError(f"Strategy '{strategy}' is not implemented yet")

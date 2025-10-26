@@ -112,6 +112,7 @@ class SQLiteDatastore(Datastore):
             # For main database (db_name is None), create both tables
             if db_name is None:
                 # Anonymous responses table: no checkpoint column, agent_name can be NULL
+                # No UNIQUE constraint - allows duplicates, retrieve will get most recent (highest id)
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS anon_responses (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,12 +123,12 @@ class SQLiteDatastore(Datastore):
                         response TEXT NOT NULL,
                         response_id TEXT,
                         provider_type TEXT,
-                        tool_calls TEXT,
-                        UNIQUE(agent_name, doc_hash)
+                        tool_calls TEXT
                     )
                 """)
 
                 # Checkpoint responses table: checkpoint is NOT NULL
+                # No UNIQUE constraint - allows duplicates, retrieve will get most recent (highest id)
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS chk_responses (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,8 +140,7 @@ class SQLiteDatastore(Datastore):
                         response TEXT NOT NULL,
                         response_id TEXT,
                         provider_type TEXT,
-                        tool_calls TEXT,
-                        UNIQUE(agent_name, checkpoint, doc_hash)
+                        tool_calls TEXT
                     )
                 """)
 
@@ -257,52 +257,40 @@ class SQLiteDatastore(Datastore):
     ) -> Optional[ParsedResponse]:
         """
         Retrieve a response from SQLite.
+        Selects the oldest entry.
 
         :param call_id: The task identifier containing agent_name, checkpoint, doc_hash, and seq_id.
         :returns: The retrieved response content.
         """
+        # It needs to be the oldest entry, because
+        # we want it to be deterministic (we don't want future requests to mess up the order)
+
         checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
         agent_name = call_id["agent_name"]
-        # session_id NOT relevant for lookup
 
-        # Get main database connection
         conn = self._get_connection(None)
-
-        # Determine table and build WHERE clause components
         table_name = "chk_responses" if checkpoint is not None else "anon_responses"
 
-        # Base WHERE conditions (always present)
-        where_conditions = ["doc_hash = ?"]
-        params = [doc_hash]
+        # Build WHERE clause using helper method
+        where_conditions, params = self._build_where_clause(
+            agent_name, checkpoint, doc_hash
+        )
 
-        # Add agent_name condition
-        if agent_name is not None:
-            where_conditions.append("agent_name = ?")
-            params.append(agent_name)
-        else:
-            where_conditions.append("agent_name IS NULL")
-
-        # Add checkpoint condition if using checkpoint table
-        if checkpoint is not None:
-            where_conditions.append("checkpoint = ?")
-            params.append(checkpoint)
-
-        # Try with seq_id first (most specific)
-        full_where = " AND ".join(where_conditions + ["seq_id = ?"])
+        # Try with seq_id first (most specific), get oldest entry
+        full_where = where_conditions + " AND seq_id = ?"
         full_params = params + [seq_id]
 
         cursor = conn.execute(
-            f"SELECT response, response_id, tool_calls FROM {table_name} WHERE {full_where}",
+            f"SELECT response, response_id, tool_calls FROM {table_name} WHERE {full_where} ORDER BY id ASC LIMIT 1",
             full_params,
         )
         row = cursor.fetchone()
         if not row:
-            # Fallback: try without seq_id (less specific)
-            base_where = " AND ".join(where_conditions)
+            # Fallback: try without seq_id (less specific), get oldest entry
             cursor = conn.execute(
-                f"SELECT response, response_id, tool_calls FROM {table_name} WHERE {base_where}",
+                f"SELECT response, response_id, tool_calls FROM {table_name} WHERE {where_conditions} ORDER BY id ASC LIMIT 1",
                 params,
             )
             row = cursor.fetchone()
@@ -354,7 +342,12 @@ class SQLiteDatastore(Datastore):
         return self._parquet_manager.get_metadata(response_id)
 
     def _build_where_clause(
-        self, agent_name: Optional[str], checkpoint: Optional[str], doc_hash: str
+        self,
+        agent_name: Optional[str],
+        checkpoint: Optional[str],
+        doc_hash: str,
+        *,
+        needs_checkpoint_col: bool = False,
     ) -> tuple[str, list]:
         """
         Build a WHERE clause for querying responses by agent_name, checkpoint, and doc_hash.
@@ -362,6 +355,9 @@ class SQLiteDatastore(Datastore):
         :param agent_name: The agent name (can be None)
         :param checkpoint: The checkpoint (can be None)
         :param doc_hash: The document hash
+        :param needs_checkpoint_col: If True, the table MUST have a checkpoint column.
+            And it compares against NULL when checkpoint is None. Conversely, if False,
+            the table could be missing the checkpoint column (anon_responses).
         :returns: Tuple of (where_clause, params)
         """
         where_conditions = ["doc_hash = ?"]
@@ -376,58 +372,76 @@ class SQLiteDatastore(Datastore):
         if checkpoint is not None:
             where_conditions.append("checkpoint = ?")
             params.append(checkpoint)
+        elif needs_checkpoint_col:
+            where_conditions.append("checkpoint IS NULL")
 
         return " AND ".join(where_conditions), params
 
-    def _upsert_response(
+    def _insert_response(
         self,
         conn: sqlite3.Connection,
         table_name: str,
         record: dict[str, any],
-        where_clause: str,
-        where_params: list,
+        *,
+        where_clause: Optional[str] = None,
+        where_params: Optional[list] = None,
+        upsert: bool = False,
     ) -> None:
         """
-        Insert or update a response record in the specified table.
+        Insert a response record in the specified table.
+        By default always inserts, allowing duplicates.
+        If upsert=True, updates the OLDEST existing record (minimum ID) if found.
 
         :param conn: SQLite connection
-        :param table_name: Name of the table to insert/update
+        :param table_name: Name of the table to insert into
         :param record: Dictionary mapping column names to values
-        :param where_clause: WHERE clause for checking existence
-        :param where_params: Parameters for the WHERE clause
+        :param where_clause: WHERE clause for checking existence (required if upsert=True)
+        :param where_params: Parameters for the WHERE clause (required if upsert=True)
+        :param upsert: If True, update oldest (min ID) existing record instead of inserting duplicate
         """
-        # Check if record already exists
-        cursor = conn.execute(
-            f"SELECT seq_id FROM {table_name} WHERE {where_clause}", where_params
-        )
-        existing = cursor.fetchone()
-
         columns = list(record.keys())
         values = list(record.values())
 
-        if existing:
-            # Update existing record
-            set_clauses = [f"{col} = ?" for col in columns]
-            update_sql = (
-                f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {where_clause}"
+        if upsert:
+            if where_clause is None or where_params is None:
+                raise ValueError("where_clause and where_params required for upsert")
+
+            # Check if record already exists, get the one with minimum ID (oldest)
+            cursor = conn.execute(
+                f"SELECT id FROM {table_name} WHERE {where_clause} ORDER BY id ASC LIMIT 1",
+                where_params,
             )
-            conn.execute(update_sql, values + where_params)
-        else:
-            # Insert new record
-            placeholders = ", ".join(["?" for _ in columns])
-            insert_sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
-            conn.execute(insert_sql, values)
+            existing = cursor.fetchone()
+
+            if existing:
+                # Update the oldest existing record (minimum ID)
+                set_clauses = [f"{col} = ?" for col in columns]
+                update_sql = (
+                    f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE id = ?"
+                )
+                conn.execute(update_sql, values + [existing["id"]])
+                return
+
+        # Insert new record (either upsert with no existing, or normal insert)
+        placeholders = ", ".join(["?" for _ in columns])
+        insert_sql = (
+            f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders})"
+        )
+        conn.execute(insert_sql, values)
 
     def store(
         self,
         call_id: CallIdentifier,
         parsed_response: "ParsedResponse",
+        *,
+        upsert: bool = False,
     ):
         """
         Store a response in SQLite.
 
         :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
         :param parsed_response: The parsed response object containing text, response_id, and metadata.
+        :param upsert: If True, update existing record instead of inserting duplicate (default: False)
         """
         checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
@@ -469,8 +483,21 @@ class SQLiteDatastore(Datastore):
             if checkpoint is not None:
                 record["checkpoint"] = checkpoint
 
-            # Upsert the response
-            self._upsert_response(conn, table_name, record, where_clause, where_params)
+            # Insert the response (or update if upsert=True)
+            if upsert:
+                where_clause, where_params = self._build_where_clause(
+                    agent_name, checkpoint, doc_hash
+                )
+            else:
+                where_clause = where_params = None
+            self._insert_response(
+                conn,
+                table_name,
+                record,
+                where_clause=where_clause,
+                where_params=where_params,
+                upsert=upsert,
+            )
 
             # Store metadata if provided
             if metadata:
@@ -541,6 +568,8 @@ class SQLiteDatastore(Datastore):
     def store_ready_batch(
         self,
         batch_result: BatchResult,
+        *,
+        upsert: bool = False,
     ) -> None:
         """
         Store completed batch results in the datastore.
@@ -549,6 +578,7 @@ class SQLiteDatastore(Datastore):
         call_id using custom_id, and stores both the response and metadata.
 
         :param batch_result: The completed batch results to store
+        :param upsert: If True, update existing records instead of inserting duplicates (default: False)
         """
         if not batch_result.parsed_responses:
             return  # Nothing to store
@@ -610,12 +640,20 @@ class SQLiteDatastore(Datastore):
                 if checkpoint:
                     record["checkpoint"] = checkpoint
 
-                # Build WHERE clause and upsert
-                where_clause, where_params = self._build_where_clause(
-                    agent_name, checkpoint, doc_hash
-                )
-                self._upsert_response(
-                    conn, table_name, record, where_clause, where_params
+                # Insert the response (or update if upsert=True)
+                if upsert:
+                    where_clause, where_params = self._build_where_clause(
+                        agent_name, checkpoint, doc_hash
+                    )
+                else:
+                    where_clause = where_params = None
+                self._insert_response(
+                    conn,
+                    table_name,
+                    record,
+                    where_clause=where_clause,
+                    where_params=where_params,
+                    upsert=upsert,
                 )
 
                 # Store metadata if available
@@ -719,23 +757,10 @@ class SQLiteDatastore(Datastore):
         checkpoint = call_id.get("checkpoint")
         doc_hash = call_id["doc_hash"]
 
-        # Build WHERE conditions to match the call_id
-        where_conditions = ["doc_hash = ?"]
-        params = [doc_hash]
-
-        if agent_name is not None:
-            where_conditions.append("agent_name = ?")
-            params.append(agent_name)
-        else:
-            where_conditions.append("agent_name IS NULL")
-
-        if checkpoint is not None:
-            where_conditions.append("checkpoint = ?")
-            params.append(checkpoint)
-        else:
-            where_conditions.append("checkpoint IS NULL")
-
-        where_clause = " AND ".join(where_conditions)
+        # Build WHERE clause using helper method (include explicit NULL check for checkpoint)
+        where_clause, params = self._build_where_clause(
+            agent_name, checkpoint, doc_hash, needs_checkpoint_col=True
+        )
 
         cursor = conn.execute(
             f"SELECT COUNT(*) as count FROM batch_pending WHERE {where_clause}",
