@@ -1,8 +1,8 @@
 import json
+import os
 from pathlib import Path
 from typing import List, Literal, Optional, Union, TYPE_CHECKING
 from parallellm.core.backend import BaseBackend
-from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.exception import NotAvailable
 from parallellm.core.identity import LLMIdentity
@@ -50,14 +50,11 @@ class BatchBackend(BaseBackend):
         self._rewrite_cache = rewrite_cache
 
         self._batch_buffer: list[tuple[CallIdentifier, dict]] = []
-        self._provider: BatchProvider = None
         self.session_id = session_id
-
-        self.batch_group_counter = 0
 
     def submit_query(
         self,
-        provider: "BatchProviderType",
+        provider: "BatchProvider",
         params: CommonQueryParameters,
         *,
         call_id: CallIdentifier,
@@ -67,18 +64,11 @@ class BatchBackend(BaseBackend):
         New control flow: Backend calls provider to get batch data, then bookkeeps it.
         This inverts control from provider calling backend.
         """
-        # Store provider reference (all calls in a batch must use the same provider)
-        if self._provider is None:
-            self._provider = provider
-        elif self._provider is not provider:
-            raise ValueError(
-                f"BatchBackend already has provider of type {self._provider.provider_type}; "
-                f"cannot mix with {provider.provider_type} provider in the same batch."
-            )
 
         # Get the batch call data from the provider
         stuff = provider.prepare_batch_call(
             params,
+            custom_id=self.generate_custom_id(call_id),
             **kwargs,
         )
 
@@ -87,7 +77,6 @@ class BatchBackend(BaseBackend):
             call_id,
             params["llm"],
             stuff=stuff,
-            auto_assign_id="custom_id",
         )
 
         # Batch values are always unavailable
@@ -122,18 +111,12 @@ class BatchBackend(BaseBackend):
         call_id: CallIdentifier,
         llm: LLMIdentity,
         stuff: dict,
-        *,
-        auto_assign_id: Optional[str] = None,
     ):
         """
         Saves a call so that it may be executed as a batch later
 
         :param call_id: The call identifier
         :param stuff: Arbitrary data needed to make the call later. Should be a dict.
-
-        :param auto_assign_id: If not None, then `stuff` will be auto-assigned a custom_id, which
-        will be f"{checkpoint_name}-{session_id}-{seq_id}", which is guaranteed to be unique unless a major
-        error has occurred. It will be placed in stuff[auto_assign_id].
 
         :raises NotAvailable: If the call_id is already in a pending batch
         """
@@ -142,19 +125,34 @@ class BatchBackend(BaseBackend):
         if self._ds.is_call_in_pending_batch(call_id):
             return
 
-        if auto_assign_id is not None:
-            agent_name = call_id["agent_name"]
-            checkpoint = call_id["checkpoint"] or ""
-            seq_id = call_id["seq_id"]
-            custom_id = f"{agent_name}-{checkpoint}-{self.session_id}-{seq_id}"
-            stuff[auto_assign_id] = custom_id
-
         self._batch_buffer.append((call_id, llm.model_name, stuff))
 
+    def generate_custom_id(
+        self,
+        call_id: CallIdentifier,
+    ):
+        """Generate a custom ID for batch calls
+
+        f"{checkpoint_name}-{session_id}-{seq_id}", which is guaranteed to be unique unless a major
+        error has occurred
+        """
+        agent_name = call_id["agent_name"]
+        checkpoint = call_id["checkpoint"] or ""
+        seq_id = call_id["seq_id"]
+        custom_id = f"{agent_name}-{checkpoint}-{self.session_id}-{seq_id}"
+        return custom_id
+
     def execute_batch(
-        self, *, max_batch_size=1000, partition_by_model_name=True
+        self,
+        provider: "BatchProvider",
+        *,
+        max_batch_size=1000,
+        partition_by_model_name=True,
     ) -> CohortIdentifier:
         """Execute the batch of calls"""
+
+        if not self._batch_buffer:
+            return CohortIdentifier(batch_ids=[], session_id=self.session_id)
 
         # 1. Split based on model_name
         # Many batch APIs (like OpenAI's) require the same model across the entire batch
@@ -201,15 +199,14 @@ class BatchBackend(BaseBackend):
         for batch in batches:
             # Here, you would typically call the provider's batch method
             call_ids, stuff = zip(*batch)
-            batch_id = self._provider.submit_batch_to_provider(call_ids, list(stuff))
+            batch_id = provider.submit_batch_to_provider(
+                self._fm, call_ids, list(stuff)
+            )
             self._ds.store_pending_batch(batch_id)
             batch_ids.append(batch_id)
 
             # Log batch submission to dashboard
-            if self._dash_logger is not None:
-                self._dash_logger.update_hash(
-                    batch_id.batch_uuid, HashStatus.SENT_BATCH
-                )
+            print("Sent batch:", batch_id.batch_uuid)
 
         cohort_id = CohortIdentifier(batch_ids=batch_ids, session_id=self.session_id)
         # Clear the batch buffer after execution
@@ -219,32 +216,6 @@ class BatchBackend(BaseBackend):
     def persist(self):
         """Persist any remaining data and datastore"""
         self._ds.persist()
-
-        # Now is the time to execute the batch
-        if self._provider is not None and self._batch_buffer:
-            self.execute_batch()
-
-    def persist_batch_to_jsonl(self, stuff: list[dict], *, preferred_name=None) -> Path:
-        """
-        Helper function to persist batch inputs to disk.
-        Coordinates with the FileManager to get a suitable location.
-        `stuff` is JSON-serialized.
-
-        Because many SDKs want the entire batch to be sent over as a file.
-        """
-        if preferred_name is None:
-            preferred_name = f"batch_{self.session_id}_{self.batch_group_counter}.jsonl"
-            self.batch_group_counter += 1
-
-        # Remnants of same-session_id files should not be possible, since
-        # session_id should be unique per run.
-        path = self._fm.allocate_batch_in() / preferred_name
-
-        with open(path, "w", encoding="utf-8") as f:
-            for item in stuff:
-                f.write(json.dumps(item) + "\n")
-
-        return path
 
     def persist_to_zip(
         self, stuff: Union[str, list[dict]], fpath: Path, *, inner_fname: str = None
@@ -282,7 +253,11 @@ class BatchBackend(BaseBackend):
     # That contains (agent_name, checkpoint?, seq_id, session_id, doc_hash, provider_type, batch_uuid)
 
     def download_batch_from_provider(
-        self, batch_uuid: str, *, save_to_disk: Literal[None, "zip"] = "zip"
+        self,
+        provider: "BatchProvider",
+        batch_uuid: str,
+        *,
+        save_to_disk: Literal[None, "zip"] = "zip",
     ) -> List[BatchResult]:
         """
         Given a batch UUID, download the results.
@@ -296,10 +271,8 @@ class BatchBackend(BaseBackend):
         :param save_to_disk: If "zip", saves the results to a zip file.
             If None, does not save to disk.
         """
-        if self._provider is None:
-            raise ValueError("No provider registered with BatchBackend")
 
-        batch_results = self._provider.download_batch(batch_uuid)
+        batch_results = provider.download_batch(batch_uuid)
 
         if batch_results and self._dash_logger is not None:
             # Log batch download to dashboard
@@ -308,7 +281,8 @@ class BatchBackend(BaseBackend):
         for res in batch_results:
             if save_to_disk == "zip":
                 ending = ".zip" if res.status == "ready" else "_err.zip"
-                fpath = self._fm.allocate_batch_out() / f"{batch_uuid}{ending}"
+                batch_fname = os.path.basename(batch_uuid)
+                fpath = self._fm.allocate_batch_out() / f"{batch_fname}{ending}"
                 self.persist_to_zip(
                     res.raw_output, fpath=fpath, inner_fname=batch_uuid + ".jsonl"
                 )
@@ -328,31 +302,31 @@ class BatchBackend(BaseBackend):
 
     def try_download_all_batches(
         self,
+        provider: "BatchProvider",
     ):
         """
         Try to download all batches and clean up completed ones
         """
         pending_batches = self._ds.get_all_pending_batch_uuids()
         for batch_uuid in pending_batches:
-            try:
-                batch_results = self.download_batch_from_provider(
-                    batch_uuid, save_to_disk="zip"
-                )
-                for batch_result in batch_results:
-                    if batch_result.status == "ready":
-                        print(f"Batch {batch_uuid} completed and stored.")
-                        # Clean up the pending batch record
-                        self._ds.clear_batch_pending(batch_uuid)
-                    elif batch_result.status == "error":
-                        print(f"Batch {batch_uuid} completed with errors and stored.")
-                        # Clean up the pending batch record even for errors
-                        self._ds.clear_batch_pending(batch_uuid)
+            batch_results = self.download_batch_from_provider(
+                provider, batch_uuid, save_to_disk="zip"
+            )
+            for batch_result in batch_results:
+                if batch_result.status == "ready":
+                    print(f"Batch {batch_uuid} completed and stored.")
+                    # Clean up the pending batch record
+                    self._ds.clear_batch_pending(batch_uuid)
+                elif batch_result.status == "error":
+                    print(f"Batch {batch_uuid} completed with errors and stored.")
+                    # Clean up the pending batch record even for errors
+                    self._ds.clear_batch_pending(batch_uuid)
 
-                if not batch_results:
+            if not batch_results:
+                if self._dash_logger is not None:
+                    self._dash_logger.update_hash(batch_uuid, HashStatus.SENT_BATCH)
+                else:
                     print(f"Batch {batch_uuid} is still pending.")
-            except Exception as e:
-                # print(f"Error downloading batch {batch_uuid}: {e}")
-                raise e
 
 
 class DebugBatchBackend(BatchBackend):

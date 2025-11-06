@@ -52,6 +52,12 @@ class FileManager:
         # write metadata to immediately persist session_counter increment
         self._save_metadata(self.metadata)
 
+        self.batch_group_counter = 0
+
+    def _get_session_counter(self) -> int:
+        """Get the current session ID"""
+        return self.metadata.get("session_counter", None)
+
     def _sanitize(
         self, user_input: Optional[str], *, default="default", add_hash=True
     ) -> str:
@@ -186,6 +192,35 @@ class FileManager:
         batch_dir.mkdir(parents=True, exist_ok=True)
         return batch_dir
 
+    def save_batch_in(
+        self, stuff: list[dict], *, preferred_name=None, batch_counter_id=None
+    ):
+        """
+        Helper function to persist batch inputs to disk.
+        Coordinates with the FileManager to get a suitable location.
+        `stuff` is JSON-serialized.
+
+        Because many SDKs want the entire batch to be sent over as a file.
+        """
+        if batch_counter_id is None:
+            batch_counter_id = self.batch_group_counter
+            self.batch_group_counter += 1
+
+        if preferred_name is None:
+            preferred_name = (
+                f"batch_{self._get_session_counter()}_{batch_counter_id}.jsonl"
+            )
+
+        # Remnants of same-session_id files should not be possible, since
+        # session_id should be unique per run.
+        path = self.allocate_batch_in() / preferred_name
+
+        with open(path, "w", encoding="utf-8") as f:
+            for item in stuff:
+                f.write(json.dumps(item) + "\n")
+
+        return path
+
     def allocate_batch_out(self) -> Path:
         """
         Get the base batch outputs directory.
@@ -228,7 +263,7 @@ class FileManager:
             with open(log_file, "w", encoding="utf-8") as f:
                 f.write("session_id\tevent_type\tagent_name\tcheckpoint\tseq_id\n")
 
-        session_id = self.metadata.get("session_counter", "unknown")
+        session_id = self._get_session_counter()
         checkpoint_display = (
             checkpoint_name if checkpoint_name is not None else "anonymous"
         )

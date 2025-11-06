@@ -251,10 +251,10 @@ class DashboardLogger:
         :param valid_responses: Optional set of valid responses (e.g., {'y', 'n'})
         :return: What the user responded
         """
-        self.coordinated_print(prompt)
-        response = input().strip().lower()
+        self.coordinated_print("")
+        response = input(prompt).strip().lower()
         while valid_responses is not None and response not in valid_responses:
-            self.coordinated_print(
+            print(
                 f"Invalid response. Please enter one of: {', '.join(valid_responses)}"
             )
             response = input().strip().lower()
@@ -275,14 +275,11 @@ class DashboardLogger:
             plural = "es"
         message = (
             f"Submit {Fore.CYAN}{num_batches} batch{plural}{Style.RESET_ALL} "
-            f"({Fore.CYAN}{total_calls} calls{Style.RESET_ALL})?"
+            f"({Fore.CYAN}{total_calls} calls{Style.RESET_ALL})? (y/n): "
         )
 
-        self.coordinated_print(message)
-        prompt = f" (y/n): "
-
         response = self.ask_for_confirmation(
-            prompt, valid_responses={"y", "n", "yes", "no"}
+            message, valid_responses={"y", "n", "yes", "no"}
         )
 
         return response in {"y", "yes"}

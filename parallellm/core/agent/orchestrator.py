@@ -110,6 +110,9 @@ class AgentOrchestrator:
         """
         self._backend.persist()
 
+        if getattr(self._backend, "execute_batch", None):
+            self._backend.execute_batch(self._provider)
+
         self._fm.persist()
 
     def save_to_file(
@@ -128,4 +131,4 @@ class AgentOrchestrator:
     def get_session_counter(self):
         """
         Get session counter, aka session ID."""
-        return self._fm.metadata["session_counter"]
+        return self._fm._get_session_counter()

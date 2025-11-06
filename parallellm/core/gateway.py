@@ -100,7 +100,7 @@ class ParalleLLMGateway:
                 fm,
                 dash_logger=dash_logger,
                 datastore_cls=datastore_cls,
-                session_id=fm.metadata["session_counter"],
+                session_id=fm._get_session_counter(),
                 confirm_batch_submission=user_confirmation,
                 rewrite_cache=rewrite_cache,
             )
@@ -133,6 +133,7 @@ class ParalleLLMGateway:
         elif provider == "google":
             from parallellm.provider.google import (
                 AsyncGoogleProvider,
+                BatchGoogleProvider,
                 SyncGoogleProvider,
             )
             from google import genai
@@ -140,6 +141,9 @@ class ParalleLLMGateway:
             if strategy == "async":
                 client = genai.Client()
                 provider = AsyncGoogleProvider(client=client)
+            elif strategy == "batch":
+                client = genai.Client()
+                provider = BatchGoogleProvider(client=client)
             else:
                 client = genai.Client()
                 provider = SyncGoogleProvider(client=client)
@@ -175,7 +179,7 @@ class ParalleLLMGateway:
 
         # try downloading previous batches if any
         if strategy == "batch":
-            backend.try_download_all_batches()
+            backend.try_download_all_batches(provider)
 
         logger.info(f"Resuming with session_id={bm.get_session_counter()}")
         return bm

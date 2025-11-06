@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Union
 from pydantic import BaseModel
 
 from parallellm.core.identity import LLMIdentity
@@ -11,6 +11,9 @@ from parallellm.types import (
     ProviderType,
     ParsedResponse,
 )
+
+if TYPE_CHECKING:
+    from parallellm.file_io.file_manager import FileManager
 
 
 class BaseProvider:
@@ -69,6 +72,7 @@ class BatchProvider(BaseProvider):
     def prepare_batch_call(
         self,
         params: CommonQueryParameters,
+        custom_id: str,
         **kwargs,
     ):
         """
@@ -80,7 +84,7 @@ class BatchProvider(BaseProvider):
         raise NotImplementedError
 
     def submit_batch_to_provider(
-        self, call_ids: list[CallIdentifier], stuff: list[Any]
+        self, fm: "FileManager", call_ids: list[CallIdentifier], stuff: list[Any]
     ) -> BatchIdentifier:
         """Submit a batch of calls to the provider."""
         raise NotImplementedError

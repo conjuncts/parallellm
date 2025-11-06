@@ -254,6 +254,7 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
     def _turn_to_openai_batch(
         self,
         params: CommonQueryParameters,
+        custom_id: str,
         **kwargs,
     ):
         instructions = params["instructions"]
@@ -277,6 +278,7 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
             }
 
         body = {
+            "custom_id": custom_id,
             "model": llm.model_name,
             "instructions": instructions,
             "input": fixed_documents,
@@ -287,11 +289,13 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
     def prepare_batch_call(
         self,
         params: CommonQueryParameters,
+        custom_id: str,
         **kwargs,
     ):
         """Prepare batch call data for OpenAI"""
         return self._turn_to_openai_batch(
             params,
+            custom_id=custom_id,
             **kwargs,
         )
 
@@ -347,14 +351,14 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         )
 
     def submit_batch_to_provider(
-        self, call_ids: list[CallIdentifier], stuff: list[dict]
+        self, fm, call_ids: list[CallIdentifier], stuff: list[dict]
     ) -> BatchIdentifier:
         """
         Submit a batch of calls to the provider.
 
         This is called from the backend.
         """
-        fpath = self.backend.persist_batch_to_jsonl(stuff)
+        fpath = fm.persist_batch_to_jsonl(stuff)
         with open(fpath, "rb") as f:
             batch_input_file = self.client.files.create(file=f, purpose="batch")
             batch_input_file_id = batch_input_file.id
