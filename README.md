@@ -33,14 +33,14 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 | --- | --- | --- | --- |
 | OpenAI | ✅ | ✅ | ✅ |
 | Anthropic | ✅ | ✅ | TODO |
-| Google | ✅ | ✅ | TODO |
+| Google | ✅ | ✅ | ✅ |
 
 
 | Structured Output | Sync | Async | Batch |
 | --- | --- | --- | --- |
 | OpenAI | ✅ | ✅ | ✅? |
 | Anthropic | ❌ | ❌ | ❌ |
-| Google | ✅ | ✅ | TODO |
+| Google | ✅ | ✅ | ✅? |
 
 | Tool Calls | Sync | Async | Batch |
 | --- | --- | --- | --- |

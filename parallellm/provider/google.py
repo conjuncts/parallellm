@@ -1,16 +1,25 @@
 import json
 from typing import TYPE_CHECKING, List, Optional, Union
+from venv import logger
 from pydantic import BaseModel
 from parallellm.core.identity import LLMIdentity
-from parallellm.provider.base import AsyncProvider, BaseProvider, SyncProvider
+from parallellm.file_io.file_manager import FileManager
+from parallellm.provider.base import (
+    AsyncProvider,
+    BaseProvider,
+    BatchProvider,
+    SyncProvider,
+)
 from parallellm.types import (
-    ParsedResponse,
-    CommonQueryParameters,
+    BatchIdentifier,
+    BatchResult,
     CallIdentifier,
+    CommonQueryParameters,
     LLMDocument,
-    ToolCallRequest,
-    ToolCallOutput,
+    ParsedResponse,
     ToolCall,
+    ToolCallOutput,
+    ToolCallRequest,
 )
 
 from google import genai
@@ -140,6 +149,52 @@ def _prepare_google_config(params: CommonQueryParameters, **kwargs) -> tuple:
     return model_name, contents, config
 
 
+def _extract_text_from_gemini_model(resp: BaseModel):
+    """Extract text content from Gemini API response.
+    See google.genai.types.GenerateContentResponse._get_text
+    Also suppresses a warning
+    """
+    if (
+        not resp.candidates
+        or not resp.candidates[0].content
+        or not resp.candidates[0].content.parts
+    ):
+        return None
+    text = ""
+    any_text_part_text = False
+    for part in resp.candidates[0].content.parts:
+        if isinstance(part.text, str):
+            if isinstance(part.thought, bool) and part.thought:
+                continue
+            any_text_part_text = True
+            text += part.text
+    # part.text == '' is different from part.text is None
+    return text if any_text_part_text else None
+
+
+def _extract_text_from_gemini_dict(resp: dict):
+    """Extract text content from Gemini API response.
+    See google.genai.types.GenerateContentResponse._get_text
+    Also suppresses a warning
+    """
+    if (
+        not resp.get("candidates")
+        or not resp["candidates"][0].get("content")
+        or not resp["candidates"][0]["content"].get("parts")
+    ):
+        return None
+    text = ""
+    any_text_part_text = False
+    for part in resp["candidates"][0]["content"]["parts"]:
+        if isinstance(part.get("text"), str):
+            if isinstance(part.get("thought"), bool) and part["thought"]:
+                continue
+            any_text_part_text = True
+            text += part["text"]
+    # part.text == '' is different from part.text is None
+    return text if any_text_part_text else None
+
+
 class GoogleProvider(BaseProvider):
     provider_type: str = "google"
 
@@ -152,13 +207,20 @@ class GoogleProvider(BaseProvider):
             # Pydantic model (e.g., google.genai.types.GenerateContentResponse)
 
             response: types.GenerateContentResponse = raw_response
-            text = response.text
+            # Suppress warning
+            # text = response.text
+            text = _extract_text_from_gemini_model(response)
             response_id = response.response_id
             obj = response.model_dump(mode="json")
             obj.pop("response_id", None)
 
             tools = []
-            for part in response.candidates[0].content.parts:
+
+            if not response.candidates:
+                # Could be an error like rate limit
+                pass
+
+            for part in response.candidates[0].content.parts or []:
                 if part.function_call:
                     func_call: types.FunctionCall = part.function_call
                     tools.append(
@@ -182,7 +244,8 @@ class GoogleProvider(BaseProvider):
             )
 
             # Extract text from Gemini response
-            text_content = raw_response.get("text", str(raw_response))
+            # from google.genai.types.GenerateContentResponse import _get_text
+            text_content = _extract_text_from_gemini_dict(raw_response)
 
             tools = []
             for part in (
@@ -250,3 +313,286 @@ class AsyncGoogleProvider(AsyncProvider, GoogleProvider):
         )
 
         return coro
+
+
+class BatchGoogleProvider(BatchProvider, GoogleProvider):
+    def __init__(self, client: "genai.Client"):
+        self.client = client
+
+    def _turn_to_gemini_batch(
+        self,
+        params: CommonQueryParameters,
+        custom_id: str,
+        **kwargs,
+    ):
+        """Convert CommonQueryParameters to Gemini batch request format"""
+        instructions = params["instructions"]
+        fixed_documents = _fix_docs_for_google(params["documents"])
+        llm = params["llm"]
+        text_format = params.get("text_format")
+        tools = params.get("tools")
+
+        config = kwargs.copy()
+        if instructions:
+            config["system_instruction"] = instructions
+
+        if text_format is not None:
+            config["response_mime_type"] = "application/json"
+            config["response_schema"] = text_format
+
+        if tools:
+            config["tools"] = _prepare_tool_schema(tools)
+
+        # Gemini batch request format
+        request = {
+            "key": custom_id,
+            "request": {
+                "contents": fixed_documents
+                if isinstance(fixed_documents, list)
+                else [{"parts": [{"text": fixed_documents}], "role": "user"}],
+                **config,
+            },
+        }
+
+        return request
+
+    def prepare_batch_call(
+        self,
+        params: CommonQueryParameters,
+        custom_id: str,
+        **kwargs,
+    ):
+        """Prepare batch call data for Gemini"""
+        return self._turn_to_gemini_batch(
+            params,
+            custom_id=custom_id,
+            **kwargs,
+        )
+
+    def _decode_gemini_batch_result(
+        self, result: dict, custom_id: str
+    ) -> ParsedResponse:
+        """Decode a single result from Gemini batch response"""
+
+        # For successful responses, the result should be a GenerateContentResponse
+        if "response" in result:
+            response_data = result["response"]
+            # Use existing parse_response method to handle the response
+            parsed = self.parse_response(response_data)
+            # Override response_id with custom_id
+            return ParsedResponse(
+                text=parsed.text,
+                response_id=custom_id,
+                metadata=parsed.metadata,
+                tool_calls=parsed.tool_calls,
+            )
+        else:
+            # Fallback parsing
+            return ParsedResponse(
+                text=result.get("text", ""),
+                response_id=custom_id,
+                metadata=result,
+                tool_calls=[],
+            )
+
+    def _decode_gemini_batch_error(
+        self, result: dict, custom_id: str
+    ) -> ParsedResponse:
+        """Decode a single error from Gemini batch response"""
+
+        error_info = result.get("error", {})
+        error_message = error_info.get("message", "Unknown error")
+
+        return ParsedResponse(
+            text=error_message,
+            response_id=custom_id,
+            metadata=error_info,
+            tool_calls=[],
+        )
+
+    def submit_batch_to_provider(
+        self, fm: FileManager, call_ids: list[CallIdentifier], stuff: list[dict]
+    ) -> BatchIdentifier:
+        """
+        Submit a batch of calls to the provider.
+
+        This is called from the backend.
+        """
+        import os
+        from google.genai import types
+
+        # Create JSONL file with custom_ids
+        temp_file_path = fm.save_batch_in(stuff)
+
+        custom_ids = []
+        for item in stuff:
+            if "key" not in item:
+                raise ValueError("Each batch item must have a 'key' field.")
+            custom_ids.append(item["key"])
+
+        try:
+            # Upload the file to Gemini File API
+            uploaded_file = self.client.files.upload(
+                file=temp_file_path,
+                config=types.UploadFileConfig(
+                    display_name=f"batch-requests-{len(stuff)}",
+                    mime_type="application/json",
+                ),
+            )
+
+            # Create batch job
+            llm = stuff[0].get("model", "gemini-2.5-flash")
+            batch_job = self.client.batches.create(
+                model=llm,
+                src=uploaded_file.name,
+                config={
+                    "display_name": f"batch-job-{len(stuff)}-requests",
+                },
+            )
+
+            return BatchIdentifier(
+                call_ids=call_ids,
+                custom_ids=custom_ids,
+                batch_uuid=batch_job.name.removeprefix("batches/"),
+            )
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+
+    def download_batch(
+        self,
+        batch_uuid: str,
+    ) -> List[BatchResult]:
+        """Download the results of a batch from the provider.
+
+        :param batch_uuid: The UUID of the batch to download.
+        :return: List of BatchResult objects containing the results and errors (if any).
+            If nothing is ready yet, empty list is returned.
+        """
+        import json
+
+        # Get batch job status
+        batch_job = self.client.batches.get(name="batches/" + batch_uuid)
+
+        # Check if job is completed
+        completed_states = {
+            "JOB_STATE_SUCCEEDED",
+            "JOB_STATE_FAILED",
+            "JOB_STATE_CANCELLED",
+            "JOB_STATE_EXPIRED",
+        }
+
+        if batch_job.state.name not in completed_states:
+            return []  # Still pending
+
+        results = []
+
+        if batch_job.state.name == "JOB_STATE_SUCCEEDED":
+            if batch_job.dest and batch_job.dest.file_name:
+                # Results are in a file
+                try:
+                    file_content = self.client.files.download(
+                        file=batch_job.dest.file_name
+                    )
+                    content_str = file_content.decode("utf-8")
+
+                    parsed_responses = []
+                    for line in content_str.strip().split("\n"):
+                        if line:
+                            try:
+                                line_data = json.loads(line)
+                                custom_id = line_data.get("key", "unknown")
+
+                                if "response" in line_data:
+                                    parsed_response = self._decode_gemini_batch_result(
+                                        line_data, custom_id
+                                    )
+                                else:
+                                    parsed_response = self._decode_gemini_batch_error(
+                                        line_data, custom_id
+                                    )
+
+                                parsed_responses.append(parsed_response)
+                            except json.JSONDecodeError:
+                                # Handle malformed JSON lines
+                                continue
+
+                    results.append(
+                        BatchResult(
+                            status="ready",
+                            raw_output=content_str,
+                            parsed_responses=parsed_responses,
+                        )
+                    )
+                except Exception as e:
+                    results.append(
+                        BatchResult(
+                            status="error",
+                            raw_output=str(e),
+                            parsed_responses=None,
+                        )
+                    )
+            else:
+                raise ValueError("Batch job succeeded but no destination file found.")
+            # elif batch_job.dest and batch_job.dest.inlined_responses:
+            #     # Results are inline
+            #     try:
+            #         parsed_responses = []
+            #         for i, inline_response in enumerate(
+            #             batch_job.dest.inlined_responses
+            #         ):
+            #             custom_id = f"request-{i}"
+
+            #             if inline_response.response:
+            #                 response_dict = {
+            #                     "response": inline_response.response.model_dump()
+            #                 }
+            #                 parsed_response = self._decode_gemini_batch_result(
+            #                     response_dict, custom_id
+            #                 )
+            #             elif inline_response.error:
+            #                 error_dict = {"error": inline_response.error}
+            #                 parsed_response = self._decode_gemini_batch_error(
+            #                     error_dict, custom_id
+            #                 )
+            #             else:
+            #                 # Unexpected case
+            #                 parsed_response = ParsedResponse(
+            #                     text="",
+            #                     response_id=custom_id,
+            #                     metadata={},
+            #                     tool_calls=[],
+            #                 )
+
+            #             parsed_responses.append(parsed_response)
+
+            #         results.append(
+            #             BatchResult(
+            #                 status="ready",
+            #                 raw_output="inline_responses",
+            #                 parsed_responses=parsed_responses,
+            #             )
+            #         )
+            #     except Exception as e:
+            #         results.append(
+            #             BatchResult(
+            #                 status="error",
+            #                 raw_output=str(e),
+            #                 parsed_responses=None,
+            #             )
+            #         )
+        else:
+            # Job failed, cancelled, or expired
+            error_msg = getattr(
+                batch_job, "error", f"Job state: {batch_job.state.name}"
+            )
+            results.append(
+                BatchResult(
+                    status="error",
+                    raw_output=str(error_msg),
+                    parsed_responses=None,
+                )
+            )
+
+        return results
