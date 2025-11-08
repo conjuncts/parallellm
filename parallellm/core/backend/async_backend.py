@@ -36,10 +36,12 @@ class AsyncBackend(BaseBackend):
         *,
         datastore_cls=None,
         rewrite_cache: bool = False,
+        max_concurrent: int = 20,
     ):
         self._fm = fm
         self._dash_logger = dash_logger
         self._rewrite_cache = rewrite_cache
+        self._max_concurrent = max_concurrent
 
         self.tasks: list[asyncio.Task] = []
         self.task_metas: list[dict] = []
@@ -184,6 +186,9 @@ class AsyncBackend(BaseBackend):
     ):
         """Helper to create and store a task in the event loop"""
 
+        # Check if we need to resolve oldest tasks to prevent queue overflow
+        await self._manage_queue_size()
+
         # Wrap the coro to parse response immediately
         metadata = call_id.copy()
 
@@ -196,6 +201,12 @@ class AsyncBackend(BaseBackend):
         self.tasks.append(task)
         self.task_metas.append(metadata)
         return task
+
+    async def _manage_queue_size(self):
+        """Check queue size and resolve oldest tasks if threshold is exceeded"""
+        if self.tasks and len(self.tasks) >= self._max_concurrent:
+            oldest_meta = self.task_metas[0]
+            self._poll_changes(oldest_meta)
 
     async def _poll_changes(self, until_call_id: Optional[CallIdentifier]):
         """

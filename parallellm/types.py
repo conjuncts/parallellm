@@ -209,3 +209,17 @@ class CommonQueryParameters(TypedDict):
     llm: "LLMIdentity"
     text_format: Optional[str]
     tools: Optional[List[dict]]
+
+
+@dataclass(frozen=True, slots=True)
+class ConfigurationTweaks:
+    """
+    Configuration tweaks for the ParallelLLM framework.
+    Holds configs not significant enough to warrant a full keyword argument.
+    """
+
+    async_max_concurrent: Optional[int] = 20
+    "Maximum number of concurrent tasks in AsyncBackend."
+
+    batch_user_confirmation: bool = True
+    "Whether to ask for user confirmation before submitting a batch."

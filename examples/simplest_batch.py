@@ -10,7 +10,6 @@ with ParalleLLM.resume_directory(
     provider="google",  #
     strategy="batch",
     log_level=logging.DEBUG,
-    user_confirmation=True,
     # ignore_cache=True,
 ) as pllm:
     # with pllm.default():

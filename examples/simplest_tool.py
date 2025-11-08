@@ -41,7 +41,6 @@ with ParalleLLM.resume_directory(
     provider="openai",  #
     strategy="sync",
     log_level=logging.DEBUG,
-    user_confirmation=True,
     # ignore_cache=True,
 ) as pllm:
     with pllm.agent(dashboard=True) as dash:
