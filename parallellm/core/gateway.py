@@ -6,7 +6,7 @@ from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger
 from parallellm.logging.fancy import parallellm_log_handler
 from parallellm.provider.openai import BatchOpenAIProvider
-from parallellm.types import ConfigurationTweaks, ProviderType
+from parallellm.types import MinorTweaks, ProviderType
 
 
 class ParalleLLMGateway:
@@ -21,7 +21,8 @@ class ParalleLLMGateway:
         log_level=logging.INFO,
         ignore_cache=False,
         rewrite_cache=False,
-        tweaks: ConfigurationTweaks = ConfigurationTweaks(),
+        throttler=None,
+        tweaks: MinorTweaks = MinorTweaks(),
     ) -> AgentOrchestrator:
         """
         Resume an AgentOrchestrator from a previously saved directory.
@@ -35,6 +36,7 @@ class ParalleLLMGateway:
         :param log_level: Logging level for the session
         :param ignore_cache: If True, always submit to API instead of using cached responses
         :param rewrite_cache: If True, overwrite cached responses with new ones (uses upsert)
+        :param throttler: Throttler instance for rate limiting (default: None, no throttling)
         :return: Configured AgentOrchestrator instance
         :raises ValueError: If strategy is not supported
         :raises NotImplementedError: If dry_run is True or strategy is not implemented
@@ -82,6 +84,7 @@ class ParalleLLMGateway:
                 datastore_cls=datastore_cls,
                 rewrite_cache=rewrite_cache,
                 max_concurrent=tweaks.async_max_concurrent,
+                throttler=throttler,
             )
         elif strategy == "sync":
             from parallellm.core.backend.sync_backend import SyncBackend
@@ -91,6 +94,7 @@ class ParalleLLMGateway:
                 dash_logger=dash_logger,
                 datastore_cls=datastore_cls,
                 rewrite_cache=rewrite_cache,
+                throttler=throttler,
             )
         elif strategy == "batch":
             from parallellm.core.backend.batch_backend import BatchBackend

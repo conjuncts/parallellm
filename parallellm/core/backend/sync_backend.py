@@ -1,5 +1,7 @@
+import time
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from parallellm.core.backend import BaseBackend
+from parallellm.core.throttler import Throttler
 from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.response import ReadyLLMResponse
 from parallellm.file_io.file_manager import FileManager
@@ -29,7 +31,17 @@ class SyncBackend(BaseBackend):
         *,
         datastore_cls=None,
         rewrite_cache: bool = False,
+        throttler=None,
     ):
+        """
+        Initialize the SyncBackend.
+
+        :param fm: FileManager for data persistence
+        :param dash_logger: Optional dashboard logger for monitoring
+        :param datastore_cls: Custom datastore class (defaults to SQLiteDatastore)
+        :param rewrite_cache: Whether to overwrite existing cache entries
+        :param throttler: Throttler instance for rate limiting (default: None)
+        """
         self._fm = fm
 
         if datastore_cls is None:
@@ -39,8 +51,27 @@ class SyncBackend(BaseBackend):
         self._dash_logger = dash_logger
         self._rewrite_cache = rewrite_cache
 
+        # Throttling configuration
+        if throttler is not None:
+            self._throttler = throttler
+        else:
+            # No rate limiting by default
+            self._throttler = Throttler(
+                max_requests_per_window=None,
+                window_seconds=None,
+            )
+
         # Store results directly instead of managing async tasks
         self._pending_results: Dict[str, Any] = {}
+
+    def _apply_throttling(self) -> None:
+        """Apply throttling by waiting if necessary"""
+        delay = self._throttler.calculate_delay()
+        if delay > 0:
+            time.sleep(delay)
+            # After waiting, record the actual submission time
+            if self._throttler.is_enabled():
+                self._throttler.record_request()
 
     def submit_query(
         self,
@@ -61,6 +92,9 @@ class SyncBackend(BaseBackend):
         seq_id = call_id["seq_id"]
 
         try:
+            # Apply throttling before making the request
+            self._apply_throttling()
+
             if self._dash_logger is not None:
                 self._dash_logger.update_hash(doc_hash, HashStatus.SENT)
 

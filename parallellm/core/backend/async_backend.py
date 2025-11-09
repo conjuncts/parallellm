@@ -5,6 +5,7 @@ import threading
 import atexit
 from typing import Optional, TYPE_CHECKING
 from parallellm.core.backend import BaseBackend
+from parallellm.core.throttler import Throttler
 from parallellm.core.calls import _call_matches
 from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.response import PendingLLMResponse
@@ -37,12 +38,34 @@ class AsyncBackend(BaseBackend):
         datastore_cls=None,
         rewrite_cache: bool = False,
         max_concurrent: int = 20,
+        throttler=None,
     ):
+        """
+        Initialize the AsyncBackend.
+
+        :param fm: FileManager for data persistence
+        :param dash_logger: Optional dashboard logger for monitoring
+        :param datastore_cls: Custom datastore class (defaults to SQLiteDatastore)
+        :param rewrite_cache: Whether to overwrite existing cache entries
+        :param max_concurrent: Maximum number of concurrent tasks
+        :param throttler: Throttler instance for rate limiting (default: None)
+        """
         self._fm = fm
         self._dash_logger = dash_logger
         self._rewrite_cache = rewrite_cache
         self._max_concurrent = max_concurrent
 
+        # Throttling configuration
+        if throttler is not None:
+            self._throttler = throttler
+        else:
+            # No rate limiting
+            self._throttler = Throttler(
+                max_requests_per_window=None,
+                window_seconds=None,
+            )
+
+        # These should ONLY be accessed from the event loop thread
         self.tasks: list[asyncio.Task] = []
         self.task_metas: list[dict] = []
         self._loop: asyncio.BaseEventLoop = None
@@ -113,6 +136,15 @@ class AsyncBackend(BaseBackend):
         res = future.result()
         return res
 
+    async def _apply_throttling(self) -> None:
+        """Apply throttling by waiting if necessary"""
+        delay = self._throttler.calculate_delay()
+        if delay > 0:
+            await asyncio.sleep(delay)
+            # After waiting, record the actual submission time
+            if self._throttler.is_enabled():
+                self._throttler.record_request()
+
     def submit_query(
         self,
         provider: "AsyncProvider",
@@ -171,6 +203,15 @@ class AsyncBackend(BaseBackend):
         if self._loop is None or self._loop.is_closed():
             raise RuntimeError("AsyncBackend event loop is not running")
 
+        # Need to poll.
+        # NOTE: modifying self.tasks in general is NOT thread-safe,
+        # But here we are only checking its length.
+        # If we push the state mutator onto the event loop then it's OK
+        if len(self.tasks) >= self._max_concurrent:
+            # Wait for the oldest task to complete
+            oldest_meta = self.task_metas[0]
+            self._run_coroutine(self._poll_changes(oldest_meta))
+
         # Create the task in the backend's event loop
         future = asyncio.run_coroutine_threadsafe(
             self._create_and_store_task(call_id, coro, provider), self._loop
@@ -186,13 +227,13 @@ class AsyncBackend(BaseBackend):
     ):
         """Helper to create and store a task in the event loop"""
 
-        # Check if we need to resolve oldest tasks to prevent queue overflow
-        await self._manage_queue_size()
-
         # Wrap the coro to parse response immediately
         metadata = call_id.copy()
 
         async def wrapped_coro():
+            # Apply throttling before creating the task
+            await self._apply_throttling()
+
             result = await coro
             parsed = provider.parse_response(result)
             return parsed, metadata
@@ -201,12 +242,6 @@ class AsyncBackend(BaseBackend):
         self.tasks.append(task)
         self.task_metas.append(metadata)
         return task
-
-    async def _manage_queue_size(self):
-        """Check queue size and resolve oldest tasks if threshold is exceeded"""
-        if self.tasks and len(self.tasks) >= self._max_concurrent:
-            oldest_meta = self.task_metas[0]
-            self._poll_changes(oldest_meta)
 
     async def _poll_changes(self, until_call_id: Optional[CallIdentifier]):
         """

@@ -7,3 +7,4 @@ applyTo: '**'
 - Put tests in `tests/`, and **use pytest**.
 - Be concise.
 - Do not use `os.path.join`. Use pathlib instead.
+- Docstrings should follow the ":param" and ":return:" format.

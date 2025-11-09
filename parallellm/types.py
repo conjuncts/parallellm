@@ -212,9 +212,9 @@ class CommonQueryParameters(TypedDict):
 
 
 @dataclass(frozen=True, slots=True)
-class ConfigurationTweaks:
+class MinorTweaks:
     """
-    Configuration tweaks for the ParallelLLM framework.
+    Minor tweaks for the ParallelLLM framework.
     Holds configs not significant enough to warrant a full keyword argument.
     """
 
