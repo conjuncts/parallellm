@@ -181,36 +181,7 @@ class DashboardLogger:
                 sys.stdout.flush()
                 self._console_written = False
 
-    def get_status(self, full_hash: str) -> Optional[HashStatus]:
-        """
-        Get the current status of a hash or batch UUID.
-
-        Args:
-            full_hash: The full hash string or batch UUID
-
-        Returns:
-            The current status of the hash/batch, or None if not found
-        """
-        with self._lock:
-            # Strip "batch_" prefix if present
-            if full_hash.startswith("batch_"):
-                full_hash = full_hash[6:]
-
-            hash_id = full_hash[:8]
-            entry = self._hashes.get(hash_id)
-            return entry.status if entry else None
-
-    def get_all_hashes(self) -> Dict[str, HashStatus]:
-        """
-        Get all current hashes and their statuses.
-
-        Returns:
-            Dictionary mapping full hashes to their statuses
-        """
-        with self._lock:
-            return {entry.full_hash: entry.status for entry in self._hashes.values()}
-
-    def coordinated_print(self, *args, **kwargs):
+    def cprint(self, *args, **kwargs):
         """
         Print to console while properly coordinating with dashboard display.
         This clears the dashboard line, prints the content, then redraws the dashboard.
@@ -251,7 +222,7 @@ class DashboardLogger:
         :param valid_responses: Optional set of valid responses (e.g., {'y', 'n'})
         :return: What the user responded
         """
-        self.coordinated_print("")
+        self.cprint("")
         response = input(prompt).strip().lower()
         while valid_responses is not None and response not in valid_responses:
             print(
@@ -293,3 +264,39 @@ class DashboardLogger:
             return "p"
         else:
             return "n"
+
+
+class PrimitiveDashboardLogger(DashboardLogger):
+    """
+    Gutted DashboardLogger that only prints
+    """
+
+    def __init__(self):
+        """
+        Initialize the DashboardLogger.
+
+        Args:
+            k: Maximum number of hashes/batches to display (default 10)
+            display: Whether to display console output (default True)
+        """
+        pass
+
+    def update_hash(self, full_hash: str, status: HashStatus):
+        pass
+
+    def _update_console(self):
+        pass
+
+    def set_display(self, display: bool):
+        pass
+
+    def clear(self):
+        pass
+
+    def coordinated_print(self, *args, **kwargs):
+        print(*args, **kwargs)
+
+    def finalize_line(self):
+        pass
+
+    # ask_for_confirmation and confirm_batch_submission remain unchanged

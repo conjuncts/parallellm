@@ -22,7 +22,7 @@ class AgentOrchestrator:
         provider: BaseProvider,
         *,
         logger: Logger,
-        dash_logger,
+        dash_logger: DashboardLogger,
         ask_params: Optional[AskParameters] = None,
         ignore_cache: bool = False,
         strategy: Optional[Literal["sync", "async", "batch"]] = None,
@@ -44,7 +44,7 @@ class AgentOrchestrator:
         self._logger = logger
 
         # Initialize the hash logger with display disabled by default
-        self._dash_logger: DashboardLogger = dash_logger
+        self.dash_logger: DashboardLogger = dash_logger
 
         self.ask_params = ask_params or {}
         self.ignore_cache = ignore_cache

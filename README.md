@@ -24,11 +24,7 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 - [ ] accept dict as a LLMDocument
 
 - [ ] retry mechanism
-- [ ] attach a DB poll call to the ask_llm method (when async, so you don't let a gigantic buildup of calls) (In async mode, don't let the queue get too large (if so, start awaiting))
-- [ ] resolve everything on everything
-- [ ] why does resolve() async take so long?
 - [ ] switch hashes from base16 to base64
-- [ ] dash logger should never be none; instead, it should implement standard (expected) prints etc. and logging that gets silently ignored.
 
 | Default | Sync | Async | Batch |
 | --- | --- | --- | --- |

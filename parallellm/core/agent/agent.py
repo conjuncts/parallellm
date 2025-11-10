@@ -297,11 +297,11 @@ class AgentDashboardContext(AgentContext):
             agent_name, batch_manager, ask_params=ask_params, ignore_cache=ignore_cache
         )
         self._was_displaying = False
-        self._bm._dash_logger.k = log_k
+        self._bm.dash_logger.k = log_k
 
     @property
     def _dash_logger(self):
-        return self._bm._dash_logger
+        return self._bm.dash_logger
 
     def __enter__(self):
         # Store current display state and enable display
@@ -325,7 +325,7 @@ class AgentDashboardContext(AgentContext):
         This ensures proper display ordering when the dashboard is active.
         """
         # Use the dashboard logger's coordinated print method
-        self._dash_logger.coordinated_print(*args, **kwargs)
+        self._dash_logger.cprint(*args, **kwargs)
 
     def update_hash_status(self, hash_value: str, status: HashStatus):
         """
@@ -335,5 +335,4 @@ class AgentDashboardContext(AgentContext):
             hash_value: The hash value to update
             status: New status - one of 'C' (cached), '↗' (sent), '↘' (received), '✓' (stored)
         """
-        if self._dash_logger is not None:
-            self._dash_logger.update_hash(hash_value, status)
+        self._dash_logger.update_hash(hash_value, status)

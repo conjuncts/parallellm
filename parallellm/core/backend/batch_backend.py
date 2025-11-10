@@ -7,7 +7,11 @@ from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.exception import NotAvailable
 from parallellm.core.identity import LLMIdentity
 from parallellm.file_io.file_manager import FileManager
-from parallellm.logging.dash_logger import DashboardLogger, HashStatus
+from parallellm.logging.dash_logger import (
+    DashboardLogger,
+    HashStatus,
+    PrimitiveDashboardLogger,
+)
 from parallellm.provider.base import BatchProvider
 from parallellm.types import (
     BatchIdentifier,
@@ -33,7 +37,7 @@ class BatchBackend(BaseBackend):
     def __init__(
         self,
         fm: FileManager,
-        dash_logger: Optional[DashboardLogger] = None,
+        dash_logger: DashboardLogger = PrimitiveDashboardLogger(),
         *,
         datastore_cls=None,
         session_id: int,
@@ -45,7 +49,7 @@ class BatchBackend(BaseBackend):
             self._ds = SQLiteDatastore(fm)
         else:
             self._ds = datastore_cls(fm)
-        self._dash_logger = dash_logger
+        self.dash_logger = dash_logger
         self._confirm_batch_submission = confirm_batch_submission
         self._rewrite_cache = rewrite_cache
 
@@ -201,11 +205,11 @@ class BatchBackend(BaseBackend):
 
         # Ask for confirmation if requested
         _saved_already = False
-        if self._confirm_batch_submission and self._dash_logger is not None:
+        if self._confirm_batch_submission:
             total_calls = sum(len(batch) for batch in index_groups)
             num_batches = len(index_groups)
 
-            confirmed = self._dash_logger.confirm_batch_submission(
+            confirmed = self.dash_logger.confirm_batch_submission(
                 num_batches, total_calls
             )
 
@@ -215,18 +219,17 @@ class BatchBackend(BaseBackend):
                 for record in batches:
                     fpath = self._fm.save_batch_in(record["data"])
                     pending_fpaths.append(fpath)
-                self._dash_logger.coordinated_print(
+                self.dash_logger.cprint(
                     f"Batch preview files written to {pending_fpaths[0]}"
                 )
-                confirmed = self._dash_logger.confirm_batch_submission(
+                confirmed = self.dash_logger.confirm_batch_submission(
                     num_batches, total_calls, allow_preview=False
                 )
 
             if confirmed == "n":
-                if self._dash_logger is not None:
-                    self._dash_logger.coordinated_print(
-                        "Batch submission cancelled by user."
-                    )
+                self.dash_logger.cprint(
+                    "Batch submission cancelled by user."
+                )
                 # Don't clear the buffer - allow the user to try again later
                 return CohortIdentifier(batch_ids=[], session_id=self.session_id)
             # else, proceed
@@ -248,8 +251,8 @@ class BatchBackend(BaseBackend):
             batch_ids.append(ident)
 
             # Log batch submission to dashboard
-            self._dash_logger.update_hash(batch_uuid, HashStatus.SENT_BATCH)
-            self._dash_logger.coordinated_print("Sent batch:", ident.batch_uuid)
+            self.dash_logger.update_hash(batch_uuid, HashStatus.SENT_BATCH)
+            self.dash_logger.cprint("Sent batch:", ident.batch_uuid)
 
         cohort_id = CohortIdentifier(batch_ids=batch_ids, session_id=self.session_id)
         # Clear the batch buffer after execution
@@ -317,9 +320,9 @@ class BatchBackend(BaseBackend):
 
         batch_results = provider.download_batch(batch_uuid)
 
-        if batch_results and self._dash_logger is not None:
+        if batch_results:
             # Log batch download to dashboard
-            self._dash_logger.update_hash(batch_uuid, HashStatus.RECEIVED_BATCH)
+            self.dash_logger.update_hash(batch_uuid, HashStatus.RECEIVED_BATCH)
 
         for res in batch_results:
             if save_to_disk == "zip":
@@ -333,8 +336,7 @@ class BatchBackend(BaseBackend):
             if res.status == "ready":
                 self._ds.store_ready_batch(res, upsert=self._rewrite_cache)
                 # Log batch storage to dashboard
-                if self._dash_logger is not None:
-                    self._dash_logger.update_hash(batch_uuid, HashStatus.STORED)
+                self.dash_logger.update_hash(batch_uuid, HashStatus.STORED)
                 # self._ds.clear_batch_pending(batch_uuid)
             else:
                 # TODO
@@ -357,23 +359,23 @@ class BatchBackend(BaseBackend):
             )
             for batch_result in batch_results:
                 if batch_result.status == "ready":
-                    self._dash_logger.coordinated_print(
+                    self.dash_logger.cprint(
                         f"Batch {batch_uuid} completed and stored."
                     )
                     # Clean up the pending batch record
                     self._ds.clear_batch_pending(batch_uuid)
                 elif batch_result.status == "error":
-                    self._dash_logger.coordinated_print(
+                    self.dash_logger.cprint(
                         f"Batch {batch_uuid} completed with errors and stored."
                     )
                     # Clean up the pending batch record even for errors
                     self._ds.clear_batch_pending(batch_uuid)
 
             if not batch_results:
-                if self._dash_logger is not None:
-                    self._dash_logger.update_hash(batch_uuid, HashStatus.SENT_BATCH)
-                else:
-                    print(f"Batch {batch_uuid} is still pending.")
+                self.dash_logger.update_hash(batch_uuid, HashStatus.SENT_BATCH)
+                self.dash_logger.cprint(
+                    f"Batch {batch_uuid} is still pending."
+                )
 
 
 class DebugBatchBackend(BatchBackend):

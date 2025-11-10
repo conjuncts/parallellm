@@ -47,19 +47,12 @@ class DashboardAwareHandler(logging.StreamHandler):
             msg = self.format(record)
 
             # Check if dashboard logger is active and displaying
-            if (
-                self._dash_logger is not None
-                and self._dash_logger.display
-                and self._dash_logger._console_written
-            ):
+            if self._dash_logger.display and self._dash_logger._console_written:
                 # Dashboard is active, use coordinated approach
                 # Clear current line and print message
                 self.stream.write(f"\r\033[K{msg}\n")
                 self.stream.flush()
 
-                # Redraw the dashboard after our message
-                # if hasattr(self._dash_logger, '_update_console'):
-                # self._dash_logger._update_console()
             else:
                 # No dashboard or dashboard not active, use regular output
                 self.stream.write(msg + self.terminator)

@@ -93,7 +93,7 @@ class MockSyncBackend(SyncBackend):
 
 class MockAsyncBackend(AsyncBackend):
     def __init__(self):
-        super().__init__(None, None, datastore_cls=MockDatastore)
+        super().__init__(None, datastore_cls=MockDatastore)
 
 
 # class MockBatchBackend(BatchBackend):

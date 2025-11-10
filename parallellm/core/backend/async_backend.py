@@ -10,7 +10,11 @@ from parallellm.core.calls import _call_matches
 from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.response import PendingLLMResponse
 from parallellm.file_io.file_manager import FileManager
-from parallellm.logging.dash_logger import DashboardLogger, HashStatus
+from parallellm.logging.dash_logger import (
+    DashboardLogger,
+    HashStatus,
+    PrimitiveDashboardLogger,
+)
 from parallellm.types import (
     CallIdentifier,
     CommonQueryParameters,
@@ -33,7 +37,7 @@ class AsyncBackend(BaseBackend):
     def __init__(
         self,
         fm: FileManager,
-        dash_logger: Optional[DashboardLogger] = None,
+        dash_logger: DashboardLogger = PrimitiveDashboardLogger(),
         *,
         datastore_cls=None,
         rewrite_cache: bool = False,
@@ -51,7 +55,7 @@ class AsyncBackend(BaseBackend):
         :param throttler: Throttler instance for rate limiting (default: None)
         """
         self._fm = fm
-        self._dash_logger = dash_logger
+        self.dash_logger = dash_logger
         self._rewrite_cache = rewrite_cache
         self._max_concurrent = max_concurrent
 
@@ -217,8 +221,7 @@ class AsyncBackend(BaseBackend):
             self._create_and_store_task(call_id, coro, provider), self._loop
         )
 
-        if self._dash_logger is not None:
-            self._dash_logger.update_hash(call_id["doc_hash"], HashStatus.SENT)
+        self.dash_logger.update_hash(call_id["doc_hash"], HashStatus.SENT)
         # Don't wait for the result, just submit it
         return future
 
@@ -259,8 +262,7 @@ class AsyncBackend(BaseBackend):
             done_tasks.append(metadata)
 
             # do logging
-            if self._dash_logger is not None:
-                self._dash_logger.update_hash(call_id["doc_hash"], HashStatus.RECEIVED)
+            self.dash_logger.update_hash(call_id["doc_hash"], HashStatus.RECEIVED)
 
             # Stop if we reached the target
             if until_call_id is not None and _call_matches(until_call_id, call_id):

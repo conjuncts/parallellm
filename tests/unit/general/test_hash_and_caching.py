@@ -144,35 +144,6 @@ class TestDashboardLogger:
         assert "cccccccc" in logger._hashes
         assert "aaaaaaaa" not in logger._hashes
 
-    def test_get_status(self):
-        """Test getting status of a hash"""
-        logger = DashboardLogger(k=3, display=False)
-        full_hash = "12345678" + "9" * 56
-
-        # Hash not present
-        assert logger.get_status(full_hash) is None
-
-        # Add hash and check status
-        logger.update_hash(full_hash, HashStatus.CACHED)
-        assert logger.get_status(full_hash) == HashStatus.CACHED
-
-    def test_get_all_hashes(self):
-        """Test getting all hashes and statuses"""
-        logger = DashboardLogger(k=3, display=False)
-
-        hashes = [
-            ("aaaaaaaa" + "0" * 56, HashStatus.SENT),
-            ("bbbbbbbb" + "1" * 56, HashStatus.RECEIVED),
-        ]
-
-        for hash_val, status in hashes:
-            logger.update_hash(hash_val, status)
-
-        all_hashes = logger.get_all_hashes()
-        assert len(all_hashes) == 2
-        assert all_hashes[hashes[0][0]] == HashStatus.SENT
-        assert all_hashes[hashes[1][0]] == HashStatus.RECEIVED
-
     def test_clear_hashes(self):
         """Test clearing all hashes"""
         logger = DashboardLogger(k=3, display=False)
@@ -310,25 +281,6 @@ class TestCacheIntegration:
         # 4. Test hash status tracking
         logger = DashboardLogger(k=5, display=False)
         logger.update_hash(computed_hash, HashStatus.SENT)
-
-        assert logger.get_status(computed_hash) == HashStatus.SENT
-
-    def test_cache_miss_to_hit_workflow(self):
-        """Test workflow from cache miss to cache hit"""
-        logger = DashboardLogger(k=5, display=False)
-        test_hash = "abcdef123456" + "0" * 52
-
-        logger.update_hash(test_hash, HashStatus.SENT)
-        assert logger.get_status(test_hash) == HashStatus.SENT
-
-        logger.update_hash(test_hash, HashStatus.RECEIVED)
-        assert logger.get_status(test_hash) == HashStatus.RECEIVED
-
-        logger.update_hash(test_hash, HashStatus.STORED)
-        assert logger.get_status(test_hash) == HashStatus.STORED
-
-        logger.update_hash(test_hash, HashStatus.CACHED)
-        assert logger.get_status(test_hash) == HashStatus.CACHED
 
 
 if __name__ == "__main__":

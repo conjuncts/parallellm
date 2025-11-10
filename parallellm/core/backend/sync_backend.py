@@ -5,7 +5,11 @@ from parallellm.core.throttler import Throttler
 from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.response import ReadyLLMResponse
 from parallellm.file_io.file_manager import FileManager
-from parallellm.logging.dash_logger import DashboardLogger, HashStatus
+from parallellm.logging.dash_logger import (
+    DashboardLogger,
+    HashStatus,
+    PrimitiveDashboardLogger,
+)
 from parallellm.provider.schemas import guess_schema
 from parallellm.types import (
     CallIdentifier,
@@ -27,7 +31,7 @@ class SyncBackend(BaseBackend):
     def __init__(
         self,
         fm: FileManager,
-        dash_logger: Optional[DashboardLogger] = None,
+        dash_logger: DashboardLogger = PrimitiveDashboardLogger(),
         *,
         datastore_cls=None,
         rewrite_cache: bool = False,
@@ -48,7 +52,7 @@ class SyncBackend(BaseBackend):
             self._ds = SQLiteDatastore(self._fm)
         else:
             self._ds = datastore_cls(self._fm)
-        self._dash_logger = dash_logger
+        self.dash_logger = dash_logger
         self._rewrite_cache = rewrite_cache
 
         # Throttling configuration
@@ -95,16 +99,14 @@ class SyncBackend(BaseBackend):
             # Apply throttling before making the request
             self._apply_throttling()
 
-            if self._dash_logger is not None:
-                self._dash_logger.update_hash(doc_hash, HashStatus.SENT)
+            self.dash_logger.update_hash(doc_hash, HashStatus.SENT)
 
             # The below function typically calls the LLM
             result = provider.prepare_sync_call(
                 params,
                 **kwargs,
             )
-            if self._dash_logger is not None:
-                self._dash_logger.update_hash(doc_hash, HashStatus.RECEIVED)
+            self.dash_logger.update_hash(doc_hash, HashStatus.RECEIVED)
 
             parsed = provider.parse_response(result)
 
