@@ -167,6 +167,7 @@ class SQLiteDatastore(Datastore):
                         provider_type TEXT,
                         batch_uuid TEXT NOT NULL,
                         custom_id TEXT,
+                        is_pending BOOLEAN DEFAULT 1,
                         UNIQUE(custom_id, batch_uuid)
                     )
                 """)
@@ -589,12 +590,12 @@ class SQLiteDatastore(Datastore):
             # Process each response in the batch
             for i, parsed in enumerate(batch_result.parsed_responses):
                 custom_id = parsed.response_id
-                # Look up the call_id using custom_id from batch_pending
+                # Look up the call_id using custom_id from active batch_pending
                 cursor = conn.execute(
                     """
                     SELECT agent_name, checkpoint, seq_id, session_id, doc_hash, provider_type
                     FROM batch_pending
-                    WHERE custom_id = ?
+                    WHERE custom_id = ? AND is_pending = 1
                     LIMIT 1
                     """,
                     (custom_id,),
@@ -673,7 +674,7 @@ class SQLiteDatastore(Datastore):
 
     def retrieve_batch_call_ids(self, batch_uuid: str) -> list[CallIdentifier]:
         """
-        Retrieve all call_ids associated with a batch_uuid.
+        Retrieve all call_ids associated with an active batch_uuid.
 
         :param batch_uuid: The batch UUID to look up
         :returns: List of CallIdentifiers for this batch
@@ -684,7 +685,7 @@ class SQLiteDatastore(Datastore):
             """
             SELECT agent_name, checkpoint, seq_id, session_id, doc_hash, provider_type
             FROM batch_pending
-            WHERE batch_uuid = ?
+            WHERE batch_uuid = ? AND is_pending = 1
             ORDER BY seq_id
             """,
             (batch_uuid,),
@@ -707,17 +708,18 @@ class SQLiteDatastore(Datastore):
 
     def get_all_pending_batch_uuids(self) -> list[str]:
         """
-        Retrieve all pending batches from the datastore.
+        Retrieve all active pending batches from the datastore.
 
         :returns: List of BatchIdentifiers, one for each unique batch_uuid
         """
         conn = self._get_connection(None)
 
-        # Get all unique batch_uuids
+        # Get all unique batch_uuids that are still active
         cursor = conn.execute(
             """
             SELECT DISTINCT batch_uuid
             FROM batch_pending
+            WHERE is_pending = 1
             ORDER BY batch_uuid
             """
         )
@@ -727,29 +729,29 @@ class SQLiteDatastore(Datastore):
 
     def clear_batch_pending(self, batch_uuid: str) -> None:
         """
-        Remove all pending batch records for a completed batch.
+        Deactivate all pending batch records for a completed batch.
 
-        :param batch_uuid: The batch UUID to clear
+        :param batch_uuid: The batch UUID to deactivate
         """
         conn = self._get_connection(None)
 
         try:
             conn.execute(
-                "DELETE FROM batch_pending WHERE batch_uuid = ?",
+                "UPDATE batch_pending SET is_pending = 0 WHERE batch_uuid = ?",
                 (batch_uuid,),
             )
             conn.commit()
 
         except sqlite3.Error as e:
             conn.rollback()
-            raise RuntimeError(f"SQLite error while clearing batch: {e}")
+            raise RuntimeError(f"SQLite error while deactivating batch: {e}")
 
     def is_call_in_pending_batch(self, call_id: CallIdentifier) -> bool:
         """
-        Check if a call_id is already in a pending batch.
+        Check if a call_id is already in an active pending batch.
 
         :param call_id: The call identifier to check
-        :returns: True if the call_id is in a pending batch, False otherwise
+        :returns: True if the call_id is in an active pending batch, False otherwise
         """
         conn = self._get_connection(None)
 
@@ -763,7 +765,7 @@ class SQLiteDatastore(Datastore):
         )
 
         cursor = conn.execute(
-            f"SELECT COUNT(*) as count FROM batch_pending WHERE {where_clause}",
+            f"SELECT COUNT(*) as count FROM batch_pending WHERE {where_clause} AND is_pending = 1",
             params,
         )
         row = cursor.fetchone()

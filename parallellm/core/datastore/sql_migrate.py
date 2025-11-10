@@ -44,6 +44,14 @@ def _migrate_sql_schema(conn: sqlite3.Connection, db_name: Optional[str]) -> Non
         if "tool_calls" not in columns:
             conn.execute("ALTER TABLE chk_responses ADD COLUMN tool_calls TEXT")
 
+        # Add is_pending column to batch_pending table if it doesn't exist
+        cursor = conn.execute("PRAGMA table_info(batch_pending)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "is_pending" not in columns:
+            conn.execute(
+                "ALTER TABLE batch_pending ADD COLUMN is_pending BOOLEAN DEFAULT 1"
+            )
+
         # Remove UNIQUE constraints by recreating tables without them
         # SQLite doesn't support ALTER TABLE DROP CONSTRAINT, so we need to recreate
         _remove_unique_constraints(conn)
