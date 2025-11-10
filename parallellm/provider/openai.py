@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Union
 from pydantic import BaseModel
 from parallellm.core.identity import LLMIdentity
@@ -350,15 +351,17 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
             text=error_code or "", response_id=custom_id, metadata=body_error
         )
 
-    def submit_batch_to_provider(
-        self, fm, call_ids: list[CallIdentifier], stuff: list[dict]
-    ) -> BatchIdentifier:
+    def get_batch_ids(self, stuff: list[dict]) -> list[str]:
+        return [s["custom_id"] for s in stuff]
+
+    def submit_batch_to_provider(self, fpath: Path, llm: str) -> str:
         """
         Submit a batch of calls to the provider.
 
+        Returns the uuid
+
         This is called from the backend.
         """
-        fpath = fm.persist_batch_to_jsonl(stuff)
         with open(fpath, "rb") as f:
             batch_input_file = self.client.files.create(file=f, purpose="batch")
             batch_input_file_id = batch_input_file.id
@@ -370,14 +373,7 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
             # metadata={"description":""}
         )
 
-        # Extract custom_ids from stuff (they were added by persist_batch_to_jsonl)
-        custom_ids = [s["custom_id"] for s in stuff]
-
-        return BatchIdentifier(
-            call_ids=call_ids,
-            custom_ids=custom_ids,
-            batch_uuid=batch_obj.id,
-        )
+        return batch_obj.id
 
     def download_batch(
         self,

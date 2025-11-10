@@ -28,6 +28,7 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 - [ ] resolve everything on everything
 - [ ] why does resolve() async take so long?
 - [ ] switch hashes from base16 to base64
+- [ ] dash logger should never be none; instead, it should implement standard (expected) prints etc. and logging that gets silently ignored.
 
 | Default | Sync | Async | Batch |
 | --- | --- | --- | --- |

@@ -52,6 +52,8 @@ class BatchBackend(BaseBackend):
         self._batch_buffer: list[tuple[CallIdentifier, dict]] = []
         self.session_id = session_id
 
+        self._private_increment = 0
+
     def submit_query(
         self,
         provider: "BatchProvider",
@@ -139,7 +141,8 @@ class BatchBackend(BaseBackend):
         agent_name = call_id["agent_name"]
         checkpoint = call_id["checkpoint"] or ""
         seq_id = call_id["seq_id"]
-        custom_id = f"{agent_name}-{checkpoint}-{self.session_id}-{seq_id}"
+        custom_id = f"{agent_name}-{checkpoint}-{self.session_id}-{seq_id}-{self._private_increment}"
+        self._private_increment += 1
         return custom_id
 
     def execute_batch(
@@ -156,57 +159,97 @@ class BatchBackend(BaseBackend):
 
         # 1. Split based on model_name
         # Many batch APIs (like OpenAI's) require the same model across the entire batch
-        batches = []
+        index_groups: list[list[int]] = []  # list of groups of indices
         if partition_by_model_name:
             mn2b = {}
-            for call_id, model_name, stuff in self._batch_buffer:
+            for i, (call_id, model_name, stuff) in enumerate(self._batch_buffer):
                 if model_name not in mn2b:
                     mn2b[model_name] = []
-                mn2b[model_name].append((call_id, stuff))
-            batches = list(mn2b.values())
+                mn2b[model_name].append(i)
+            index_groups = list(mn2b.values())
         else:
-            batches = [(call_id, stuff) for call_id, _, stuff in self._batch_buffer]
+            index_groups = [list(range(len(self._batch_buffer)))]
 
         # 2. Split into groups of max_batch_size
         _bdr = []
-        for batch in batches:
+        for batch in index_groups:
             if len(batch) <= max_batch_size:
                 _bdr.append(batch)
             else:
                 for i in range(0, len(batch), max_batch_size):
                     _bdr.append(batch[i : i + max_batch_size])
-        batches = _bdr
+        index_groups = _bdr
+
+        # dict with keys: call_ids, model_name, stuff, custom_ids
+        batches: list[dict] = []
+        for index_gp in index_groups:
+            rowwise = {
+                "call_ids": [],
+                "model_name": None,
+                "data": [],
+                "custom_ids": [],
+            }
+            for i in index_gp:
+                call_id, model_name, stuff = self._batch_buffer[i]
+                rowwise["call_ids"].append(call_id)
+                rowwise["model_name"] = model_name
+                rowwise["data"].append(stuff)
+            rowwise["custom_ids"] = provider.get_batch_custom_ids(rowwise["data"])
+            batches.append(rowwise)
+
+        pending_fpaths = []
 
         # Ask for confirmation if requested
+        _saved_already = False
         if self._confirm_batch_submission and self._dash_logger is not None:
-            total_calls = sum(len(batch) for batch in batches)
-            num_batches = len(batches)
+            total_calls = sum(len(batch) for batch in index_groups)
+            num_batches = len(index_groups)
 
             confirmed = self._dash_logger.confirm_batch_submission(
                 num_batches, total_calls
             )
 
-            if not confirmed:
+            if confirmed == "p":
+                # Preview: write them to file, but do not yet submit
+                _saved_already = True
+                for record in batches:
+                    fpath = self._fm.save_batch_in(record["data"])
+                    pending_fpaths.append(fpath)
+                self._dash_logger.coordinated_print(
+                    f"Batch preview files written to {pending_fpaths[0]}"
+                )
+                confirmed = self._dash_logger.confirm_batch_submission(
+                    num_batches, total_calls, allow_preview=False
+                )
+
+            if confirmed == "n":
                 if self._dash_logger is not None:
                     self._dash_logger.coordinated_print(
                         "Batch submission cancelled by user."
                     )
                 # Don't clear the buffer - allow the user to try again later
                 return CohortIdentifier(batch_ids=[], session_id=self.session_id)
+            # else, proceed
+        if not _saved_already:
+            for record in batches:
+                fpath = self._fm.save_batch_in(record["data"])
+                pending_fpaths.append(fpath)
 
         # 3. Submit each batch
         batch_ids = []
-        for batch in batches:
-            # Here, you would typically call the provider's batch method
-            call_ids, stuff = zip(*batch)
-            batch_id = provider.submit_batch_to_provider(
-                self._fm, call_ids, list(stuff)
+        for fpath, record in zip(pending_fpaths, batches):
+            batch_uuid = provider.submit_batch_to_provider(fpath, record["model_name"])
+            ident = BatchIdentifier(
+                call_ids=record["call_ids"],
+                custom_ids=record["custom_ids"],
+                batch_uuid=batch_uuid,
             )
-            self._ds.store_pending_batch(batch_id)
-            batch_ids.append(batch_id)
+            self._ds.store_pending_batch(ident)
+            batch_ids.append(ident)
 
             # Log batch submission to dashboard
-            print("Sent batch:", batch_id.batch_uuid)
+            self._dash_logger.update_hash(batch_uuid, HashStatus.SENT_BATCH)
+            self._dash_logger.coordinated_print("Sent batch:", ident.batch_uuid)
 
         cohort_id = CohortIdentifier(batch_ids=batch_ids, session_id=self.session_id)
         # Clear the batch buffer after execution
@@ -314,11 +357,15 @@ class BatchBackend(BaseBackend):
             )
             for batch_result in batch_results:
                 if batch_result.status == "ready":
-                    print(f"Batch {batch_uuid} completed and stored.")
+                    self._dash_logger.coordinated_print(
+                        f"Batch {batch_uuid} completed and stored."
+                    )
                     # Clean up the pending batch record
                     self._ds.clear_batch_pending(batch_uuid)
                 elif batch_result.status == "error":
-                    print(f"Batch {batch_uuid} completed with errors and stored.")
+                    self._dash_logger.coordinated_print(
+                        f"Batch {batch_uuid} completed with errors and stored."
+                    )
                     # Clean up the pending batch record even for errors
                     self._ds.clear_batch_pending(batch_uuid)
 

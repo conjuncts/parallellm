@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Optional, Union
 from pydantic import BaseModel
 
@@ -83,9 +84,11 @@ class BatchProvider(BaseProvider):
         """
         raise NotImplementedError
 
-    def submit_batch_to_provider(
-        self, fm: "FileManager", call_ids: list[CallIdentifier], stuff: list[Any]
-    ) -> BatchIdentifier:
+    def get_batch_custom_ids(self, stuff: list[dict]) -> list[str]:
+        """Get batch IDs from a bunch of raw data."""
+        raise NotImplementedError
+
+    def submit_batch_to_provider(self, fpath: Path, llm: str) -> str:
         """Submit a batch of calls to the provider."""
         raise NotImplementedError
 

@@ -182,7 +182,11 @@ class ParalleLLMGateway:
 
         # try downloading previous batches if any
         if strategy == "batch":
+            _st = backend._dash_logger.display
+            backend._dash_logger.set_display(True)
             backend.try_download_all_batches(provider)
+            backend._dash_logger.finalize_line()
+            backend._dash_logger.set_display(_st)
 
         logger.info(f"Resuming with session_id={bm.get_session_counter()}")
         return bm

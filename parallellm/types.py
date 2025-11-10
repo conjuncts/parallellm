@@ -207,7 +207,7 @@ class CommonQueryParameters(TypedDict):
     instructions: Optional[str]
     documents: Union[LLMDocument, List[LLMDocument]]
     llm: "LLMIdentity"
-    text_format: Optional[str]
+    text_format: Optional[dict]
     tools: Optional[List[dict]]
 
 

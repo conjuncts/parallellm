@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Union
 from venv import logger
 from pydantic import BaseModel
@@ -332,16 +333,21 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
         text_format = params.get("text_format")
         tools = params.get("tools")
 
-        config = kwargs.copy()
+        gen_config = kwargs.copy()
+        config = {}
         if instructions:
             config["system_instruction"] = instructions
 
         if text_format is not None:
-            config["response_mime_type"] = "application/json"
-            config["response_schema"] = text_format
+            gen_config["responseMimeType"] = "application/json"
+            if not isinstance(text_format, dict):
+                # pydantic?
+                if getattr(text_format, "model_json_schema", None):
+                    text_format = text_format.model_json_schema()
+            gen_config["responseJsonSchema"] = text_format
 
         if tools:
-            config["tools"] = _prepare_tool_schema(tools)
+            gen_config["tools"] = _prepare_tool_schema(tools)
 
         # Gemini batch request format
         request = {
@@ -351,6 +357,7 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
                 if isinstance(fixed_documents, list)
                 else [{"parts": [{"text": fixed_documents}], "role": "user"}],
                 **config,
+                "generationConfig": gen_config,
             },
         }
 
@@ -410,55 +417,46 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
             tool_calls=[],
         )
 
-    def submit_batch_to_provider(
-        self, fm: FileManager, call_ids: list[CallIdentifier], stuff: list[dict]
-    ) -> BatchIdentifier:
-        """
-        Submit a batch of calls to the provider.
-
-        This is called from the backend.
-        """
-        import os
-        from google.genai import types
-
-        # Create JSONL file with custom_ids
-        temp_file_path = fm.save_batch_in(stuff)
-
+    def get_batch_custom_ids(self, stuff):
         custom_ids = []
         for item in stuff:
             if "key" not in item:
                 raise ValueError("Each batch item must have a 'key' field.")
             custom_ids.append(item["key"])
+        return custom_ids
 
-        try:
-            # Upload the file to Gemini File API
-            uploaded_file = self.client.files.upload(
-                file=temp_file_path,
-                config=types.UploadFileConfig(
-                    display_name=f"batch-requests-{len(stuff)}",
-                    mime_type="application/json",
-                ),
-            )
+    def submit_batch_to_provider(self, fpath: Path, llm: str) -> str:
+        """
+        Submit a batch of calls to the provider.
 
-            # Create batch job
-            llm = stuff[0].get("model", "gemini-2.5-flash")
-            batch_job = self.client.batches.create(
-                model=llm,
-                src=uploaded_file.name,
-                config={
-                    "display_name": f"batch-job-{len(stuff)}-requests",
-                },
-            )
+        This is called from the backend.
+        """
+        from google.genai import types
 
-            return BatchIdentifier(
-                call_ids=call_ids,
-                custom_ids=custom_ids,
-                batch_uuid=batch_job.name.removeprefix("batches/"),
-            )
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
+        num_lines = 0
+        with open(fpath, "r", encoding="utf-8") as f:
+            for _ in f:
+                num_lines += 1
+        # Upload the file to Gemini File API
+        uploaded_file = self.client.files.upload(
+            file=fpath,
+            config=types.UploadFileConfig(
+                display_name=f"batch-requests-{num_lines}",
+                mime_type="application/json",
+            ),
+        )
+
+        # Create batch job
+        batch_job = self.client.batches.create(
+            model=llm,
+            src=uploaded_file.name,
+            config={
+                "display_name": f"batch-job-{num_lines}-requests",
+            },
+        )
+        return batch_job.name.removeprefix("batches/")
+
+        # TODO: consider: a try/finally block option to clean up the temp files?
 
     def download_batch(
         self,

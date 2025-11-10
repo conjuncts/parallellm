@@ -2,7 +2,7 @@ import sys
 import shutil
 import threading
 from collections import OrderedDict
-from typing import Dict, Optional, Set
+from typing import Dict, Literal, Optional, Set
 from colorama import Fore, Style, init
 from dataclasses import dataclass
 from enum import Enum
@@ -16,7 +16,7 @@ class HashStatus(Enum):
 
     CACHED = "C"  # cached
     SENT = "↗"  # sent to provider
-    SENT_BATCH = "⇈"  # sent to provider in batch
+    SENT_BATCH = "⏳"  # sent to provider in batch
     RECEIVED = "↘"  # received from provider
     RECEIVED_BATCH = "⇊"  # received from provider in batch
     STORED = "✓"  # stored in datastore
@@ -260,7 +260,9 @@ class DashboardLogger:
             response = input().strip().lower()
         return response
 
-    def confirm_batch_submission(self, num_batches: int, total_calls: int) -> bool:
+    def confirm_batch_submission(
+        self, num_batches: int, total_calls: int, allow_preview=True
+    ) -> Literal["y", "n", "p"]:
         """
         Ask the user to confirm batch submission with formatted message.
 
@@ -277,9 +279,17 @@ class DashboardLogger:
             f"Submit {Fore.CYAN}{num_batches} batch{plural}{Style.RESET_ALL} "
             f"({Fore.CYAN}{total_calls} calls{Style.RESET_ALL})? (y/n): "
         )
+        if allow_preview:
+            message = message[:-3] + "/preview): "
 
-        response = self.ask_for_confirmation(
-            message, valid_responses={"y", "n", "yes", "no"}
-        )
+        valid_responses = {"y", "n", "yes", "no"}
+        if allow_preview:
+            valid_responses.update({"preview", "p"})
+        response = self.ask_for_confirmation(message, valid_responses=valid_responses)
 
-        return response in {"y", "yes"}
+        if response in {"y", "yes"}:
+            return "y"
+        elif response in {"preview", "p"}:
+            return "p"
+        else:
+            return "n"
