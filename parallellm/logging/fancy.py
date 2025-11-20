@@ -1,9 +1,5 @@
 from colorama import Fore, Style, init
 import logging
-import sys
-from typing import Optional
-
-from parallellm.logging.dash_logger import DashboardLogger
 
 # Initialize colorama for colored output
 init()
@@ -33,12 +29,8 @@ class DashboardAwareHandler(logging.StreamHandler):
     before outputting log messages.
     """
 
-    def __init__(self, stream=None):
+    def __init__(self, dash_logger, stream=None):
         super().__init__(stream)
-        self._dash_logger: Optional[DashboardLogger] = None
-
-    def set_dash_logger(self, dash_logger: DashboardLogger):
-        """Set the dashboard logger to coordinate with."""
         self._dash_logger = dash_logger
 
     def emit(self, record):
@@ -63,5 +55,14 @@ class DashboardAwareHandler(logging.StreamHandler):
 
 
 # Configure logging to output to console with colors - only for parallellm loggers
-parallellm_log_handler = DashboardAwareHandler()
-parallellm_log_handler.setFormatter(ColoredFormatter("%(levelname)s %(message)s"))
+_parallellm_log_handler = None
+
+
+def get_parallellm_log_handler(dash_logger) -> DashboardAwareHandler:
+    global _parallellm_log_handler
+    if _parallellm_log_handler is None:
+        _parallellm_log_handler = DashboardAwareHandler(dash_logger)
+        _parallellm_log_handler.setFormatter(
+            ColoredFormatter("%(levelname)s %(message)s")
+        )
+    return _parallellm_log_handler

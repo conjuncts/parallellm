@@ -4,7 +4,7 @@ from typing import Literal
 from parallellm.core.agent.orchestrator import AgentOrchestrator
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger
-from parallellm.logging.fancy import parallellm_log_handler
+from parallellm.logging.fancy import get_parallellm_log_handler
 from parallellm.provider.openai import BatchOpenAIProvider
 from parallellm.types import MinorTweaks, ProviderType
 
@@ -50,14 +50,13 @@ class ParalleLLMGateway:
             raise NotImplementedError("Dry run is not implemented yet")
 
         # 2. Setup logger
+        dash_logger = DashboardLogger(k=10, display=False)
+        parallellm_log_handler = get_parallellm_log_handler(dash_logger)
+
         logger = logging.getLogger("parallellm")
         logger.setLevel(log_level)
         logger.addHandler(parallellm_log_handler)
-
         logger.debug("Resuming directory")
-
-        dash_logger = DashboardLogger(k=10, display=False)
-        parallellm_log_handler.set_dash_logger(dash_logger)
 
         # Prevent propagation to root logger to avoid duplicate messages
         logger.propagate = False

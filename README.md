@@ -37,7 +37,7 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 | --- | --- | --- | --- |
 | OpenAI | ✅ | ✅ | ✅? |
 | Anthropic | ❌ | ❌ | ❌ |
-| Google | ✅ | ✅ | ✅? |
+| Google | ✅ | ✅ | ✅ |
 
 | Tool Calls | Sync | Async | Batch |
 | --- | --- | --- | --- |

@@ -227,9 +227,7 @@ class BatchBackend(BaseBackend):
                 )
 
             if confirmed == "n":
-                self.dash_logger.cprint(
-                    "Batch submission cancelled by user."
-                )
+                self.dash_logger.cprint("Batch submission cancelled by user.")
                 # Don't clear the buffer - allow the user to try again later
                 return CohortIdentifier(batch_ids=[], session_id=self.session_id)
             # else, proceed
@@ -359,9 +357,7 @@ class BatchBackend(BaseBackend):
             )
             for batch_result in batch_results:
                 if batch_result.status == "ready":
-                    self.dash_logger.cprint(
-                        f"Batch {batch_uuid} completed and stored."
-                    )
+                    self.dash_logger.cprint(f"Batch {batch_uuid} completed and stored.")
                     # Clean up the pending batch record
                     self._ds.clear_batch_pending(batch_uuid)
                 elif batch_result.status == "error":
@@ -373,9 +369,7 @@ class BatchBackend(BaseBackend):
 
             if not batch_results:
                 self.dash_logger.update_hash(batch_uuid, HashStatus.SENT_BATCH)
-                self.dash_logger.cprint(
-                    f"Batch {batch_uuid} is still pending."
-                )
+                self.dash_logger.cprint(f"Batch {batch_uuid} is still pending.")
 
 
 class DebugBatchBackend(BatchBackend):
