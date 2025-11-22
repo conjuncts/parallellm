@@ -29,8 +29,11 @@ def openai_message_sinker(meta: dict, *, remove_content=True):
     }
 
 
-def openai_metadata_sinker(metas: List[str]):
-    objs = [json.loads(meta) for meta in metas if meta.strip()]
+def openai_metadata_sinker(metas: List[tuple[str, str]]):
+    """
+    Input: List of tuples of (response_id, metadata_json)
+    """
+    objs = [{"response_id": r, **json.loads(meta)} for r, meta in metas if meta.strip()]
 
     messages_df = None
     # custom handle messages
@@ -59,13 +62,9 @@ if __name__ == "__main__":
     r: ResponseItem = None
 
     with open(
-        "experiments/openai_metadata_example.json", "r", encoding="utf-8"
+        "experiments/schema/openai_metadata_example.json", "r", encoding="utf-8"
     ) as json_file:
-        test_run = [json.load(json_file)]
-
-        df, df2 = openai_metadata_sinker(
-            [json.dumps(item) for item in test_run]
-        ).values()
+        df, df2 = openai_metadata_sinker([("314", json_file.read())]).values()
     print("Responses DF:")
     print(df)
     print("Messages DF:")

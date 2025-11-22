@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, Optional
 import polars as pl
 
+from parallellm.provider.google._sink import google_metadata_sinker
 from parallellm.provider.openai._sink import openai_metadata_sinker
 
 
@@ -70,9 +71,7 @@ def sequester_df_to_parquet(
         raise RuntimeError(f"Error backing up {table_name} to parquet: {e}")
 
 
-def sequester_openai_metadata(
-    metadata_rows: list[Dict], file_manager
-) -> Optional[list[str]]:
+def sequester_metadata(metadata_rows: list[Dict], file_manager) -> Optional[list[str]]:
     """
     Sequester OpenAI metadata from SQLite rows to Parquet files.
     Returns a list of response_ids that were successfully transferred and can be deleted from SQLite.
@@ -80,100 +79,87 @@ def sequester_openai_metadata(
     # metadata_rows is actually a sqlite3.Row object
 
     # Extract metadata strings for processing
-    metadata_strings = []
-    response_ids_to_delete = []
+    metadata_strings = {
+        "openai": [],
+        "google": [],
+    }
 
     for row in metadata_rows:
         response_id = row["response_id"]
         metadata_json = row["metadata"]
+        provider_type = row["provider_type"]
 
-        if metadata_json:
-            metadata_strings.append(metadata_json)
-            response_ids_to_delete.append(response_id)
+        if metadata_json and provider_type in metadata_strings:
+            metadata_strings[provider_type].append((response_id, metadata_json))
 
     if not metadata_strings:
-        return  # No valid metadata to transfer
+        return
 
     # Process metadata using the existing sinker function
-    processed_data = openai_metadata_sinker(metadata_strings)
-    responses_df = processed_data["responses"]
-    messages_df = processed_data["messages"]
+    response_ids_to_delete = []
+    for provider_type, metas in metadata_strings.items():
+        if provider_type == "openai":
+            processed_dfs = openai_metadata_sinker(metas)
 
-    if responses_df.is_empty() and messages_df.is_empty():
-        return  # No data to save
+        elif provider_type == "google":
+            processed_dfs = google_metadata_sinker(metas)
+        else:
+            # Unavailable
+            continue
 
+        sequester_dataframes(processed_dfs, file_manager, provider_type=provider_type)
+
+        # Collect successfully sequestered response_ids
+        response_df = processed_dfs["responses"]
+        if not response_df.is_empty():
+            response_ids_to_delete.extend(
+                response_df.select("response_id").to_series().to_list()
+            )
+
+    return response_ids_to_delete
+
+
+def sequester_dataframes(
+    dfs: dict[str, pl.DataFrame], file_manager, provider_type: str
+) -> Optional[list[str]]:
     # Create metadata directory
     datastore_dir = file_manager.allocate_datastore()
     metadata_dir = datastore_dir / "apimeta"
     metadata_dir.mkdir(parents=True, exist_ok=True)
 
     # Define file paths
-    responses_parquet = metadata_dir / "openai-responses.parquet"
-    messages_parquet = metadata_dir / "openai-messages.parquet"
-    responses_tmp = metadata_dir / "openai-responses.parquet.tmp"
-    messages_tmp = metadata_dir / "openai-messages.parquet.tmp"
-
+    tmp_files = []
     try:
-        # Handle responses dataframe
-        if not responses_df.is_empty():
-            final_responses_df = responses_df
+        for df_name, df in dfs.items():
+            if df.is_empty():
+                continue
+            df_parquet = metadata_dir / f"{provider_type}-{df_name}.parquet"
+            df_tmp = metadata_dir / f"{provider_type}-{df_name}.parquet.tmp"
+            tmp_files.append(df_tmp)
+
+            # Handle responses dataframe
+            final_df = df
 
             # Merge with existing responses data if file exists
-            if responses_parquet.exists():
-                existing_responses = pl.read_parquet(responses_parquet)
-                # Concatenate and deduplicate based on all columns
-                final_responses_df = pl.concat(
-                    [existing_responses, responses_df], how="diagonal_relaxed"
-                )
+            if df_parquet.exists():
+                existing_responses = pl.read_parquet(df_parquet)
+                final_df = pl.concat([existing_responses, df], how="diagonal_relaxed")
 
             # Write to temporary file
-            final_responses_df.write_parquet(responses_tmp)
+            final_df.write_parquet(df_tmp)
 
-        # Handle messages dataframe
-        if not messages_df.is_empty():
-            final_messages_df = messages_df
-
-            # Merge with existing messages data if file exists
-            if messages_parquet.exists():
-                existing_messages = pl.read_parquet(messages_parquet)
-                # Concatenate and deduplicate based on all columns
-                final_messages_df = pl.concat(
-                    [existing_messages, messages_df], how="diagonal_relaxed"
-                )
-
-            # Write to temporary file
-            final_messages_df.write_parquet(messages_tmp)
-
-        # Atomic swap: move temporary files to final locations
-        if responses_tmp.exists():
-            if responses_parquet.exists():
-                responses_parquet.unlink()  # Remove old file
-            responses_tmp.rename(responses_parquet)
-
-        if messages_tmp.exists():
-            if messages_parquet.exists():
-                messages_parquet.unlink()  # Remove old file
-            messages_tmp.rename(messages_parquet)
-
-        # Success! Now remove the transferred metadata from SQLite
-        return response_ids_to_delete
+            # Atomic swap: move temporary files to final locations
+            if df_tmp.exists():
+                if df_parquet.exists():
+                    df_parquet.unlink()
+                df_tmp.rename(df_parquet)
 
     except Exception as e:
         # Clean up temporary files on error
-        for tmp_file in [responses_tmp, messages_tmp]:
+        for tmp_file in tmp_files:
             if tmp_file.exists():
                 try:
                     tmp_file.unlink()
                 except Exception:
                     pass  # Ignore cleanup errors
         raise RuntimeError(f"Error transferring metadata to Parquet: {e}")
-
-
-def sequester_google_metadata(
-    metadata_rows: list[Dict], file_manager
-) -> Optional[list[str]]:
-    """
-    Sequester OpenAI metadata from SQLite rows to Parquet files.
-    Returns a list of response_ids that were successfully transferred and can be deleted from SQLite.
-    """
-    # metadata_rows is actually a sqlite3.Row object
