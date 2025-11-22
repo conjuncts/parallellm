@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict, Optional
 import polars as pl
 
-from parallellm.core.lake.metadata_sinks import openai_metadata_sinker
+from parallellm.provider.openai._sink import openai_metadata_sinker
 
 
 def sequester_df_to_parquet(
@@ -167,3 +167,13 @@ def sequester_openai_metadata(
                 except Exception:
                     pass  # Ignore cleanup errors
         raise RuntimeError(f"Error transferring metadata to Parquet: {e}")
+
+
+def sequester_google_metadata(
+    metadata_rows: list[Dict], file_manager
+) -> Optional[list[str]]:
+    """
+    Sequester OpenAI metadata from SQLite rows to Parquet files.
+    Returns a list of response_ids that were successfully transferred and can be deleted from SQLite.
+    """
+    # metadata_rows is actually a sqlite3.Row object

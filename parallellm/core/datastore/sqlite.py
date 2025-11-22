@@ -13,7 +13,7 @@ from parallellm.core.datastore.sql_migrate import (
     _migrate_sql_schema,
 )
 from parallellm.core.datastore.parquet_manager import ParquetManager
-from parallellm.core.lake.sequester import sequester_openai_metadata
+from parallellm.core.sink.sequester import sequester_openai_metadata
 from parallellm.file_io.file_manager import FileManager
 from parallellm.types import (
     BatchIdentifier,
@@ -801,7 +801,7 @@ class SQLiteDatastore(Datastore):
             if sequestered:
                 placeholders = ",".join(["?" for _ in sequestered])
                 conn.execute(
-                    f"DELETE FROM metadata WHERE response_id IN ({placeholders})",
+                    f"DELETE FROM metadata WHERE response_id IN ({placeholders}) AND (provider_type = 'openai' OR provider_type IS NULL)",
                     sequestered,
                 )
                 conn.commit()

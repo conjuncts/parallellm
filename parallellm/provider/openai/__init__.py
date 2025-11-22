@@ -9,7 +9,7 @@ from parallellm.provider.base import (
     BatchProvider,
     SyncProvider,
 )
-from parallellm.provider.openai_tools import to_strict_json_schema
+from parallellm.provider.openai.openai_tools import to_strict_json_schema
 from parallellm.provider.schemas import guess_schema
 from parallellm.types import (
     BatchIdentifier,

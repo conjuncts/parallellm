@@ -8,7 +8,7 @@ import polars as pl
 from parallellm.core.datastore.base import Datastore
 from parallellm.core.datastore.sqlite import SQLiteDatastore, _sql_table_to_dataframe
 from parallellm.core.datastore.parquet_manager import ParquetManager
-from parallellm.core.lake.sequester import sequester_df_to_parquet
+from parallellm.core.sink.sequester import sequester_df_to_parquet
 from parallellm.file_io.file_manager import FileManager
 from parallellm.types import CallIdentifier, ParsedResponse
 
