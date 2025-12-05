@@ -74,7 +74,7 @@ class AskParameters(TypedDict):
     hash_by: Optional[List[Literal["llm"]]]
 
 
-BatchStatus = Literal["pending", "ready", "error"]
+BatchStatus = Literal["ready", "error"]
 
 
 @dataclass(slots=True)
@@ -223,3 +223,6 @@ class MinorTweaks:
 
     batch_user_confirmation: bool = True
     "Whether to ask for user confirmation before submitting a batch."
+
+    batch_wait_until_complete: bool = True
+    "Whether to wait for all batches to complete before proceeding."

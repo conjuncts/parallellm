@@ -16,10 +16,12 @@ class HashStatus(Enum):
 
     CACHED = "C"  # cached
     SENT = "↗"  # sent to provider
-    SENT_BATCH = "⏳"  # sent to provider in batch
+    SENT_BATCH = "⇈"  # sent to provider in batch
     RECEIVED = "↘"  # received from provider
     RECEIVED_BATCH = "⇊"  # received from provider in batch
     STORED = "✓"  # stored in datastore
+    STORED_BATCH = "✔"  # stored in datastore in batch
+    STORED_ERROR_BATCH = "✖"
 
 
 @dataclass
@@ -67,10 +69,12 @@ class DashboardLogger:
         self._status_colors = {
             HashStatus.CACHED: Fore.GREEN,
             HashStatus.SENT: Fore.CYAN,
-            HashStatus.SENT_BATCH: Fore.CYAN,
+            HashStatus.SENT_BATCH: Fore.BLUE,
             HashStatus.RECEIVED: Fore.GREEN,
-            HashStatus.RECEIVED_BATCH: Fore.GREEN,
+            HashStatus.RECEIVED_BATCH: Fore.MAGENTA,
             HashStatus.STORED: Fore.GREEN,
+            HashStatus.STORED_BATCH: Fore.MAGENTA,
+            HashStatus.STORED_ERROR_BATCH: Fore.MAGENTA,
         }
 
     def update_hash(self, full_hash: str, status: HashStatus):
@@ -118,8 +122,8 @@ class DashboardLogger:
             console_width = 80  # Fallback for environments without proper terminal
 
         # Build the display line with grey [DASH] prefix
-        prefix = f"{Fore.LIGHTBLACK_EX}[pllm DASH]{Style.RESET_ALL} "
-        prefix_len = len("[pllm DASH] ")  # Length without color codes
+        prefix = f"{Fore.LIGHTBLACK_EX}[DASH]{Style.RESET_ALL} "
+        prefix_len = len("[DASH] ")  # Length without color codes
 
         # Calculate how many hashes we can display based on console width
         # Each hash entry is approximately: "S 12345678 " (11 characters)
@@ -159,32 +163,31 @@ class DashboardLogger:
 
         sys.stdout.flush()
 
-    def set_display(self, display: bool):
+    def set_display(self, display: bool, clear_console: bool = True):
         """Enable or disable console display"""
         with self._lock:
             self.display = display
             if display:
                 self._update_console()
             elif self._console_written:
-                # Clear the line if disabling display using ANSI escape sequence
-                sys.stdout.write(f"\r\033[K")
-                sys.stdout.flush()
+                if clear_console:
+                    sys.stdout.write(f"\r\033[K")
+                    sys.stdout.flush()
                 self._console_written = False
 
-    def clear(self):
+    def clear(self, clear_console=True):
         """Clear all hash entries"""
         with self._lock:
             self._hashes.clear()
             if self._console_written:
-                # Clear the console line using ANSI escape sequence
-                sys.stdout.write(f"\r\033[K")
-                sys.stdout.flush()
+                if clear_console:
+                    sys.stdout.write(f"\r\033[K")
+                    sys.stdout.flush()
                 self._console_written = False
 
-    def cprint(self, *args, **kwargs):
+    def print(self, *args, **kwargs):
         """
-        Print to console while properly coordinating with dashboard display.
-        This clears the dashboard line, prints the content, then redraws the dashboard.
+        Print to console.
         """
         if not self.display:
             # Dashboard not active, use regular print
@@ -199,6 +202,15 @@ class DashboardLogger:
 
             # Print the user's content
             print(*args, **kwargs)
+
+    def cprint(self, *args, **kwargs):
+        """
+        Print to console while properly coordinating with dashboard display.
+        This clears the dashboard line, prints the content, then redraws the dashboard.
+        """
+        self.print(*args, **kwargs)
+        # Redraw the dashboard line
+        self._update_console()
 
     def finalize_line(self):
         """
@@ -293,7 +305,7 @@ class PrimitiveDashboardLogger(DashboardLogger):
     def clear(self):
         pass
 
-    def coordinated_print(self, *args, **kwargs):
+    def cprint(self, *args, **kwargs):
         print(*args, **kwargs)
 
     def finalize_line(self):

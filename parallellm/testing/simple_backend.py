@@ -1,7 +1,6 @@
 from typing import Optional
 from parallellm.core.backend import BaseBackend
 from parallellm.core.backend.async_backend import AsyncBackend
-from parallellm.core.backend.batch_backend import BatchBackend
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.core.calls import _call_to_concise_dict
 from parallellm.core.datastore.base import Datastore

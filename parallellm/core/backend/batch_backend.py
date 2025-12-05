@@ -152,6 +152,7 @@ class BatchBackend(BaseBackend):
     def execute_batch(
         self,
         provider: "BatchProvider",
+        special_dl: DashboardLogger,
         *,
         max_batch_size=1000,
         partition_by_model_name=True,
@@ -209,9 +210,7 @@ class BatchBackend(BaseBackend):
             total_calls = sum(len(batch) for batch in index_groups)
             num_batches = len(index_groups)
 
-            confirmed = self.dash_logger.confirm_batch_submission(
-                num_batches, total_calls
-            )
+            confirmed = special_dl.confirm_batch_submission(num_batches, total_calls)
 
             if confirmed == "p":
                 # Preview: write them to file, but do not yet submit
@@ -219,15 +218,13 @@ class BatchBackend(BaseBackend):
                 for record in batches:
                     fpath = self._fm.save_batch_in(record["data"])
                     pending_fpaths.append(fpath)
-                self.dash_logger.cprint(
-                    f"Batch preview files written to {pending_fpaths[0]}"
-                )
-                confirmed = self.dash_logger.confirm_batch_submission(
+                special_dl.cprint(f"Batch preview files written to {pending_fpaths[0]}")
+                confirmed = special_dl.confirm_batch_submission(
                     num_batches, total_calls, allow_preview=False
                 )
 
             if confirmed == "n":
-                self.dash_logger.cprint("Batch submission cancelled by user.")
+                special_dl.cprint("Batch submission cancelled by user.")
                 # Don't clear the buffer - allow the user to try again later
                 return CohortIdentifier(batch_ids=[], session_id=self.session_id)
             # else, proceed
@@ -249,8 +246,8 @@ class BatchBackend(BaseBackend):
             batch_ids.append(ident)
 
             # Log batch submission to dashboard
-            self.dash_logger.update_hash(batch_uuid, HashStatus.SENT_BATCH)
-            self.dash_logger.cprint("Sent batch:", ident.batch_uuid)
+            special_dl.update_hash(batch_uuid, HashStatus.SENT_BATCH)
+            special_dl.cprint("Sent batch:", ident.batch_uuid)
 
         cohort_id = CohortIdentifier(batch_ids=batch_ids, session_id=self.session_id)
         # Clear the batch buffer after execution
@@ -308,8 +305,8 @@ class BatchBackend(BaseBackend):
 
         This is a helper function that calls the provider's download_batch_results method.
 
-        This has the inverted (correct) control flow - the rest of the codebase
-        will eventually be rectified to have this control flow.
+        The list can contain both ready and error results.
+        Empty list = still pending.
 
         :param batch_uuid: The UUID of the batch to download.
         :param save_to_disk: If "zip", saves the results to a zip file.
@@ -317,10 +314,6 @@ class BatchBackend(BaseBackend):
         """
 
         batch_results = provider.download_batch(batch_uuid)
-
-        if batch_results:
-            # Log batch download to dashboard
-            self.dash_logger.update_hash(batch_uuid, HashStatus.RECEIVED_BATCH)
 
         for res in batch_results:
             if save_to_disk == "zip":
@@ -334,7 +327,6 @@ class BatchBackend(BaseBackend):
             if res.status == "ready":
                 self._ds.store_ready_batch(res, upsert=self._rewrite_cache)
                 # Log batch storage to dashboard
-                self.dash_logger.update_hash(batch_uuid, HashStatus.STORED)
                 # self._ds.clear_batch_pending(batch_uuid)
             else:
                 # TODO
@@ -346,30 +338,43 @@ class BatchBackend(BaseBackend):
     def try_download_all_batches(
         self,
         provider: "BatchProvider",
+        special_dl: DashboardLogger,
     ):
         """
         Try to download all batches and clean up completed ones
         """
         pending_batches = self._ds.get_all_pending_batch_uuids()
+
+        statuses = {
+            "pending": 0,
+            "ready": 0,
+            "error": 0,
+        }
         for batch_uuid in pending_batches:
             batch_results = self.download_batch_from_provider(
                 provider, batch_uuid, save_to_disk="zip"
             )
             for batch_result in batch_results:
                 if batch_result.status == "ready":
-                    self.dash_logger.cprint(f"Batch {batch_uuid} completed and stored.")
+                    special_dl.update_hash(batch_uuid, HashStatus.STORED_BATCH)
+                    special_dl.cprint(f"Batch {batch_uuid} completed and stored.")
                     # Clean up the pending batch record
                     self._ds.clear_batch_pending(batch_uuid)
+                    statuses["ready"] += 1
                 elif batch_result.status == "error":
-                    self.dash_logger.cprint(
+                    special_dl.update_hash(batch_uuid, HashStatus.STORED_ERROR_BATCH)
+                    special_dl.cprint(
                         f"Batch {batch_uuid} completed with errors and stored."
                     )
                     # Clean up the pending batch record even for errors
                     self._ds.clear_batch_pending(batch_uuid)
+                    statuses["error"] += 1
 
             if not batch_results:
-                self.dash_logger.update_hash(batch_uuid, HashStatus.SENT_BATCH)
-                self.dash_logger.cprint(f"Batch {batch_uuid} is still pending.")
+                special_dl.update_hash(batch_uuid, HashStatus.SENT_BATCH)
+                special_dl.cprint(f"Batch {batch_uuid} is still pending.")
+                statuses["pending"] += 1
+        return statuses
 
 
 class DebugBatchBackend(BatchBackend):

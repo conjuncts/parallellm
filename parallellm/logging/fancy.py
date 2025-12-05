@@ -17,7 +17,7 @@ class ColoredFormatter(logging.Formatter):
     def format(self, record):
         # Apply colors based on log level
         color = self._status_colors.get(record.levelno, "")
-        record.levelname = f"{color}[pllm {record.levelname}]{Style.RESET_ALL}"
+        record.levelname = f"{color}[{record.levelname}]{Style.RESET_ALL}"
 
         return super().format(record)
 

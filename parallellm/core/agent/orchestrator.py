@@ -23,6 +23,7 @@ class AgentOrchestrator:
         *,
         logger: Logger,
         dash_logger: DashboardLogger,
+        special_dash_logger: DashboardLogger = None,
         ask_params: Optional[AskParameters] = None,
         ignore_cache: bool = False,
         strategy: Optional[Literal["sync", "async", "batch"]] = None,
@@ -35,6 +36,7 @@ class AgentOrchestrator:
         :param provider: Provider for submitting queries to LLM APIs
         :param logger: Logger instance
         :param dash_logger: Dashboard logger for pretty printing hash status
+        :param special_dash_logger: Dashboard logger for the beginning/end of lifecycle.
         :param ask_params: Default parameters for ask_llm() calls
         :param ignore_cache: If True, always submit to the API instead of using cached responses
         """
@@ -45,6 +47,9 @@ class AgentOrchestrator:
 
         # Initialize the hash logger with display disabled by default
         self.dash_logger: DashboardLogger = dash_logger
+        if special_dash_logger is None:
+            special_dash_logger = dash_logger
+        self.special_dash_logger: DashboardLogger = special_dash_logger
 
         self.ask_params = ask_params or {}
         self.ignore_cache = ignore_cache
@@ -111,7 +116,11 @@ class AgentOrchestrator:
         self._backend.persist()
 
         if getattr(self._backend, "execute_batch", None):
-            self._backend.execute_batch(self._provider)
+            special_dl = self.special_dash_logger
+            special_dl.set_display(True)
+            self._backend.execute_batch(self._provider, special_dl=special_dl)
+            special_dl._update_console()
+            special_dl.set_display(False, clear_console=False)
 
         self._fm.persist()
 

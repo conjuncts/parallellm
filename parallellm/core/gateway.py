@@ -169,23 +169,28 @@ class ParalleLLMGateway:
             raise NotImplementedError(f"Provider '{provider}' not implemented yet")
 
         logger.debug("Creating AgentOrchestrator")
+        special_dl = DashboardLogger(k=10, display=False)
         bm = AgentOrchestrator(
             file_manager=fm,
             backend=backend,
             provider=provider,
             logger=logger,
             dash_logger=dash_logger,
+            special_dash_logger=special_dl,
             ignore_cache=ignore_cache,
             strategy=strategy,
         )
 
         # try downloading previous batches if any
         if strategy == "batch":
-            _st = backend.dash_logger.display
-            backend.dash_logger.set_display(True)
-            backend.try_download_all_batches(provider)
-            backend.dash_logger.finalize_line()
-            backend.dash_logger.set_display(_st)
+            special_dl.set_display(True)
+            statuses = backend.try_download_all_batches(provider, special_dl)
+            special_dl.finalize_line()
+            special_dl.set_display(False)
+            special_dl.clear(clear_console=False)
+            if statuses["pending"] > 0 and tweaks.batch_wait_until_complete:
+                # TODO: handle this better
+                exit(0)
 
         logger.info(f"Resuming with session_id={bm.get_session_counter()}")
         return bm

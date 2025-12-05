@@ -95,11 +95,8 @@ class BatchProvider(BaseProvider):
     def download_batch(self, batch_uuid: str) -> List[BatchResult]:
         """Download the results of a batch from the provider.
 
-        :return: A tuple of (content, batch_status)
-
-            - content is either a string (entire file content), a list (one item per call_id),
-            or None if pending.
-
-            - batch_status is one of "pending", "ready", or "error".
+        The list can contain both ready and error results.
+        Empty list = still pending.
+        - batch_status is one of "pending", "ready", or "error".
         """
         raise NotImplementedError

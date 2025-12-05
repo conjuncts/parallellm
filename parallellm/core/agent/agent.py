@@ -324,8 +324,8 @@ class AgentDashboardContext(AgentContext):
         Print to console above the dashboard output.
         This ensures proper display ordering when the dashboard is active.
         """
-        # Use the dashboard logger's coordinated print method
-        self._dash_logger.cprint(*args, **kwargs)
+        # Use the dashboard logger's print method
+        self._dash_logger.print(*args, **kwargs)
 
     def update_hash_status(self, hash_value: str, status: HashStatus):
         """

@@ -25,8 +25,8 @@ with ParalleLLM.resume_directory(
 ) as pllm:
     # with pllm.default():
     time_start = time.time()
-    with pllm.agent(dashboard=True) as dash:
-        for i in range(5):
+    for i in range(5):
+        with pllm.agent(dashboard=True) as dash:
             req_start = time.time()
             resp = dash.ask_llm(f"Please name a power of {i + 2}.", hash_by=["llm"])
             # dash.print(resp.resolve())
