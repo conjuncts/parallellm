@@ -8,6 +8,7 @@ import hashlib
 from pathlib import Path
 from typing import Optional
 
+from parallellm.core.message.state import MessageState
 from parallellm.types import WorkingMetadata
 
 
@@ -128,6 +129,9 @@ class FileManager:
         """Save metadata to JSON file"""
         with open(self.metadata_file, "w") as f:
             json.dump(metadata, f)
+
+    def save_msg_state(self, agent_name: str, msg_state: MessageState):
+        checkpoint_dir = self.directory / "agents" / self._sanitize(agent_name)
 
     def save_userdata(self, key: str, value, overwrite=True):
         """

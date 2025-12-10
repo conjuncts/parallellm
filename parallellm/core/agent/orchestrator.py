@@ -3,6 +3,7 @@ from typing import List, Literal, Optional, Union
 from parallellm.core.agent.agent import AgentContext, AgentDashboardContext
 from parallellm.core.backend import BaseBackend
 from parallellm.core.exception import IntegrityError
+from parallellm.core.message.state import MessageState
 from parallellm.core.response import (
     LLMResponse,
     PendingLLMResponse,
@@ -85,6 +86,12 @@ class AgentOrchestrator:
         return AgentContext(
             name, self, ask_params=ask_params, ignore_cache=self.ignore_cache
         )
+
+    def save_msg_state(self, agent_name: str, msg_state: MessageState):
+        """
+        Save the MessageState for a specific agent.
+        """
+        self._fm.save_agent_msg_state(agent_name, msg_state)
 
     def save_userdata(self, key, value):
         """

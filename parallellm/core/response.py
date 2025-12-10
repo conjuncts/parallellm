@@ -12,7 +12,7 @@ from parallellm.types import (
 
 
 class LLMResponse:
-    def __init__(self, value: str, call_id: CallIdentifier = None):
+    def __init__(self, value: str, *, call_id: CallIdentifier = None):
         self.value = value
         self.call_id = call_id
         self._pr: Optional[ParsedResponse] = None

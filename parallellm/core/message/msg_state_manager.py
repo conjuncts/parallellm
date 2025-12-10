@@ -1,0 +1,2 @@
+class MessageStateManager:
+    pass

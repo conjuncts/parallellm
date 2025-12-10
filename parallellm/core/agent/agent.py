@@ -5,6 +5,7 @@ from parallellm.core.cast.fix_docs import cast_documents
 from parallellm.core.exception import GotoCheckpoint, NotAvailable, WrongCheckpoint
 from parallellm.core.hash import compute_hash
 from parallellm.core.identity import LLMIdentity
+from parallellm.core.message.state import MessageState
 from parallellm.core.response import (
     LLMResponse,
     ReadyLLMResponse,
@@ -279,6 +280,15 @@ class AgentContext:
     def update_hash_status(self, hash_value: str, status: HashStatus):
         # No-op
         pass
+
+    def get_msg_state(self) -> MessageState:
+        """
+        Get the current MessageState for this agent.
+
+        Returns:
+            MessageState: The current message state.
+        """
+        return self._bm._backend.get_agent_msg_state(self.agent_name)
 
 
 class AgentDashboardContext(AgentContext):
