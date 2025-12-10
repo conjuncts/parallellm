@@ -72,6 +72,17 @@ class LLMResponse:
         self.value = None
         self._pr = None
 
+    def __repr__(self):
+        v = self.value
+        if v and len(v) > 50:
+            v = v[:47] + "..."
+        return f"<{self.__class__.__name__} hash={self.call_id['doc_hash'][:8]} value={v!r}>"
+
+    def __str__(self):
+        if self.value is not None:
+            return self.value
+        return repr(self)
+
 
 class PendingLLMResponse(LLMResponse):
     """
