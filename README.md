@@ -44,3 +44,8 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 | OpenAI | ✅ | ✅ | TODO |
 | Anthropic | ✅ | ✅ | TODO |
 | Google | ✅ | ✅ | TODO |
+
+
+TODO
+- centrally track documents (and incorporate with MessageState) just as responses are also tracked
+- tree-based MessageState, which in turn stores all historical MessageState's

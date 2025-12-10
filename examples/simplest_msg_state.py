@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 with ParalleLLM.resume_directory(
-    ".pllm/simplest",
+    ".pllm/state/msg-state",
     # ".temp",
     provider="openai",  #
     strategy="sync",
@@ -14,10 +14,15 @@ with ParalleLLM.resume_directory(
 ) as pllm:
     # with pllm.default():
     with pllm.agent(dashboard=True) as dash:
-        msg = dash.get_msg_state()
-        resp = dash.ask_llm("Please name a power of 3.", hash_by=["llm"])
+        msgs = dash.get_msg_state()
 
-        dash.print(resp.resolve())
+        print("Current messages:", msgs)
+        out = input("Send a message: ")
+        if out:
+            msgs.append(out)
+        resp = dash.ask_llm(msgs)
+        print("Response:", resp.resolve())
+        msgs.append(resp)
 
 
 # pllm.persist()

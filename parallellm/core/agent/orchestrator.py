@@ -3,7 +3,8 @@ from typing import List, Literal, Optional, Union
 from parallellm.core.agent.agent import AgentContext, AgentDashboardContext
 from parallellm.core.backend import BaseBackend
 from parallellm.core.exception import IntegrityError
-from parallellm.core.message.state import MessageState
+from parallellm.core.msg.state import MessageState
+from parallellm.core.hydrate import hydrate_llm_response, hydrate_msg_state
 from parallellm.core.response import (
     LLMResponse,
     PendingLLMResponse,
@@ -87,6 +88,14 @@ class AgentOrchestrator:
             name, self, ask_params=ask_params, ignore_cache=self.ignore_cache
         )
 
+    def get_msg_state(self, agent_name: str) -> MessageState:
+        """
+        Load the MessageState for a specific agent.
+        """
+        msg_state = self._fm.load_agent_msg_state(agent_name)
+        msg_state = hydrate_msg_state(msg_state, self._backend)
+        return msg_state
+
     def save_msg_state(self, agent_name: str, msg_state: MessageState):
         """
         Save the MessageState for a specific agent.
@@ -105,14 +114,8 @@ class AgentOrchestrator:
         """
         data = self._fm.load_userdata(key)
 
-        # If the loaded data is an LLMResponse, inject the backend
-        if isinstance(data, PendingLLMResponse):
-            data._backend = self._backend
-        elif isinstance(data, ReadyLLMResponse):
-            parsed_response = self._backend.retrieve(data.call_id)
-            if parsed_response is None:
-                raise IntegrityError("Cached value is no longer available")
-            data.value = parsed_response.text
+        # If the loaded data is an LLMResponse, inject the backend and hydrate
+        data = hydrate_llm_response(data, self._backend)
 
         return data
 

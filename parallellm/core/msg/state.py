@@ -5,10 +5,9 @@ from parallellm.types import LLMDocument
 
 
 class MessageState(UserList[Union[LLMDocument, LLMResponse]]):
-    """
+    """ """
 
-    """
-    def __init__(self, *, agent_name: str = None, anon_ctr = 0, chkp_ctr = 0):
+    def __init__(self, *, agent_name: str = None, anon_ctr=0, chkp_ctr=0):
         super().__init__()
         self.agent_name = agent_name
         self.anon_ctr = anon_ctr
@@ -29,8 +28,8 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]]):
         if isinstance(other, LLMResponse):
             # recover seq_id
             if other.call_id:
-                seq_id = other.call_id.get('seq_id', 0)
-                if other.call_id.get('checkpoint'):
+                seq_id = other.call_id.get("seq_id", 0)
+                if other.call_id.get("checkpoint"):
                     self.chkp_ctr = max(self.chkp_ctr, seq_id)
                 else:
                     self.anon_ctr = max(self.anon_ctr, seq_id)

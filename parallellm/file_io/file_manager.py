@@ -8,7 +8,7 @@ import hashlib
 from pathlib import Path
 from typing import Optional
 
-from parallellm.core.message.state import MessageState
+from parallellm.core.msg.state import MessageState
 from parallellm.types import WorkingMetadata
 
 
@@ -130,8 +130,24 @@ class FileManager:
         with open(self.metadata_file, "w") as f:
             json.dump(metadata, f)
 
-    def save_msg_state(self, agent_name: str, msg_state: MessageState):
+    def load_agent_msg_state(self, agent_name: str) -> MessageState:
         checkpoint_dir = self.directory / "agents" / self._sanitize(agent_name)
+        msg_state_file = checkpoint_dir / "msg_state.pkl"
+
+        if not msg_state_file.exists():
+            return MessageState(agent_name=agent_name)
+
+        with open(msg_state_file, "rb") as f:
+            return pickle.load(f)
+
+    def save_agent_msg_state(self, agent_name: str, msg_state: MessageState):
+        checkpoint_dir = self.directory / "agents" / self._sanitize(agent_name)
+        msg_state_file = checkpoint_dir / "msg_state.pkl"
+
+        if not msg_state_file.parent.exists():
+            msg_state_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(msg_state_file, "wb") as f:
+            pickle.dump(msg_state, f)
 
     def save_userdata(self, key: str, value, overwrite=True):
         """

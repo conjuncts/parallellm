@@ -5,7 +5,7 @@ from parallellm.core.cast.fix_docs import cast_documents
 from parallellm.core.exception import GotoCheckpoint, NotAvailable, WrongCheckpoint
 from parallellm.core.hash import compute_hash
 from parallellm.core.identity import LLMIdentity
-from parallellm.core.message.state import MessageState
+from parallellm.core.msg.state import MessageState
 from parallellm.core.response import (
     LLMResponse,
     ReadyLLMResponse,
@@ -48,6 +48,9 @@ class AgentContext:
         Either a checkpoint or None (if anonymous).
         """
 
+        self._msg_state: Optional[MessageState] = None
+        "MessageState for this agent. Some pipelines won't use this (so it will be None)."
+
     def __enter__(self):
         # Any setup logic can go here if needed
         return self
@@ -56,6 +59,13 @@ class AgentContext:
         # Delegate to BatchManager's error handling logic
 
         self._exit_checkpoint()
+
+        # Save message state
+        if self._msg_state is not None:
+            self._bm.save_msg_state(
+                self.agent_name,
+                self._msg_state,
+            )
 
         if exc_type in (NotAvailable, WrongCheckpoint, GotoCheckpoint):
             return True
@@ -171,7 +181,7 @@ class AgentContext:
 
     def ask_llm(
         self,
-        documents: Union[LLMDocument, List[LLMDocument]],
+        documents: Union[LLMDocument, List[LLMDocument], MessageState],
         *additional_documents: LLMDocument,
         instructions: Optional[str] = None,
         llm: Union[LLMIdentity, str, None] = None,
@@ -288,7 +298,10 @@ class AgentContext:
         Returns:
             MessageState: The current message state.
         """
-        return self._bm._backend.get_agent_msg_state(self.agent_name)
+        if self._msg_state is None:
+            self._msg_state = self._bm.get_msg_state(self.agent_name)
+
+        return self._msg_state
 
 
 class AgentDashboardContext(AgentContext):
