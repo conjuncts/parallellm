@@ -123,6 +123,12 @@ class ToolCall:
         """Allow unpacking into tuple for backward compatibility."""
         return iter((self.name, self.args, self.call_id))
 
+    def __repr__(self):
+        return f"ToolCall(name={self.name}, call_id={(self.call_id or '')[:8]}, args={self.args})"
+
+    def __str__(self):
+        return self.__repr__()
+
 
 @dataclass(slots=True)
 class ToolCallRequest:
@@ -134,9 +140,14 @@ class ToolCallRequest:
     calls: List[ToolCall]
     """List of tool calls."""
 
-    def __iter__(self):
-        """Allow unpacking into tuple for backward compatibility."""
-        return iter(("function_call", self.calls))
+    def __repr__(self):
+        brief_calls = [
+            f"{call.name}({(call.call_id or '')[:8]})" for call in self.calls
+        ]
+        return f"ToolCallRequest(text_content={self.text_content}, calls={brief_calls})"
+
+    def __str__(self):
+        return self.__repr__()
 
 
 @dataclass(slots=True)
@@ -152,9 +163,11 @@ class ToolCallOutput:
     name: str
     """The name of the function call this output corresponds to."""
 
-    def __iter__(self):
-        """Allow unpacking into tuple for backward compatibility."""
-        return iter(("function_call_output", (self.content, self.call_id)))
+    def __repr__(self):
+        return f"ToolCallOutput(name={self.name}, call_id={(self.call_id or '')[:8]}, content={self.content[:20]}...)"
+
+    def __str__(self):
+        return self.__repr__()
 
 
 LLMDocument = Union[

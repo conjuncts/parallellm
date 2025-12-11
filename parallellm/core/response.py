@@ -76,7 +76,9 @@ class LLMResponse:
         v = self.value
         if v and len(v) > 50:
             v = v[:47] + "..."
-        return f"<{self.__class__.__name__} hash={self.call_id['doc_hash'][:8]} value={v!r}>"
+        return (
+            f"{self.__class__.__name__}({v!r}, doc_hash={self.call_id['doc_hash'][:8]})"
+        )
 
     def __str__(self):
         if self.value is not None:
