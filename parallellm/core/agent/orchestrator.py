@@ -88,19 +88,20 @@ class AgentOrchestrator:
             name, self, ask_params=ask_params, ignore_cache=self.ignore_cache
         )
 
-    def get_msg_state(self, agent_name: str) -> MessageState:
+    def get_msg_state(self, agent: AgentContext) -> MessageState:
         """
         Load the MessageState for a specific agent.
         """
-        msg_state = self._fm.load_agent_msg_state(agent_name)
+        msg_state = self._fm.load_agent_msg_state(agent.agent_name)
+        msg_state._true_agent = agent
         msg_state = hydrate_msg_state(msg_state, self._backend)
         return msg_state
 
-    def save_msg_state(self, agent_name: str, msg_state: MessageState):
+    def save_msg_state(self, agent: AgentContext, msg_state: MessageState):
         """
         Save the MessageState for a specific agent.
         """
-        self._fm.save_agent_msg_state(agent_name, msg_state)
+        self._fm.save_agent_msg_state(agent.agent_name, msg_state)
 
     def save_userdata(self, key, value):
         """

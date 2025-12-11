@@ -1,0 +1,47 @@
+from abc import ABC
+from typing import TYPE_CHECKING, List, Literal, Optional, Union
+
+from parallellm.core.identity import LLMIdentity
+from parallellm.core.response import LLMResponse
+from parallellm.types import LLMDocument
+
+if TYPE_CHECKING:
+    from parallellm.core.msg.state import MessageState
+
+
+class Askable(ABC):
+    """
+    A component that can be asked a question.
+    """
+
+    def ask_llm(
+        self,
+        documents: Union[LLMDocument, List[LLMDocument], "MessageState"],
+        *additional_documents: LLMDocument,
+        instructions: Optional[str] = None,
+        llm: Union[LLMIdentity, str, None] = None,
+        salt: Optional[str] = None,
+        hash_by: Optional[List[Literal["llm"]]] = None,
+        text_format: Optional[str] = None,
+        tools: Optional[list] = None,
+        **kwargs,
+    ) -> LLMResponse:
+        """
+        Ask the LLM a question.
+
+        :param documents: Documents to use, such as the prompt.
+            Can be strings or images.
+        :param instructions: The system prompt to use.
+        :param llm: The identity of the LLM to use.
+            Can be helpful multi-agent or multi-model scenarios.
+        :param salt: A value to include in the hash for differentiation.
+        :param hash_by: The names of additional terms to include in the hash for differentiation.
+            Example: "llm" will also include the LLM name.
+        :param text_format: Schema or format specification for structured output.
+            For OpenAI: uses structured output via responses.parse().
+            For Google: sets response_mime_type and response_schema.
+            For Anthropic: not supported.
+        :returns: A LLMResponse. The value is **lazy loaded**: for best efficiency,
+            it should not be resolved until you actually need it.
+        """
+        raise NotImplementedError()

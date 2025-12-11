@@ -142,12 +142,21 @@ class FileManager:
 
     def save_agent_msg_state(self, agent_name: str, msg_state: MessageState):
         checkpoint_dir = self.directory / "agents" / self._sanitize(agent_name)
-        msg_state_file = checkpoint_dir / "msg_state.pkl"
+        tmp_file = checkpoint_dir / "msg_state.tmp.pkl"
 
-        if not msg_state_file.parent.exists():
-            msg_state_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(msg_state_file, "wb") as f:
-            pickle.dump(msg_state, f)
+        if not tmp_file.parent.exists():
+            tmp_file.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(tmp_file, "wb") as f:
+                pickle.dump(msg_state, f)
+            # Atomic rename
+            os.replace(tmp_file, checkpoint_dir / "msg_state.pkl")
+        except Exception as e:
+            print(f"Failed to save agent message state: {e}")
+            raise e
+        finally:
+            if tmp_file.exists():
+                tmp_file.unlink(missing_ok=True)
 
     def save_userdata(self, key: str, value, overwrite=True):
         """

@@ -1,17 +1,30 @@
 from collections import UserList
-from typing import SupportsIndex, Union
+from typing import TYPE_CHECKING, List, Literal, Optional, Union
+from parallellm.core.ask import Askable
+from parallellm.core.identity import LLMIdentity
 from parallellm.core.response import LLMResponse
 from parallellm.types import LLMDocument
 
+if TYPE_CHECKING:
+    from parallellm.core.agent.agent import AgentContext
 
-class MessageState(UserList[Union[LLMDocument, LLMResponse]]):
+
+class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
     """ """
 
-    def __init__(self, *, agent_name: str = None, anon_ctr=0, chkp_ctr=0):
+    def __init__(
+        self,
+        *,
+        agent_name: str = None,
+        anon_ctr=0,
+        chkp_ctr=0,
+        true_agent: "AgentContext" = None,
+    ):
         super().__init__()
         self.agent_name = agent_name
         self.anon_ctr = anon_ctr
         self.chkp_ctr = chkp_ctr
+        self._true_agent = true_agent
 
     def copy(self) -> "MessageState":
         """Create a copy of this MessageState."""
@@ -19,6 +32,7 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]]):
             agent_name=self.agent_name,
             anon_ctr=self.anon_ctr,
             chkp_ctr=self.chkp_ctr,
+            true_agent=self._true_agent,
         )
         new_state.data = self.data.copy()
         return new_state
@@ -92,3 +106,57 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]]):
         for item in others:
             self._update_seq_counters(item)
         self.data.extend(others)
+
+    def ask_llm(
+        self,
+        documents: Union[LLMDocument, List[LLMDocument], "MessageState"] = None,
+        *additional_documents: LLMDocument,
+        instructions: Optional[str] = None,
+        llm: Union[LLMIdentity, str, None] = None,
+        salt: Optional[str] = None,
+        hash_by: Optional[List[Literal["llm"]]] = None,
+        text_format: Optional[str] = None,
+        tools: Optional[list] = None,
+        **kwargs,
+    ) -> LLMResponse:
+        f"""
+        Ask the LLM a question. By asking a question directly on the MessageState, the response
+        automatically gets appended to the conversation.
+
+        :param documents: Documents to use, such as the prompt.
+            Can be strings or images.
+        :param instructions: The system prompt to use.
+        :param llm: The identity of the LLM to use.
+            Can be helpful multi-agent or multi-model scenarios.
+        :param salt: A value to include in the hash for differentiation.
+        :param hash_by: The names of additional terms to include in the hash for differentiation.
+            Example: "llm" will also include the LLM name.
+        :param text_format: Schema or format specification for structured output.
+            For OpenAI: uses structured output via responses.parse().
+            For Google: sets response_mime_type and response_schema.
+            For Anthropic: not supported.
+        :returns: A LLMResponse. The value is **lazy loaded**: for best efficiency,
+            it should not be resolved until you actually need it.
+        """
+        if documents is None:
+            documents = self
+        out = self._true_agent.ask_llm(
+            documents,
+            *additional_documents,
+            instructions=instructions,
+            llm=llm,
+            salt=salt,
+            hash_by=hash_by,
+            text_format=text_format,
+            tools=tools,
+            **kwargs,
+        )
+        self._update_seq_counters(out)
+        self.append(out)
+        return out
+
+    def __getstate__(self):
+        # Exclude _true_agent from pickling
+        state = self.__dict__.copy()
+        del state["_true_agent"]
+        return state

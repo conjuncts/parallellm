@@ -1,6 +1,7 @@
 import re
 from typing import TYPE_CHECKING, List, Literal, Optional, Union
 from colorama import Fore, Style, init
+from parallellm.core.ask import Askable
 from parallellm.core.cast.fix_docs import cast_documents
 from parallellm.core.exception import GotoCheckpoint, NotAvailable, WrongCheckpoint
 from parallellm.core.hash import compute_hash
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
     from parallellm.core.agent.orchestrator import AgentOrchestrator
 
 
-class AgentContext:
+class AgentContext(Askable):
     """Context manager for Agent lifecycle (default context)"""
 
     def __init__(
@@ -50,6 +51,7 @@ class AgentContext:
 
         self._msg_state: Optional[MessageState] = None
         "MessageState for this agent. Some pipelines won't use this (so it will be None)."
+        self._persist_msg_state: bool = True
 
     def __enter__(self):
         # Any setup logic can go here if needed
@@ -61,9 +63,9 @@ class AgentContext:
         self._exit_checkpoint()
 
         # Save message state
-        if self._msg_state is not None:
+        if self._msg_state is not None and self._persist_msg_state:
             self._bm.save_msg_state(
-                self.agent_name,
+                self,
                 self._msg_state,
             )
 
@@ -191,25 +193,6 @@ class AgentContext:
         tools: Optional[list] = None,
         **kwargs,
     ) -> LLMResponse:
-        """
-        Ask the LLM a question
-
-        :param documents: Documents to use, such as the prompt.
-            Can be strings or images.
-        :param instructions: The system prompt to use.
-        :param llm: The identity of the LLM to use.
-            Can be helpful multi-agent or multi-model scenarios.
-        :param salt: A value to include in the hash for differentiation.
-        :param hash_by: The names of additional terms to include in the hash for differentiation.
-            Example: "llm" will also include the LLM name.
-        :param text_format: Schema or format specification for structured output.
-            For OpenAI: uses structured output via responses.parse().
-            For Google: sets response_mime_type and response_schema.
-            For Anthropic: not supported.
-        :returns: A LLMResponse. The value is **lazy loaded**: for best efficiency,
-            it should not be resolved until you actually need it.
-        """
-
         # load ask_params defaults
         for k, v in self.ask_params.items():
             if k == "hash_by" and hash_by is None:
@@ -291,15 +274,19 @@ class AgentContext:
         # No-op
         pass
 
-    def get_msg_state(self) -> MessageState:
+    def get_msg_state(self, persist=True) -> MessageState:
         """
         Get the current MessageState for this agent.
 
-        Returns:
-            MessageState: The current message state.
+        :param persist: Whether to persist the MessageState upon exit.
+            (This lets you save and resume conversations.
+            If False, responses still get cached in the backend,
+            but they won't appear in MessageState.)
+        :returns: The current message state.
         """
         if self._msg_state is None:
-            self._msg_state = self._bm.get_msg_state(self.agent_name)
+            self._msg_state = self._bm.get_msg_state(self)
+            self._persist_msg_state = persist
 
         return self._msg_state
 

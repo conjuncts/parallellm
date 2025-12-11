@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 with ParalleLLM.resume_directory(
-    ".pllm/state/msg-state",
+    ".pllm/state/conversation",
     # ".temp",
     provider="openai",  #
     strategy="sync",
@@ -18,11 +18,11 @@ with ParalleLLM.resume_directory(
 
         print("Current messages:", msgs)
         out = input("Send a message: ")
-        if out:
+        while out:
             msgs.append(out)
-            resp = dash.ask_llm(msgs)
-            print("Response:", resp.resolve())
-            msgs.append(resp)
+            msgs.ask_llm()
+            print("Response:", msgs[-1].resolve())
+            out = input("Send a message: ")
 
 
 # pllm.persist()
