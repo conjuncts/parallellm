@@ -12,11 +12,7 @@ with ParalleLLM.resume_directory(
     log_level=logging.DEBUG,
     # ignore_cache=True,
 ) as pllm:
-    # with pllm.default():
     with pllm.agent(dashboard=True) as dash:
         resp = dash.ask_llm("Please name a power of 3.", hash_by=["llm"])
 
         dash.print(resp.resolve())
-
-
-# pllm.persist()

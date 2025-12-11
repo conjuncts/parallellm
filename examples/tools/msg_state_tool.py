@@ -1,3 +1,8 @@
+"""
+In comparison to `simplest_tool.py`, this example demonstrates how MessageState
+to conveniently store conversation history.
+"""
+
 import logging
 
 from pydantic import BaseModel
@@ -44,41 +49,27 @@ with ParalleLLM.resume_directory(
     # ignore_cache=True,
 ) as pllm:
     with pllm.agent(dashboard=True) as dash:
-        # Structured output
-        # resp = dash.ask_llm(
-        # "Please name a power of 3.", hash_by=["llm"], text_format=MyModel
-        # )
-
         # Tools
-        msgs = ["How many files are in '~/examples'? Give the final answer in words."]
-        resp = dash.ask_llm(
-            msgs,
+        convo = dash.get_msg_state(persist=False)
+        convo.append(
+            "How many files are in '~/examples'? Give the final answer in words."
+        )
+        resp = convo.ask_llm(
             hash_by=["llm"],
             tools=tools,
             # llm="gpt-4o"
         )
 
-        dash.print(resp.resolve())
         tool_calls = resp.resolve_tool_calls(to_dict=False)
-        for call in tool_calls:
-            dash.print(
-                f"Tool call: `{call.name}` with args {call.args} call_id {call.call_id}"
-            )
-
         assert len(tool_calls) == 1
         assert tool_calls[0].name == "count_files"
-        msgs.append(resp.to_assistant_message())
 
         computed_tool_output = ToolCallOutput(
             name=tool_calls[0].name,
             content=ls_tool(tool_calls[0].args),
             call_id=tool_calls[0].call_id,
         )
+        convo.append(computed_tool_output)
 
-        resp = dash.ask_llm(msgs + [computed_tool_output], hash_by=["llm"])
-        dash.print(resp.resolve())
-        # Should respond by putting it in:
-        # - function_call_output (openai)
-        # - tool_result (anthropic)
-
-# pllm.persist()
+        resp = convo.ask_llm(hash_by=["llm"])
+        dash.print(convo)

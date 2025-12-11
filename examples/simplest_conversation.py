@@ -12,7 +12,6 @@ with ParalleLLM.resume_directory(
     log_level=logging.DEBUG,
     # ignore_cache=True,
 ) as pllm:
-    # with pllm.default():
     with pllm.agent(dashboard=True) as dash:
         msgs = dash.get_msg_state(persist=True)
 
@@ -23,6 +22,3 @@ with ParalleLLM.resume_directory(
             msgs.ask_llm()
             print("Response:", msgs[-1].resolve())
             out = input("Send a message: ")
-
-
-# pllm.persist()

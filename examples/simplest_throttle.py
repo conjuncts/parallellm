@@ -23,7 +23,6 @@ with ParalleLLM.resume_directory(
         async_max_concurrent=2,
     ),
 ) as pllm:
-    # with pllm.default():
     time_start = time.time()
     for i in range(5):
         with pllm.agent(dashboard=True) as dash:
@@ -34,6 +33,3 @@ with ParalleLLM.resume_directory(
             dash.print(
                 f"Response {i} at {req_start - time_start} took {req_end - req_start:.2f}s"
             )
-
-
-# pllm.persist()

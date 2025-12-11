@@ -17,7 +17,6 @@ pllm = ParalleLLM.resume_directory(
     log_level=logging.DEBUG,
 )
 
-# with pllm.default():
 with pllm.agent(dashboard=True) as dash:
     dash.print("This will always be executed")
 
