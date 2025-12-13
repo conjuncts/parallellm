@@ -91,7 +91,6 @@ class SyncBackend(BaseBackend):
         """
 
         """Submit a synchronous function call and store the result immediately"""
-        checkpoint = call_id["checkpoint"] or ""
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
 
@@ -113,14 +112,14 @@ class SyncBackend(BaseBackend):
             self._ds.store(call_id, parsed, upsert=self._rewrite_cache)
 
             # Store in pending results for immediate retrieval
-            key = f"{checkpoint}:{doc_hash}:{seq_id}"
+            key = f"{doc_hash}:{seq_id}"
             self._pending_results[key] = parsed.text
 
             return ReadyLLMResponse(call_id=call_id, pr=parsed)
 
         except Exception as e:
             # Store the exception for later retrieval
-            key = f"{checkpoint}:{doc_hash}:{seq_id}"
+            key = f"{doc_hash}:{seq_id}"
             self._pending_results[key] = e
             raise
 
@@ -139,13 +138,11 @@ class SyncBackend(BaseBackend):
         Synchronous retrieve that checks pending results first, then datastore.
 
         The required fields from call_id are:
-        - agent_name, checkpoint, doc_hash, seq_id
+        - agent_name, doc_hash, seq_id
         """
         # Check if we have a pending result
         # Within one session, doc_hash should not be necessary
         key = f"{call_id['agent_name']}:{call_id['seq_id']}"
-        if call_id["checkpoint"]:
-            key += f":{call_id['checkpoint']}"
         if key in self._pending_results:
             result = self._pending_results[key]
             if isinstance(result, Exception):

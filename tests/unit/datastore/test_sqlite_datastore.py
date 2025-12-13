@@ -31,10 +31,9 @@ def temp_datastore():
 
 class TestSQLite:
     def test_store_and_retrieve_anonymous_response(self, temp_datastore):
-        """Test storing and retrieving an anonymous response (no checkpoint)"""
+        """Test storing and retrieving an anonymous response"""
         call_id: CallIdentifier = {
             "agent_name": "test_agent",
-            "checkpoint": None,
             "doc_hash": "test_hash_123",
             "seq_id": 1,
             "session_id": 100,
@@ -59,37 +58,10 @@ class TestSQLite:
         retrieved_with_metadata = temp_datastore.retrieve(call_id, metadata=True)
         assert retrieved_with_metadata.metadata == metadata
 
-    def test_store_and_retrieve_checkpoint_response(self, temp_datastore):
-        """Test storing and retrieving a checkpoint response"""
-        call_id: CallIdentifier = {
-            "agent_name": "checkpoint_agent",
-            "checkpoint": "v1.0",
-            "doc_hash": "checkpoint_hash_456",
-            "seq_id": 2,
-            "session_id": 200,
-            "provider_type": "anthropic",
-        }
-
-        parsed_response = ParsedResponse(
-            text="Checkpoint response",
-            response_id="chk_resp_456",
-            metadata={"checkpoint_info": "test"},
-        )
-
-        # Store the response
-        temp_datastore.store(call_id, parsed_response)
-
-        # Retrieve the response
-        retrieved = temp_datastore.retrieve(call_id)
-        assert retrieved is not None
-        assert retrieved.text == "Checkpoint response"
-        assert retrieved.response_id == "chk_resp_456"
-
     def test_store_update_existing_response(self, temp_datastore):
         """Test that storing with same call_id updates existing response"""
         call_id: CallIdentifier = {
             "agent_name": "test_agent",
-            "checkpoint": None,
             "doc_hash": "update_test_hash",
             "seq_id": 1,
             "session_id": 100,
@@ -119,7 +91,6 @@ class TestSQLite:
         """Test retrieving a response that doesn't exist"""
         call_id: CallIdentifier = {
             "agent_name": "nonexistent_agent",
-            "checkpoint": None,
             "doc_hash": "nonexistent_hash",
             "seq_id": 999,
             "session_id": 100,
@@ -133,7 +104,6 @@ class TestSQLite:
         """Test that retrieve falls back to matching without seq_id"""
         call_id: CallIdentifier = {
             "agent_name": "fallback_agent",
-            "checkpoint": None,
             "doc_hash": "fallback_hash",
             "seq_id": 1,
             "session_id": 100,
@@ -164,7 +134,6 @@ class TestSQLiteBatch:
         call_ids = [
             {
                 "agent_name": "batch_agent",
-                "checkpoint": None,
                 "doc_hash": f"batch_hash_{i}",
                 "seq_id": i,
                 "session_id": 300,
@@ -209,7 +178,6 @@ class TestSQLiteBatch:
         call_ids = [
             {
                 "agent_name": "ready_batch_agent",
-                "checkpoint": None,
                 "doc_hash": f"ready_hash_{i}",
                 "seq_id": i,
                 "session_id": 400,
@@ -298,7 +266,6 @@ class TestSQLiteExtras:
         tables = [row[0] for row in cursor.fetchall()]
         expected_tables = [
             "anon_responses",
-            "chk_responses",
             "metadata",
             "batch_pending",
         ]
@@ -309,7 +276,6 @@ class TestSQLiteExtras:
         """Test handling of null agent names"""
         call_id: CallIdentifier = {
             "agent_name": None,
-            "checkpoint": None,
             "doc_hash": "null_agent_hash",
             "seq_id": 1,
             "session_id": 100,
@@ -331,7 +297,6 @@ class TestSQLiteExtras:
         """Test metadata storage and retrieval"""
         call_id: CallIdentifier = {
             "agent_name": "metadata_agent",
-            "checkpoint": None,
             "doc_hash": "metadata_hash",
             "seq_id": 1,
             "session_id": 500,
@@ -364,7 +329,6 @@ class TestSQLiteExtras:
         # Store some data
         call_id: CallIdentifier = {
             "agent_name": "persist_agent",
-            "checkpoint": None,
             "doc_hash": "persist_hash",
             "seq_id": 1,
             "session_id": 600,
@@ -423,7 +387,6 @@ class TestSQLiteExtras:
             # This should cause an error due to invalid parameters
             call_id: CallIdentifier = {
                 "agent_name": "error_agent",
-                "checkpoint": None,
                 "doc_hash": None,  # This should cause an error
                 "seq_id": 1,
                 "session_id": 700,
@@ -443,7 +406,6 @@ class TestSQLiteExtras:
         # Store some OpenAI metadata
         call_id: CallIdentifier = {
             "agent_name": "transfer_agent",
-            "checkpoint": None,
             "doc_hash": "transfer_hash",
             "seq_id": 1,
             "session_id": 800,

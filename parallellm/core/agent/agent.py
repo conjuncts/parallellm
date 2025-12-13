@@ -1,9 +1,8 @@
-import re
 from typing import TYPE_CHECKING, List, Literal, Optional, Union
 from colorama import Fore, Style, init
 from parallellm.core.ask import Askable
 from parallellm.core.cast.fix_docs import cast_documents
-from parallellm.core.exception import GotoCheckpoint, NotAvailable, WrongCheckpoint
+from parallellm.core.exception import NotAvailable
 from parallellm.core.hash import compute_hash
 from parallellm.core.identity import LLMIdentity
 from parallellm.core.msg.state import MessageState
@@ -38,16 +37,9 @@ class AgentContext(Askable):
         self._bm = batch_manager
 
         self._anonymous_counter = 0  # Anonymous mode counter, always starts from 0
-        self._checkpoint_counter = None  # Initialized when entering checkpoint
 
         self.ask_params = ask_params or {}
         self.ignore_cache = ignore_cache
-
-        self.active_checkpoint: Optional[str] = None
-        """
-        Active checkpoint: if we are inside a checkpoint context.
-        Either a checkpoint or None (if anonymous).
-        """
 
         self._msg_state: Optional[MessageState] = None
         "MessageState for this agent. Some pipelines won't use this (so it will be None)."
@@ -60,13 +52,11 @@ class AgentContext(Askable):
     def __exit__(self, exc_type, exc_value, traceback):
         # Delegate to BatchManager's error handling logic
 
-        self._exit_checkpoint()
-
         # Save message state
         if self._msg_state is not None and self._persist_msg_state:
             self._try_persist_msg_state(self._msg_state)
 
-        if exc_type in (NotAvailable, WrongCheckpoint, GotoCheckpoint):
+        if exc_type in (NotAvailable,):
             return True
         if self._bm.strategy == "batch" and exc_type in (NotAvailable,):
             # swallow NotAvailable errors only in batch mode
@@ -90,93 +80,8 @@ class AgentContext(Askable):
         key = self.agent_name if self.agent_name is not None else "default-agent"
         return self._bm._fm.metadata["agents"].setdefault(
             key,
-            {
-                "latest_checkpoint": None,
-                "checkpoint_counter": 0,
-            },
+            {},
         )
-
-    def when_checkpoint(self, checkpoint_name):
-        """
-        Declares a checkpoint.
-
-        This permits non-deterministic/expensive operations to be skipped
-        and allows code to be resumed.
-
-        :param checkpoint_name: Only execute subsequent code if the agent
-            is at this checkpoint.
-        """
-        if self.my_metadata["latest_checkpoint"] is None:
-            self.my_metadata["latest_checkpoint"] = checkpoint_name
-
-        # But generally, only enter if it is the latest
-        elif checkpoint_name != self.my_metadata["latest_checkpoint"]:
-            raise WrongCheckpoint()
-
-        # Set it as active and initialize local checkpoint counter
-        self.active_checkpoint = checkpoint_name
-        # Initialize local counter from persisted metadata (or 0 if first time)
-        self._checkpoint_counter = self.my_metadata.get("checkpoint_counter", 0)
-
-        self._bm._logger.info(
-            f"Entered checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
-        )
-
-    def when_checkpoint_pattern(self, checkpoint_pattern):
-        """
-        Declares a checkpoint based on a regex pattern.
-
-        :param checkpoint_pattern: Regex pattern to match the checkpoint name.
-        """
-
-        curr_checkpoint = self.my_metadata["latest_checkpoint"]
-        if curr_checkpoint is None:
-            raise WrongCheckpoint()
-
-        if re.match(checkpoint_pattern, curr_checkpoint):
-            self.when_checkpoint(curr_checkpoint)
-
-    def goto_checkpoint(self, checkpoint_name):
-        """
-        Nothing after this statement will be executed.
-        """
-        # Log the current seq_id before switching
-        current_seq_id = None
-        if self.active_checkpoint is not None:
-            current_seq_id = self._checkpoint_counter
-        else:
-            current_seq_id = self._anonymous_counter
-
-        # Revise metadata
-        self.my_metadata["latest_checkpoint"] = checkpoint_name
-        self.my_metadata["checkpoint_counter"] = self._checkpoint_counter
-
-        # Logging
-        self._bm._fm.log_checkpoint_event(
-            "switch", self.agent_name, checkpoint_name, current_seq_id
-        )
-        self._bm._logger.info(
-            f"Switched to checkpoint {Fore.CYAN}{checkpoint_name}{Style.RESET_ALL}"
-        )
-        raise GotoCheckpoint(checkpoint_name)
-
-    def _exit_checkpoint(self):
-        """
-        Exit checkpoint context
-        """
-        if self.active_checkpoint is not None:
-            # Log the final seq_id before exiting
-            final_seq_id = (
-                self._checkpoint_counter if self._checkpoint_counter is not None else 0
-            )
-
-            # Log checkpoint exit to file
-            # self._fm.log_checkpoint_event("exit", self.active_checkpoint, final_seq_id)
-
-            # Do NOT persist local checkpoint counter
-            # (local checkpoint counter should only persist upon a goto)
-            self.active_checkpoint = None
-            self._checkpoint_counter = None
 
     def ask_llm(
         self,
@@ -201,14 +106,10 @@ class AgentContext(Askable):
             llm = LLMIdentity(llm)
 
         # Use dual counter system based on checkpoint mode
-        if self.active_checkpoint is not None:
-            # In checkpoint mode: use and increment local checkpoint counter
-            seq_id = self._checkpoint_counter
-            self._checkpoint_counter += 1
-        else:
-            # In anonymous mode: use and increment anonymous counter
-            seq_id = self._anonymous_counter
-            self._anonymous_counter += 1
+
+        # In anonymous mode: use and increment anonymous counter
+        seq_id = self._anonymous_counter
+        self._anonymous_counter += 1
 
         if isinstance(documents, MessageState):
             documents = documents.cast_documents() + list(additional_documents)
@@ -230,7 +131,6 @@ class AgentContext(Askable):
 
         call_id: CallIdentifier = {
             "agent_name": self.agent_name,
-            "checkpoint": self.active_checkpoint,
             "doc_hash": hashed,
             "seq_id": seq_id,
             "session_id": self._bm.get_session_counter(),

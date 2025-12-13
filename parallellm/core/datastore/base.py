@@ -20,7 +20,7 @@ class Datastore(ABC):
         """
         Retrieve a response from the backend.
 
-        :param call_id: The task identifier containing agent_name, checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing agent_name, doc_hash, and seq_id.
         :param metadata: Whether to include metadata in the response.
         :returns: The retrieved response content.
         """
@@ -43,7 +43,7 @@ class Datastore(ABC):
         """
         Store a response in the backend.
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing doc_hash and seq_id.
         :param parsed_response: The parsed response object containing text, response_id, and metadata.
         :returns: The seq_id where the response was stored (if applicable).
         """

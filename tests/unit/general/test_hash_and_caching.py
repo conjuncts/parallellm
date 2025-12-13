@@ -184,69 +184,39 @@ class TestCallMatching:
 
     def test_call_matches_identical(self):
         """Test that identical calls match"""
-        call1 = self._create_call_id("agent1", "chk1", "hash123", 1, 100)
-        call2 = self._create_call_id("agent1", "chk1", "hash123", 1, 100)
+        call1 = self._create_call_id("agent1", "hash123", 1, 100)
+        call2 = self._create_call_id("agent1", "hash123", 1, 100)
 
         assert _call_matches(call1, call2) is True
 
     def test_call_matches_different_session(self):
         """Test that calls with different session_id still match"""
-        call1 = self._create_call_id("agent1", "chk1", "hash123", 1, 100)
-        call2 = self._create_call_id(
-            "agent1", "chk1", "hash123", 1, 200
-        )  # Different session
+        call1 = self._create_call_id("agent1", "hash123", 1, 100)
+        call2 = self._create_call_id("agent1", "hash123", 1, 200)  # Different session
 
         # Should match because session_id is ignored for matching
         assert _call_matches(call1, call2) is True
 
-    def test_call_matches_different_checkpoint(self):
-        """Test that calls with different checkpoints don't match"""
-        call1 = self._create_call_id("agent1", "chk1", "hash123", 1, 100)
-        call2 = self._create_call_id(
-            "agent1", "chk2", "hash123", 1, 100
-        )  # Different checkpoint
-
-        assert _call_matches(call1, call2) is False
-
     def test_call_matches_different_hash(self):
         """Test that calls with different hashes don't match"""
-        call1 = self._create_call_id("agent1", "chk1", "hash123", 1, 100)
-        call2 = self._create_call_id(
-            "agent1", "chk1", "hash456", 1, 100
-        )  # Different hash
+        call1 = self._create_call_id("agent1", "hash123", 1, 100)
+        call2 = self._create_call_id("agent1", "hash456", 1, 100)  # Different hash
 
         assert _call_matches(call1, call2) is False
 
     def test_call_matches_different_seq_id(self):
         """Test that calls with different seq_id don't match"""
-        call1 = self._create_call_id("agent1", "chk1", "hash123", 1, 100)
-        call2 = self._create_call_id(
-            "agent1", "chk1", "hash123", 2, 100
-        )  # Different seq_id
-
-        assert _call_matches(call1, call2) is False
-
-    def test_call_matches_none_checkpoints(self):
-        """Test matching with None checkpoints"""
-        call1 = self._create_call_id("agent1", None, "hash123", 1, 100)
-        call2 = self._create_call_id("agent1", None, "hash123", 1, 200)
-
-        assert _call_matches(call1, call2) is True
-
-    def test_call_matches_one_none_checkpoint(self):
-        """Test that None and non-None checkpoints don't match"""
-        call1 = self._create_call_id("agent1", None, "hash123", 1, 100)
-        call2 = self._create_call_id("agent1", "chk1", "hash123", 1, 100)
+        call1 = self._create_call_id("agent1", "hash123", 1, 100)
+        call2 = self._create_call_id("agent1", "hash123", 2, 100)  # Different seq_id
 
         assert _call_matches(call1, call2) is False
 
     def _create_call_id(
-        self, agent_name, checkpoint, doc_hash, seq_id, session_id
+        self, agent_name, doc_hash, seq_id, session_id
     ) -> CallIdentifier:
         """Helper to create call identifiers"""
         return {
             "agent_name": agent_name,
-            "checkpoint": checkpoint,
             "doc_hash": doc_hash,
             "seq_id": seq_id,
             "session_id": session_id,
@@ -267,7 +237,6 @@ class TestCacheIntegration:
         # 2. Create call ID with hash
         call_id: CallIdentifier = {
             "agent_name": "test_agent",
-            "checkpoint": "test_checkpoint",
             "doc_hash": computed_hash,
             "seq_id": 1,
             "session_id": 1,

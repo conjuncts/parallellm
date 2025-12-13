@@ -41,7 +41,6 @@ def sample_call_id():
     """Create a sample CallIdentifier for testing"""
     return {
         "agent_name": "test_agent",
-        "checkpoint": "test_checkpoint",
         "doc_hash": "test_hash_123",
         "seq_id": 1,
         "session_id": 1,
@@ -225,7 +224,7 @@ class TestSyncBackend:
         assert resp_metadata is not None
 
         # Check that result is stored in pending results
-        key = f"{sample_call_id['checkpoint']}:{sample_call_id['doc_hash']}:{sample_call_id['seq_id']}"
+        key = f"{sample_call_id['doc_hash']}:{sample_call_id['seq_id']}"
         assert key in backend._pending_results
         assert backend._pending_results[key] == resp_text
 

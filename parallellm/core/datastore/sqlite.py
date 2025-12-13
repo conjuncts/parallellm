@@ -109,31 +109,14 @@ class SQLiteDatastore(Datastore):
             conn = sqlite3.connect(str(db_path))
             conn.row_factory = sqlite3.Row  # Enable dict-like access to rows
 
-            # For main database (db_name is None), create both tables
+            # For main database (db_name is None), create response table
             if db_name is None:
-                # Anonymous responses table: no checkpoint column, agent_name can be NULL
+                # Responses table: agent_name can be NULL
                 # No UNIQUE constraint - allows duplicates, retrieve will get most recent (highest id)
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS anon_responses (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         agent_name TEXT,
-                        seq_id INTEGER NOT NULL,
-                        session_id INTEGER NOT NULL,
-                        doc_hash TEXT NOT NULL,
-                        response TEXT NOT NULL,
-                        response_id TEXT,
-                        provider_type TEXT,
-                        tool_calls TEXT
-                    )
-                """)
-
-                # Checkpoint responses table: checkpoint is NOT NULL
-                # No UNIQUE constraint - allows duplicates, retrieve will get most recent (highest id)
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS chk_responses (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        agent_name TEXT,
-                        checkpoint TEXT NOT NULL,
                         seq_id INTEGER NOT NULL,
                         session_id INTEGER NOT NULL,
                         doc_hash TEXT NOT NULL,
@@ -160,7 +143,6 @@ class SQLiteDatastore(Datastore):
                     CREATE TABLE IF NOT EXISTS batch_pending (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         agent_name TEXT,
-                        checkpoint TEXT,
                         seq_id INTEGER NOT NULL,
                         session_id INTEGER NOT NULL,
                         doc_hash TEXT NOT NULL,
@@ -198,29 +180,6 @@ class SQLiteDatastore(Datastore):
                     CREATE INDEX IF NOT EXISTS idx_anon_provider_type ON anon_responses(provider_type)
                 """)
 
-                # Create indexes for chk_responses table
-                conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_chk_agent_checkpoint ON chk_responses(agent_name, checkpoint)
-                """)
-                conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_chk_agent_checkpoint_doc_hash ON chk_responses(agent_name, checkpoint, doc_hash)
-                """)
-                conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_chk_doc_hash ON chk_responses(doc_hash)
-                """)
-                conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_chk_session_id ON chk_responses(session_id)
-                """)
-                conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_chk_seq_id ON chk_responses(seq_id)
-                """)
-                conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_chk_response_id ON chk_responses(response_id)
-                """)
-                conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_chk_provider_type ON chk_responses(provider_type)
-                """)
-
                 # Create indexes for metadata table
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_metadata_response_id ON metadata(response_id)
@@ -237,7 +196,7 @@ class SQLiteDatastore(Datastore):
                     CREATE INDEX IF NOT EXISTS idx_batch_pending_custom_id ON batch_pending(custom_id)
                 """)
                 conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_batch_pending_agent_checkpoint ON batch_pending(agent_name, checkpoint)
+                    CREATE INDEX IF NOT EXISTS idx_batch_pending_agent_name ON batch_pending(agent_name)
                 """)
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_batch_pending_doc_hash ON batch_pending(doc_hash)
@@ -260,24 +219,21 @@ class SQLiteDatastore(Datastore):
         Retrieve a response from SQLite.
         Selects the oldest entry.
 
-        :param call_id: The task identifier containing agent_name, checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing agent_name, doc_hash, and seq_id.
         :returns: The retrieved response content.
         """
         # It needs to be the oldest entry, because
         # we want it to be deterministic (we don't want future requests to mess up the order)
 
-        checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
         agent_name = call_id["agent_name"]
 
         conn = self._get_connection(None)
-        table_name = "chk_responses" if checkpoint is not None else "anon_responses"
+        table_name = "anon_responses"
 
         # Build WHERE clause using helper method
-        where_conditions, params = self._build_where_clause(
-            agent_name, checkpoint, doc_hash
-        )
+        where_conditions, params = self._build_where_clause(agent_name, doc_hash)
 
         # Try with seq_id first (most specific), get oldest entry
         full_where = where_conditions + " AND seq_id = ?"
@@ -345,20 +301,13 @@ class SQLiteDatastore(Datastore):
     def _build_where_clause(
         self,
         agent_name: Optional[str],
-        checkpoint: Optional[str],
         doc_hash: str,
-        *,
-        needs_checkpoint_col: bool = False,
     ) -> tuple[str, list]:
         """
-        Build a WHERE clause for querying responses by agent_name, checkpoint, and doc_hash.
+        Build a WHERE clause for querying responses by agent_name and doc_hash.
 
         :param agent_name: The agent name (can be None)
-        :param checkpoint: The checkpoint (can be None)
         :param doc_hash: The document hash
-        :param needs_checkpoint_col: If True, the table MUST have a checkpoint column.
-            And it compares against NULL when checkpoint is None. Conversely, if False,
-            the table could be missing the checkpoint column (anon_responses).
         :returns: Tuple of (where_clause, params)
         """
         where_conditions = ["doc_hash = ?"]
@@ -369,12 +318,6 @@ class SQLiteDatastore(Datastore):
             params.append(agent_name)
         else:
             where_conditions.append("agent_name IS NULL")
-
-        if checkpoint is not None:
-            where_conditions.append("checkpoint = ?")
-            params.append(checkpoint)
-        elif needs_checkpoint_col:
-            where_conditions.append("checkpoint IS NULL")
 
         return " AND ".join(where_conditions), params
 
@@ -440,11 +383,10 @@ class SQLiteDatastore(Datastore):
         """
         Store a response in SQLite.
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
+        :param call_id: The task identifier containing doc_hash, seq_id, and session_id.
         :param parsed_response: The parsed response object containing text, response_id, and metadata.
         :param upsert: If True, update existing record instead of inserting duplicate (default: False)
         """
-        checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
         session_id = call_id["session_id"]
@@ -461,10 +403,8 @@ class SQLiteDatastore(Datastore):
         conn = self._get_connection(None)
 
         # Determine table and build WHERE clause
-        table_name = "chk_responses" if checkpoint is not None else "anon_responses"
-        where_clause, where_params = self._build_where_clause(
-            agent_name, checkpoint, doc_hash
-        )
+        table_name = "anon_responses"
+        where_clause, where_params = self._build_where_clause(agent_name, doc_hash)
 
         try:
             # Prepare record for INSERT/UPDATE
@@ -481,13 +421,10 @@ class SQLiteDatastore(Datastore):
                 "tool_calls": tool_calls_json,
             }
 
-            if checkpoint is not None:
-                record["checkpoint"] = checkpoint
-
             # Insert the response (or update if upsert=True)
             if upsert:
                 where_clause, where_params = self._build_where_clause(
-                    agent_name, checkpoint, doc_hash
+                    agent_name, doc_hash
                 )
             else:
                 where_clause = where_params = None
@@ -533,7 +470,6 @@ class SQLiteDatastore(Datastore):
             # Insert each call_id from the batch into the batch_pending table
             for call_id, custom_id in zip(batch_id.call_ids, batch_id.custom_ids):
                 agent_name = call_id["agent_name"]
-                checkpoint = call_id.get("checkpoint")
                 seq_id = call_id["seq_id"]
                 session_id = call_id["session_id"]
                 doc_hash = call_id["doc_hash"]
@@ -544,12 +480,11 @@ class SQLiteDatastore(Datastore):
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO batch_pending 
-                    (agent_name, checkpoint, seq_id, session_id, doc_hash, provider_type, batch_uuid, custom_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (agent_name, seq_id, session_id, doc_hash, provider_type, batch_uuid, custom_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         agent_name,
-                        checkpoint,
                         seq_id,
                         session_id,
                         doc_hash,
@@ -593,7 +528,7 @@ class SQLiteDatastore(Datastore):
                 # Look up the call_id using custom_id from active batch_pending
                 cursor = conn.execute(
                     """
-                    SELECT agent_name, checkpoint, seq_id, session_id, doc_hash, provider_type
+                    SELECT agent_name, seq_id, session_id, doc_hash, provider_type
                     FROM batch_pending
                     WHERE custom_id = ? AND is_pending = 1
                     LIMIT 1
@@ -608,14 +543,13 @@ class SQLiteDatastore(Datastore):
                     )
 
                 agent_name = row["agent_name"]
-                checkpoint = row["checkpoint"]
                 seq_id = row["seq_id"]
                 session_id = row["session_id"]
                 doc_hash = row["doc_hash"]
                 provider_type = row["provider_type"]
 
-                # Determine table
-                table_name = "chk_responses" if checkpoint else "anon_responses"
+                # Use anon_responses table
+                table_name = "anon_responses"
 
                 # Get response components from parsed_response
                 resp_text = parsed.text
@@ -637,14 +571,10 @@ class SQLiteDatastore(Datastore):
                     "provider_type": provider_type,
                     "tool_calls": tool_calls_json,
                 }
-
-                if checkpoint:
-                    record["checkpoint"] = checkpoint
-
                 # Insert the response (or update if upsert=True)
                 if upsert:
                     where_clause, where_params = self._build_where_clause(
-                        agent_name, checkpoint, doc_hash
+                        agent_name, doc_hash
                     )
                 else:
                     where_clause = where_params = None
@@ -683,7 +613,7 @@ class SQLiteDatastore(Datastore):
 
         cursor = conn.execute(
             """
-            SELECT agent_name, checkpoint, seq_id, session_id, doc_hash, provider_type
+            SELECT agent_name, seq_id, session_id, doc_hash, provider_type
             FROM batch_pending
             WHERE batch_uuid = ? AND is_pending = 1
             ORDER BY seq_id
@@ -696,7 +626,6 @@ class SQLiteDatastore(Datastore):
         for row in rows:
             call_id: CallIdentifier = {
                 "agent_name": row["agent_name"],
-                "checkpoint": row["checkpoint"],
                 "seq_id": row["seq_id"],
                 "session_id": row["session_id"],
                 "doc_hash": row["doc_hash"],
@@ -756,13 +685,10 @@ class SQLiteDatastore(Datastore):
         conn = self._get_connection(None)
 
         agent_name = call_id["agent_name"]
-        checkpoint = call_id.get("checkpoint")
         doc_hash = call_id["doc_hash"]
 
-        # Build WHERE clause using helper method (include explicit NULL check for checkpoint)
-        where_clause, params = self._build_where_clause(
-            agent_name, checkpoint, doc_hash, needs_checkpoint_col=True
-        )
+        # Build WHERE clause using helper method
+        where_clause, params = self._build_where_clause(agent_name, doc_hash)
 
         cursor = conn.execute(
             f"SELECT COUNT(*) as count FROM batch_pending WHERE {where_clause} AND is_pending = 1",
@@ -781,8 +707,6 @@ class SQLiteDatastore(Datastore):
         3. Merges with existing Parquet data (if any)
         4. Writes to temporary files, then swaps them atomically
         5. Removes transferred data from SQLite only on success
-
-        :param checkpoint: The checkpoint to transfer metadata for
         """
         conn = self._get_connection(None)
 
@@ -807,7 +731,7 @@ class SQLiteDatastore(Datastore):
                 conn.commit()
 
                 # VACUUM database for debugging (reclaim space after deletion)
-                # print(f"Debug: VACUUMing database for checkpoint '{checkpoint}' after deleting {len(succeeded)} metadata records")
+                # print(f"Debug: VACUUMing database after deleting {len(succeeded)} metadata records")
                 # conn.execute("VACUUM")
         except sqlite3.Error as e:
             raise RuntimeError(f"SQLite error during metadata transfer: {e}")
@@ -839,19 +763,19 @@ class SQLiteDatastore(Datastore):
         # Close all connections to ensure proper cleanup, especially important on Windows
         self.close()
 
-    def close(self, checkpoint: Optional[str] = None) -> None:
+    def close(self, db_name: Optional[str] = None) -> None:
         """
         Close SQLite connection(s) for the current thread.
 
-        :param checkpoint: The checkpoint connection to close (if None, close all connections).
+        :param db_name: The database name to close (if None, close all connections).
         """
         if hasattr(self, "_local") and hasattr(self._local, "connections"):
             connections = self._get_connections()
 
-            if checkpoint is not None:
-                if checkpoint in connections:
-                    connections[checkpoint].close()
-                    del connections[checkpoint]
+            if db_name is not None:
+                if db_name in connections:
+                    connections[db_name].close()
+                    del connections[db_name]
             else:
                 # Close all connections for current thread
                 for conn in connections.values():

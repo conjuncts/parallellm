@@ -9,15 +9,9 @@ if TYPE_CHECKING:
 
 
 class AgentMetadata(TypedDict):
-    checkpoint_counter: int
-    """
-    Counter for checkpoint mode operations. Persisted across runs.
-    """
+    """Metadata for an agent"""
 
-    latest_checkpoint: Optional[str]
-    """
-    Latest checkpoint is that which has last been reached
-    """
+    pass
 
 
 class WorkingMetadata(TypedDict):
@@ -32,7 +26,6 @@ class WorkingMetadata(TypedDict):
 class CallIdentifier(TypedDict):
     agent_name: str
     """Name of the agent (if any, otherwise default) making the call."""
-    checkpoint: Optional[str]
     doc_hash: str
     seq_id: int
     session_id: int

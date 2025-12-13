@@ -139,13 +139,12 @@ class BatchBackend(BaseBackend):
     ):
         """Generate a custom ID for batch calls
 
-        f"{checkpoint_name}-{session_id}-{seq_id}", which is guaranteed to be unique unless a major
+        f"{agent_name}-{session_id}-{seq_id}-{counter}", which is guaranteed to be unique unless a major
         error has occurred
         """
         agent_name = call_id["agent_name"]
-        checkpoint = call_id["checkpoint"] or ""
         seq_id = call_id["seq_id"]
-        custom_id = f"{agent_name}-{checkpoint}-{self.session_id}-{seq_id}-{self._private_increment}"
+        custom_id = f"{agent_name}-{self.session_id}-{seq_id}-{self._private_increment}"
         self._private_increment += 1
         return custom_id
 
@@ -285,13 +284,13 @@ class BatchBackend(BaseBackend):
 
     # TODO: Also need to store the batch_uuid
     # In that datastore, we need to store
-    # (checkpoint, doc_hash, session_id, seq_id, batch_uuid)
+    # (doc_hash, session_id, seq_id, batch_uuid)
     # so probably the easiest way is to add a possibly NULL column (batch_uuid)
     # to the existing SQL database.
 
     # But that requires response (TEXT) to be not null.
     # Hence, we will need to create a new table "unready_batch_responses"
-    # That contains (agent_name, checkpoint?, seq_id, session_id, doc_hash, provider_type, batch_uuid)
+    # That contains (agent_name, seq_id, session_id, doc_hash, provider_type, batch_uuid)
 
     def download_batch_from_provider(
         self,

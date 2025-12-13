@@ -39,12 +39,7 @@ class FileManager:
             self.metadata = {}
         self.metadata.setdefault(
             "agents",
-            {
-                "default-agent": {
-                    "latest_checkpoint": None,
-                    "checkpoint_counter": 0,
-                }
-            },
+            {"default-agent": {}},
         )
 
         # session_counter: default to 0
@@ -64,11 +59,10 @@ class FileManager:
     ) -> str:
         """
         Sanitize user input to be safe for use as directory name.
-        Uses format: <first_64_chars>-<8_letter_hash> for non-None checkpoints.
-        Returns "default" if checkpoint is None (non-checkpointed mode).
+        Uses format: <first_64_chars>-<8_letter_hash>.
 
-        :param checkpoint: The checkpoint name to sanitize
-        :returns: Sanitized checkpoint name ("default" for None)
+        :param user_input: The string to sanitize
+        :returns: Sanitized string
         """
         if user_input is None:
             return default
@@ -91,14 +85,14 @@ class FileManager:
             cleaned = cleaned[:64].rstrip("_.")
 
         if not cleaned:
-            cleaned = "checkpoint"
+            cleaned = "empty"
 
         # Return format: chk-<first_64_chars>-<8_letter_hash>
         if not add_hash:
             return cleaned
 
-        checkpoint_hash = hashlib.sha256(user_input.encode("utf-8")).hexdigest()[:8]
-        return f"{cleaned}-{checkpoint_hash}"
+        input_hash = hashlib.sha256(user_input.encode("utf-8")).hexdigest()[:8]
+        return f"{cleaned}-{input_hash}"
 
     def _create_lock(self):
         """Create lock file with current process ID"""
@@ -131,8 +125,8 @@ class FileManager:
             json.dump(metadata, f)
 
     def load_agent_msg_state(self, agent_name: str) -> MessageState:
-        checkpoint_dir = self.directory / "agents" / self._sanitize(agent_name)
-        msg_state_file = checkpoint_dir / "msg_state.pkl"
+        msg_state_dir = self.directory / "agents" / self._sanitize(agent_name)
+        msg_state_file = msg_state_dir / "msg_state.pkl"
 
         if not msg_state_file.exists():
             return MessageState(agent_name=agent_name)
@@ -141,8 +135,8 @@ class FileManager:
             return pickle.load(f)
 
     def save_agent_msg_state(self, agent_name: str, msg_state: MessageState):
-        checkpoint_dir = self.directory / "agents" / self._sanitize(agent_name)
-        tmp_file = checkpoint_dir / "msg_state.tmp.pkl"
+        msg_state_dir = self.directory / "agents" / self._sanitize(agent_name)
+        tmp_file = msg_state_dir / "msg_state.tmp.pkl"
 
         if not tmp_file.parent.exists():
             tmp_file.parent.mkdir(parents=True, exist_ok=True)
@@ -150,7 +144,7 @@ class FileManager:
             with open(tmp_file, "wb") as f:
                 pickle.dump(msg_state, f)
             # Atomic rename
-            os.replace(tmp_file, checkpoint_dir / "msg_state.pkl")
+            os.replace(tmp_file, msg_state_dir / "msg_state.pkl")
         except Exception as e:
             print(f"Failed to save agent message state: {e}")
             raise e
@@ -160,21 +154,20 @@ class FileManager:
 
     def save_userdata(self, key: str, value, overwrite=True):
         """
-        Internally persist data across checkpoints
+        Internally persist data
 
-        :param checkpoint: The checkpoint name, or None for default checkpoint
         :param key: The data key
         :param value: The data value to save
         :param overwrite: Whether to overwrite existing data
         """
 
-        # Create checkpoint directory
-        checkpoint_dir = self.directory / "userdata"
-        checkpoint_dir.mkdir(exist_ok=True)
+        # Create userdata directory
+        userdata_dir = self.directory / "userdata"
+        userdata_dir.mkdir(exist_ok=True)
 
         # Save data using pickle for complex objects
         fname = self._sanitize(key)
-        data_file = checkpoint_dir / f"{fname}.pkl"
+        data_file = userdata_dir / f"{fname}.pkl"
 
         if data_file.exists() and not overwrite:
             return
@@ -184,16 +177,16 @@ class FileManager:
 
     def load_userdata(self, key: str):
         """
-        Internally load data across checkpoints
+        Internally load data
 
         :param key: The data key to load
         :returns: The loaded data
         :raises FileNotFoundError: If the data file is not found
         """
-        checkpoint_dir = self.directory / "userdata"
+        userdata_dir = self.directory / "userdata"
 
         fname = self._sanitize(key)
-        data_file = checkpoint_dir / f"{fname}.pkl"
+        data_file = userdata_dir / f"{fname}.pkl"
 
         if not data_file.exists():
             raise FileNotFoundError(f"Data file not found: {data_file}")
@@ -266,43 +259,6 @@ class FileManager:
         """
         if self.metadata is not None:
             self._save_metadata(self.metadata)
-
-    def log_checkpoint_event(
-        self,
-        event_type: str,
-        agent_name: Optional[str],
-        checkpoint_name: Optional[str],
-        seq_id: Optional[int],
-    ):
-        """
-        Log checkpoint state change events to a TSV file
-
-        :param event_type: Type of event ('enter', 'exit', 'switch')
-        :param checkpoint_name: Name of the checkpoint
-        :param seq_id: Sequence ID at the time of the event
-        :param additional_info: Any additional information to log
-        """
-        log_dir = self.directory / "logs"
-        log_dir.mkdir(exist_ok=True)
-
-        log_file = log_dir / "checkpoint_events.tsv"
-
-        # Write header if file doesn't exist
-        if not log_file.exists():
-            with open(log_file, "w", encoding="utf-8") as f:
-                f.write("session_id\tevent_type\tagent_name\tcheckpoint\tseq_id\n")
-
-        session_id = self._get_session_counter()
-        checkpoint_display = (
-            checkpoint_name if checkpoint_name is not None else "anonymous"
-        )
-
-        # Use tab-separated values
-        log_entry = f"{session_id}\t{event_type}\t{agent_name}\t{checkpoint_display}\t{seq_id}\n"
-
-        # Append to log file
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(log_entry)
 
     def is_locked(self):
         """

@@ -49,7 +49,6 @@ class TestReadyLLMResponse:
         """Helper to create mock call identifiers"""
         return {
             "agent_name": "test_agent",
-            "checkpoint": None,
             "doc_hash": "test_hash_123",
             "seq_id": 1,
             "session_id": 1,
@@ -143,7 +142,6 @@ class TestPendingLLMResponse:
         """Helper to create mock call identifiers"""
         return {
             "agent_name": "test_agent",
-            "checkpoint": "test_checkpoint",
             "doc_hash": "test_hash_456",
             "seq_id": 2,
             "session_id": 1,

@@ -58,10 +58,7 @@ class TestFileManagerBasics:
 
             # Default agent should have proper structure
             default_agent = fm.metadata["agents"]["default-agent"]
-            assert "latest_checkpoint" in default_agent
-            assert "checkpoint_counter" in default_agent
-            assert default_agent["latest_checkpoint"] is None
-            assert default_agent["checkpoint_counter"] == 0
+            assert default_agent == {}
 
     def test_session_counter_increments(self):
         """Test session counter increments on each new FileManager"""
@@ -171,7 +168,7 @@ class TestSanitization:
             fm = FileManager(temp_dir)
 
             result = fm._sanitize("")
-            assert "checkpoint" in result  # Default fallback
+            assert "empty" in result  # Default fallback
 
 
 class TestUserdataPersistence:
@@ -394,54 +391,6 @@ class TestAgentOrchestratorIntegration:
             "session_id": 1,
             "provider_type": "openai",
         }
-
-
-class TestCheckpointLogging:
-    """Test checkpoint event logging"""
-
-    def test_log_checkpoint_event(self):
-        """Test checkpoint event logging"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            fm = FileManager(temp_dir)
-
-            fm.log_checkpoint_event("enter", "test_agent", "test_checkpoint", 5)
-
-            log_file = fm.directory / "logs" / "checkpoint_events.tsv"
-            assert log_file.exists()
-
-            # Read and verify log content
-            with open(log_file, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-
-            assert len(lines) == 2  # Header + one event
-            assert "session_id\tevent_type\tagent_name\tcheckpoint\tseq_id" in lines[0]
-            assert "enter\ttest_agent\ttest_checkpoint\t5" in lines[1]
-
-    def test_log_multiple_checkpoint_events(self):
-        """Test logging multiple checkpoint events"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            fm = FileManager(temp_dir)
-
-            # Log multiple events
-            events = [
-                ("enter", "agent1", "checkpoint1", 0),
-                ("switch", "agent1", "checkpoint2", 3),
-                ("exit", "agent1", "checkpoint2", 5),
-            ]
-
-            for event_type, agent, checkpoint, seq_id in events:
-                fm.log_checkpoint_event(event_type, agent, checkpoint, seq_id)
-
-            # Verify all events are logged
-            log_file = fm.directory / "logs" / "checkpoint_events.tsv"
-            with open(log_file, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-
-            assert len(lines) == 4  # Header + 3 events
-            for i, (event_type, agent, checkpoint, seq_id) in enumerate(events, 1):
-                assert event_type in lines[i]
-                assert agent in lines[i]
-                assert checkpoint in lines[i]
 
 
 class TestFileManagerPersistence:

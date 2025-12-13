@@ -6,7 +6,6 @@ to write effective tests for code that uses ParalleLLM with pytest.
 
 For more comprehensive examples testing real ParalleLLM functionality:
 - test_tournament_examples.py: Tests tournament logic, persistence, and caching
-- test_checkpoint_examples.py: Tests checkpoint functionality and userdata persistence
 """
 
 import shutil

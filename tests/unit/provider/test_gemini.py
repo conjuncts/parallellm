@@ -29,7 +29,6 @@ def call_id() -> CallIdentifier:
     """Fixture to create mock call identifiers for testing"""
     return {
         "agent_name": "test_agent",
-        "checkpoint": "test_checkpoint",
         "doc_hash": "test_hash",
         "seq_id": 1,
         "session_id": 1,

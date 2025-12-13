@@ -74,7 +74,7 @@ class SQLiteParquetDatastore(Datastore):
         """
         Retrieve a response, checking parquet first, then SQLite.
 
-        :param call_id: The task identifier containing agent_name, checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing agent_name, doc_hash, and seq_id.
         :param metadata: Whether to include metadata in the response.
         :returns: The retrieved response content.
         """
@@ -119,7 +119,7 @@ class SQLiteParquetDatastore(Datastore):
         """
         Store a response in SQLite (transactional).
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, seq_id, and session_id.
+        :param call_id: The task identifier containing doc_hash, seq_id, and session_id.
         :param parsed_response: The parsed response object containing text, response_id, and metadata.
         :param upsert: If True, update existing record instead of inserting duplicate (default: False)
         """
@@ -132,7 +132,7 @@ class SQLiteParquetDatastore(Datastore):
         Transfer all response tables from SQLite to Parquet files.
 
         This method:
-        1. Extracts all data from anon_responses, chk_responses, and metadata tables
+        1. Extracts all data from anon_responses, and metadata tables
         2. Merges with existing Parquet data (if any)
         3. Writes to temporary files, then swaps them atomically
         4. Removes transferred data from SQLite only on success
@@ -143,7 +143,6 @@ class SQLiteParquetDatastore(Datastore):
         try:
             tables_to_process = [
                 ("anon_responses", "anon_responses"),
-                ("chk_responses", "chk_responses"),
                 ("metadata", "metadata"),
             ]
 
@@ -163,7 +162,7 @@ class SQLiteParquetDatastore(Datastore):
                 if not ids:
                     continue
 
-                if table in ["anon_responses", "chk_responses"]:
+                if table in ["anon_responses"]:
                     # Delete by ID
                     placeholders = ",".join(["?" for _ in ids])
                     conn.execute(
@@ -201,14 +200,14 @@ class SQLiteParquetDatastore(Datastore):
         finally:
             self._sqlite_datastore.persist()
 
-    def close(self, checkpoint: Optional[str] = None) -> None:
+    def close(self, db_name: Optional[str] = None) -> None:
         """
         Close connections and clear caches.
 
-        :param checkpoint: The checkpoint connection to close (if None, close all connections).
+        :param db_name: The database name to close (if None, close all connections).
         """
         # Parquet manager will handle its own cleanup
-        self._sqlite_datastore.close(checkpoint)
+        self._sqlite_datastore.close(db_name)
 
     def __del__(self):
         """

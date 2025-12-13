@@ -24,13 +24,11 @@ def mock_orchestrator():
     mock_orch._fm.metadata = {"agents": {}}
 
     # Mock the logging method that's called during checkpoint operations
-    mock_orch._fm.log_checkpoint_event = Mock()
     mock_orch._logger.info = Mock()
 
     # Create a mock call ID for responses
     mock_call_id = {
         "agent_name": "test_agent",
-        "checkpoint": None,
         "doc_hash": "test_hash",
         "seq_id": 0,
         "session_id": 1,

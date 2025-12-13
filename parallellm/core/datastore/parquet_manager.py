@@ -44,7 +44,6 @@ class ParquetManager:
 
         return {
             "anon_responses": parquet_dir / "anon_responses.parquet",
-            "chk_responses": parquet_dir / "chk_responses.parquet",
             "metadata": parquet_dir / "metadata.parquet",
         }
 
@@ -96,16 +95,15 @@ class ParquetManager:
         """
         Retrieve response row from parquet files using call_id.
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing doc_hash and seq_id.
         :returns: The retrieved row as a dictionary, or None if not found.
         """
-        checkpoint = call_id["checkpoint"]
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
         agent_name = call_id["agent_name"]
 
         # Determine which table to check
-        table_name = "chk_responses" if checkpoint is not None else "anon_responses"
+        table_name = "anon_responses"
         df = self._eager_tables.get(table_name)
 
         if df is None or df.is_empty():
@@ -118,9 +116,6 @@ class ParquetManager:
             filters.append(pl.col("agent_name") == agent_name)
         else:
             filters.append(pl.col("agent_name").is_null())
-
-        if checkpoint is not None:
-            filters.append(pl.col("checkpoint") == checkpoint)
 
         # Try with seq_id first (most specific)
         specific_filters = filters + [pl.col("seq_id") == seq_id]

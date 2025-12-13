@@ -105,13 +105,13 @@ class AgentOrchestrator:
 
     def save_userdata(self, key, value):
         """
-        The intended way to let data persist across checkpoints
+        The intended way to let data persist across runs
         """
         return self._fm.save_userdata(key, value)
 
     def load_userdata(self, key):
         """
-        The intended way to let data persist across checkpoints
+        The intended way to let data persist across runs
         """
         data = self._fm.load_userdata(key)
 

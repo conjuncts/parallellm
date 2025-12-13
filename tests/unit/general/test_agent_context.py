@@ -3,16 +3,15 @@ Unit tests for AgentContext class
 
 Tests the core agent functionality including:
 - Context manager behavior (__enter__, __exit__)
-- Checkpoint management (when_checkpoint, goto_checkpoint)
-- Counter systems (anonymous vs checkpoint modes)
+- Counter systems (anonymous)
 - ask_llm method and cache integration
-- Exception handling and checkpoint transitions
+- Exception handling
 """
 
 import pytest
 from unittest.mock import Mock, MagicMock, patch
-from parallellm.core.agent.agent import AgentContext, AgentDashboardContext
-from parallellm.core.exception import NotAvailable, WrongCheckpoint, GotoCheckpoint
+from parallellm.core.agent.agent import AgentContext
+from parallellm.core.exception import NotAvailable
 from parallellm.core.response import ReadyLLMResponse, PendingLLMResponse
 from parallellm.types import CallIdentifier, ParsedResponse
 
@@ -32,7 +31,7 @@ class TestAgentContextBasics:
         """Test __exit__ handles ParalleLLM exceptions correctly"""
         agent = AgentContext("test_agent", mock_orchestrator)
 
-        suppressed_exceptions = [NotAvailable, WrongCheckpoint, GotoCheckpoint]
+        suppressed_exceptions = [NotAvailable]
 
         for exc_type in suppressed_exceptions:
             with agent:
@@ -54,7 +53,7 @@ class TestAgentContextBasics:
 
 
 def test_counter_independence(mock_orchestrator):
-    """Test that anonymous and checkpoint counters are independent"""
+    """Test that anonymous conuter works correctly"""
     agent = AgentContext("test_agent", mock_orchestrator)
 
     with agent:
@@ -62,14 +61,12 @@ def test_counter_independence(mock_orchestrator):
         agent.ask_llm("anonymous 2")
         assert agent._anonymous_counter == 2
 
-    # Switch to checkpoint mode
-    with agent:
-        agent.when_checkpoint("checkpoint_1")
-        agent.ask_llm("checkpoint 1")
-        agent.ask_llm("checkpoint 2")
-        agent.ask_llm("checkpoint 3")
-        assert agent._checkpoint_counter == 3
-        assert agent._anonymous_counter == 2  # Should remain unchanged
+    agent2 = AgentContext("test_agent", mock_orchestrator)
+    with agent2:
+        agent2.ask_llm("anonymous 1")
+        assert agent2._anonymous_counter == 1
+
+    assert agent._anonymous_counter == 2  # Original agent unchanged
 
 
 class TestAskLLMMethod:
@@ -116,24 +113,9 @@ class TestAskLLMMethod:
             call_id = call_args.kwargs["call_id"]
 
             assert call_id["agent_name"] == "test_agent"
-            assert call_id["checkpoint"] is None  # Anonymous mode
             assert call_id["seq_id"] == 0  # First call
             assert call_id["session_id"] == 1
             assert call_id["provider_type"] == "openai"
-
-    def test_ask_llm_checkpoint_call_id(self, mock_orchestrator):
-        """Test call ID generation in checkpoint mode"""
-        agent = AgentContext("test_agent", mock_orchestrator)
-
-        with agent:
-            agent.when_checkpoint("test_checkpoint")
-            agent.ask_llm("Checkpoint prompt")
-
-            call_args = mock_orchestrator._backend.submit_query.call_args
-            call_id = call_args.kwargs["call_id"]
-
-            assert call_id["checkpoint"] == "test_checkpoint"
-            assert call_id["seq_id"] == 0  # First checkpoint call
 
     @patch("parallellm.core.agent.agent.compute_hash")
     def test_ask_llm_hash_computation(self, mock_compute_hash, mock_orchestrator):
@@ -148,22 +130,6 @@ class TestAskLLMMethod:
             mock_compute_hash.assert_called_once_with(
                 "Test instructions", ["Test prompt"]
             )
-
-    def test_context_manager_checkpoint_cleanup(self, mock_orchestrator):
-        """Test that context manager properly cleans up checkpoint state"""
-        agent = AgentContext("test_agent", mock_orchestrator)
-
-        with agent:
-            agent.when_checkpoint("test_checkpoint")
-            agent.ask_llm("checkpoint prompt")
-
-            # Verify checkpoint is active during context
-            assert agent.active_checkpoint == "test_checkpoint"
-            assert agent._checkpoint_counter is not None
-
-        # After context exit, checkpoint should be cleaned up
-        assert agent.active_checkpoint is None
-        assert agent._checkpoint_counter is None
 
     def test_context_manager_preserves_anonymous_counter(self, mock_orchestrator):
         """Test that context manager preserves anonymous counter across contexts"""

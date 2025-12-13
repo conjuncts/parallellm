@@ -27,7 +27,7 @@ class MockBackend(BaseBackend):
         """
         Retrieve a response.
 
-        :param call_id: The task identifier containing agent_name, checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing agent_name, doc_hash, and seq_id.
         :returns: The retrieved ParsedResponse.
         """
         return self._dict.get(tuple(_call_to_concise_dict(call_id).values()))
@@ -50,7 +50,7 @@ class MockDatastore(Datastore):
         """
         Retrieve a response from the backend.
 
-        :param call_id: The task identifier containing agent_name, checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing agent_name, doc_hash, and seq_id.
         :param metadata: Whether to include metadata in the response.
         :returns: The retrieved response content.
         """
@@ -73,7 +73,7 @@ class MockDatastore(Datastore):
         """
         Store a response in the backend.
 
-        :param call_id: The task identifier containing checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing doc_hash, and seq_id.
         :param parsed_response: The parsed response object containing text, response_id, and metadata.
         """
         self._dict[tuple(_call_to_concise_dict(call_id).values())] = parsed_response

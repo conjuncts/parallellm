@@ -2,7 +2,7 @@
 Integration tests combining multiple ParalleLLM features
 
 These tests validate complex scenarios that combine:
-- Tournaments with checkpoints
+- Tournaments
 - Async/sync strategy switching
 - Userdata persistence across different workflows
 """
@@ -12,8 +12,8 @@ from parallellm.core.gateway import ParalleLLM
 from parallellm.testing.simple_mock import mock_openai_calls
 
 
-def test_tournament_with_checkpoints(temp_integration_dir):
-    """Test tournament that uses checkpoints for different phases"""
+def test_tournament(temp_integration_dir):
+    """Test tournament"""
     responses = [
         # Phase 1: Get contestants
         """Contest participants:
@@ -45,10 +45,8 @@ Diana
         contestants = contestants_resp.resolve().split("```")[1].split("\n")[1:5]
         pllm.save_userdata("contestants", contestants)
 
-    # Phase 2: Semi-finals (checkpoint controlled)
+    # Phase 2: Semi-finals
     with agent:
-        agent.when_checkpoint("semifinals")
-
         contestants = pllm.load_userdata("contestants")
         semifinal_winners = []
 
@@ -58,12 +56,9 @@ Diana
             semifinal_winners.append(resp.resolve())
 
         pllm.save_userdata("semifinal_winners", semifinal_winners)
-        agent.goto_checkpoint("finals")
 
-    # Phase 3: Finals (checkpoint controlled)
+    # Phase 3: Finals
     with agent:
-        agent.when_checkpoint("finals")
-
         finalists = pllm.load_userdata("semifinal_winners")
         final_resp = agent.ask_llm(f"Final match: {finalists[0]} vs {finalists[1]}?")
         winner = final_resp.resolve()
@@ -197,14 +192,11 @@ def test_mixed_checkpoint_and_caching(temp_integration_dir):
 
     # Checkpoint A
     with agent1:
-        agent1.when_checkpoint("checkpoint_a")
         result_a = agent1.ask_llm("Process A")
         pllm1.save_userdata("result_a", result_a.resolve())
-        agent1.goto_checkpoint("checkpoint_b")
 
     # Checkpoint B
     with agent1:
-        agent1.when_checkpoint("checkpoint_b")
         result_b = agent1.ask_llm("Process B")
         pllm1.save_userdata("result_b", result_b.resolve())
 

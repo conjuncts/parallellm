@@ -44,10 +44,7 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
             # recover seq_id
             if other.call_id:
                 seq_id = other.call_id.get("seq_id", 0)
-                if other.call_id.get("checkpoint"):
-                    self.chkp_ctr = max(self.chkp_ctr, seq_id)
-                else:
-                    self.anon_ctr = max(self.anon_ctr, seq_id)
+                self.anon_ctr = max(self.anon_ctr, seq_id)
 
     def __setitem__(self, i, item):
         self._update_seq_counters(item)

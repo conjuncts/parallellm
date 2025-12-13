@@ -9,7 +9,6 @@ Better errors when a bad request (ie. openai.BadRequest) is made
 explicitly not-agentic philosophy (more of an input/output machine) although agents / responsibility isolation can be implemented with LLMIdentity
 
 
-- [x] difference between checkpoint-control and non-checkpoint-control
 - [x] different execution counters
 - [x] condition_hash (salt-by)
 - [ ] batch api

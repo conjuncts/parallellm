@@ -274,7 +274,7 @@ class AsyncBackend(BaseBackend):
             if meta in done_tasks:
                 self.tasks.pop(i)
                 self.task_metas.pop(i)
-                # print(f"Completed {meta['checkpoint']}:{meta['doc_hash'][:8]}:{meta['seq_id']}")
+                # print(f"Completed {meta['doc_hash'][:8]}:{meta['seq_id']}")
 
     async def aretrieve(
         self, call_id: CallIdentifier, metadata=False

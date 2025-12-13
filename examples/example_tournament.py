@@ -43,7 +43,7 @@ with pllm.agent(dashboard=True) as dash:
         game_descriptions.append(resp.resolve())
 
     dash.print("Descriptions:", [x[:70] for x in game_descriptions])
-    # Finalize hash logger display before checkpoint change
+    # Finalize hash logger display
 
 
 pllm.persist()

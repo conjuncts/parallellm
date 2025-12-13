@@ -24,7 +24,7 @@ class BaseBackend:
         """
         Retrieve a response.
 
-        :param call_id: The task identifier containing agent_name, checkpoint, doc_hash, and seq_id.
+        :param call_id: The task identifier containing agent_name, doc_hash, and seq_id.
         :returns: The retrieved ParsedResponse.
         """
         raise NotImplementedError

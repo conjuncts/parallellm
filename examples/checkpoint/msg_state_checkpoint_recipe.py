@@ -17,7 +17,7 @@ pllm = ParalleLLM.resume_directory(
 # However, some code will be non-deterministic (ie. API calls, random)
 # or might take a really long time, leading to different outcomes.
 
-# In such a case, ParalleLLM introduces "checkpoints"
+# In such a case, ParalleLLM introduces "message state"
 agent = pllm.agent(dashboard=True)
 
 with agent:
