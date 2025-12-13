@@ -64,10 +64,7 @@ class AgentContext(Askable):
 
         # Save message state
         if self._msg_state is not None and self._persist_msg_state:
-            self._bm.save_msg_state(
-                self,
-                self._msg_state,
-            )
+            self._try_persist_msg_state(self._msg_state)
 
         if exc_type in (NotAvailable, WrongCheckpoint, GotoCheckpoint):
             return True
@@ -213,7 +210,10 @@ class AgentContext(Askable):
             seq_id = self._anonymous_counter
             self._anonymous_counter += 1
 
-        documents = cast_documents(documents, list(additional_documents))
+        if isinstance(documents, MessageState):
+            documents = documents.cast_documents() + list(additional_documents)
+        else:
+            documents = cast_documents(documents, list(additional_documents))
 
         # Compute salt
         salt_terms = []
@@ -289,6 +289,12 @@ class AgentContext(Askable):
             self._persist_msg_state = persist
 
         return self._msg_state
+
+    def _try_persist_msg_state(self, msg_state):
+        self._bm.save_msg_state(
+            self,
+            msg_state,
+        )
 
 
 class AgentDashboardContext(AgentContext):

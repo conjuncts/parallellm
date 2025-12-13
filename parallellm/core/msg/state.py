@@ -1,6 +1,7 @@
 from collections import UserList
 from typing import TYPE_CHECKING, List, Literal, Optional, Union
 from parallellm.core.ask import Askable
+from parallellm.core.cast.fix_docs import cast_documents
 from parallellm.core.identity import LLMIdentity
 from parallellm.core.response import LLMResponse
 from parallellm.types import LLMDocument
@@ -120,7 +121,8 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
         **kwargs,
     ) -> LLMResponse:
         f"""
-        Ask the LLM a question. By asking a question directly on the MessageState, the response
+        Ask the LLM a question. By asking a question directly on the MessageState, 
+        new documents and the response
         automatically gets appended to the conversation.
 
         :param documents: Documents to use, such as the prompt.
@@ -138,11 +140,11 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
         :returns: A LLMResponse. The value is **lazy loaded**: for best efficiency,
             it should not be resolved until you actually need it.
         """
-        if documents is None:
-            documents = self
+        if documents is not None:
+            fixed_docs = cast_documents(documents, list(additional_documents))
+            self.extend(fixed_docs)
         out = self._true_agent.ask_llm(
-            documents,
-            *additional_documents,
+            self,
             instructions=instructions,
             llm=llm,
             salt=salt,
@@ -160,3 +162,21 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
         state = self.__dict__.copy()
         del state["_true_agent"]
         return state
+
+    def persist(self):
+        """Persist the current message state to the agent's storage."""
+        if self._true_agent:
+            self._true_agent._try_persist_msg_state(self)
+
+    def cast_documents(self) -> List[LLMDocument]:
+        """
+        Cast the MessageState to a list of standardized LLMDocuments.
+        """
+        # Convert LLMResponse into corresponding messages
+        result = []
+        for i, doc in enumerate(self):
+            if isinstance(doc, LLMResponse):
+                result.append(doc.to_assistant_message())
+            else:
+                result.append(doc)
+        return result
