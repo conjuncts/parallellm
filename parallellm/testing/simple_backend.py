@@ -56,7 +56,7 @@ class MockDatastore(Datastore):
         """
         return self._dict.get(tuple(_call_to_concise_dict(call_id).values()))
 
-    def retrieve_metadata(self, response_id: str) -> Optional[dict]:
+    def retrieve_metadata_legacy(self, response_id: str) -> Optional[dict]:
         """
         Retrieve metadata from the backend using response_id.
 

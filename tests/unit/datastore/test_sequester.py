@@ -46,8 +46,6 @@ def test_sequester_metadata(test_wkdir):
     # Currently, only openai/google are sequestered
     assert new_count == 3
 
-    conn.close()
-
     # Check that parquet files were created
     metadata_dir = fm.allocate_datastore() / "apimeta"
     assert metadata_dir.exists()
@@ -63,6 +61,17 @@ def test_sequester_metadata(test_wkdir):
     for parquet_file in n_openai:
         df = pl.read_parquet(parquet_file)
         assert not df.is_empty()
+
+    # Verify that metadata can be retrieved
+    recovered_meta = ds.retrieve_metadata_legacy("msg_011czEnUFgzYsUye9ygZDinQ")
+    assert recovered_meta["model"] == "claude-3-haiku-20240307"
+
+    recovered_meta = ds.retrieve_metadata_legacy(
+        "resp_0413f7f758e604110069212d3d1ef0819283556872ee053df7"
+    )
+    assert recovered_meta["model"] == "gpt-4.1-nano-2025-04-14"
+
+    conn.close()
 
 
 if __name__ == "__main__":

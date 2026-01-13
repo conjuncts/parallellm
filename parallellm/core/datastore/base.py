@@ -26,7 +26,7 @@ class Datastore(ABC):
         """
         raise NotImplementedError
 
-    def retrieve_metadata(self, response_id: str) -> Optional[dict]:
+    def retrieve_metadata_legacy(self, response_id: str) -> Optional[dict]:
         """
         Retrieve metadata from the backend using response_id.
 
