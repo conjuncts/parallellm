@@ -67,12 +67,6 @@ class ParalleLLMGateway:
         logger.debug("Creating backend")
         if datastore == "sqlite":
             datastore_cls = None  # default
-        elif datastore == "sqlite_parquet":
-            from parallellm.core.datastore.semi_sql_parquet import (
-                SQLiteParquetDatastore,
-            )
-
-            datastore_cls = SQLiteParquetDatastore
 
         if strategy == "async":
             from parallellm.core.backend.async_backend import AsyncBackend
