@@ -6,11 +6,36 @@ from typing import Optional, TYPE_CHECKING
 import polars as pl
 
 from parallellm.core.datastore.base import Datastore
-from parallellm.core.datastore.sqlite import SQLiteDatastore, _sql_table_to_dataframe
+from parallellm.core.datastore.sqlite import SQLiteDatastore
 from parallellm.core.datastore.parquet_manager import ParquetManager
 from parallellm.core.sink.sequester import sequester_df_to_parquet
 from parallellm.file_io.file_manager import FileManager
 from parallellm.types import CallIdentifier, ParsedResponse
+
+
+def _sql_table_to_dataframe(
+    conn: sqlite3.Connection, sql_query: str, params: tuple = ()
+) -> Optional[pl.DataFrame]:
+    """
+    Extract data from a SQL query and convert to a Polars DataFrame.
+
+    :param conn: SQLite connection
+    :param sql_query: SQL query to execute
+    :param params: Parameters for the SQL query
+    :returns: Polars DataFrame with the query results, or None if no data
+    """
+    cursor = conn.execute(sql_query, params)
+    rows = cursor.fetchall()
+
+    if not rows:
+        return None
+
+    # Convert to DataFrame
+    columns = [description[0] for description in cursor.description]
+    data = [dict(zip(columns, row)) for row in rows]
+    df = pl.DataFrame(data)
+
+    return df if not df.is_empty() else None
 
 
 class SQLiteParquetDatastore(Datastore):
@@ -51,22 +76,6 @@ class SQLiteParquetDatastore(Datastore):
     ) -> Optional[dict]:
         """Retrieve metadata from parquet files using response_id."""
         return self._parquet_manager.get_metadata(response_id)
-
-    def _retrieve_metadata_from_parquet(
-        self, call_id: CallIdentifier
-    ) -> Optional[dict]:
-        """Retrieve metadata from parquet files."""
-
-        row = self._retrieve_row_from_parquet(call_id)
-
-        if row is None:
-            return None
-
-        response_id = row["response_id"]
-        if response_id is None:
-            return None
-
-        return self._retrieve_metadata_from_parquet_by_response_id(response_id)
 
     def retrieve(
         self, call_id: CallIdentifier, metadata=False
@@ -152,7 +161,7 @@ class SQLiteParquetDatastore(Datastore):
                 parquet_path = parquet_paths[parquet_key]
 
                 df = _sql_table_to_dataframe(conn, f"SELECT * FROM {table_name}")
-                transferred_ids = sequester_df_to_parquet(df, table_name, parquet_path)
+                transferred_ids = sequester_df_to_parquet(df, parquet_path)
 
                 if transferred_ids:
                     data_to_delete[table_name] = transferred_ids

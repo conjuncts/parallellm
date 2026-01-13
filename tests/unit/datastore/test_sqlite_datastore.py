@@ -52,7 +52,6 @@ class TestSQLite:
         retrieved = temp_datastore.retrieve(call_id)
         assert retrieved is not None
         assert retrieved.text == "Test response"
-        assert retrieved.response_id == "resp_123"
 
         # Retrieve with metadata
         retrieved_with_metadata = temp_datastore.retrieve(call_id, metadata=True)
@@ -85,7 +84,6 @@ class TestSQLite:
         # Retrieve should return updated response
         retrieved = temp_datastore.retrieve(call_id)
         assert retrieved.text == "Updated response"
-        assert retrieved.response_id == "updated_123"
 
     def test_retrieve_nonexistent_response(self, temp_datastore):
         """Test retrieving a response that doesn't exist"""

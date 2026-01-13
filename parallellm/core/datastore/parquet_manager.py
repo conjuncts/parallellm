@@ -91,6 +91,31 @@ class ParquetManager:
         """
         return self._metadata_cache.get(response_id)
 
+    def get_metadata_new(
+        self, agent_name: str, seq_id: int, session_id: int
+    ) -> Optional[dict]:
+        """
+        Retrieve metadata by agent_name, seq_id, and session_id from cache.
+
+        :param agent_name: The agent name to look up metadata for.
+        :param seq_id: The sequence ID to look up metadata for.
+        :param session_id: The session ID to look up metadata for.
+        :returns: The retrieved metadata as a dictionary, or None if not found.
+        """
+        for _, df in self._eager_tables.items():
+            result = df.filter(
+                (pl.col("agent_name") == agent_name)
+                & (pl.col("seq_id") == seq_id)
+                & (pl.col("session_id") == session_id)
+            )
+            if not result.is_empty():
+                metadata_json = result.row(0)["metadata"]
+                if metadata_json:
+                    return json.loads(metadata_json)
+                return None
+
+        return None
+
     def retrieve_response_row(self, call_id: CallIdentifier) -> Optional[dict]:
         """
         Retrieve response row from parquet files using call_id.

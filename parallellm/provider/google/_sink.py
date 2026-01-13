@@ -106,7 +106,9 @@ def fix_to_snake_case(obj: dict) -> dict:
 
 
 def google_metadata_sinker(metas: List[str]):
-    objs = [{"response_id": r, **json.loads(meta)} for r, meta in metas if meta.strip()]
+    objs = [
+        {**as_is, **json.loads(astring)} for as_is, astring in metas if astring.strip()
+    ]
 
     # custom handle messages
     # assume there's almost always only 1 candidate

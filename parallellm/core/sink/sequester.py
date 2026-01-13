@@ -2,13 +2,13 @@ from pathlib import Path
 from typing import Dict, Optional
 import polars as pl
 
+from parallellm.core.sink.to_parquet import write_to_parquet
 from parallellm.provider.google._sink import google_metadata_sinker
 from parallellm.provider.openai._sink import openai_metadata_sinker
 
 
 def sequester_df_to_parquet(
     df: pl.DataFrame,
-    table_name: str,
     parquet_path: Path,
     *,
     return_key=False,
@@ -26,49 +26,18 @@ def sequester_df_to_parquet(
     if new_df is None:
         return None
 
-    # Ensure parent directory exists
-    parquet_path.parent.mkdir(parents=True, exist_ok=True)
+    write_to_parquet(parquet_path, new_df, mode="append")
 
-    # Merge with existing data if parquet file exists
-    final_df = new_df
-    if parquet_path.exists():
-        try:
-            existing_df = pl.read_parquet(parquet_path)
-            # Concatenate and deduplicate based on all columns
-            final_df = pl.concat([existing_df, new_df], how="diagonal_relaxed")
-        except Exception as e:
-            print(f"Warning: Failed to read existing {parquet_path.name}: {e}")
-
-    # Write to temporary file for atomic operation
-    temp_path = parquet_path.with_suffix(".parquet.tmp")
-
-    try:
-        final_df.write_parquet(temp_path)
-
-        # Atomic swap: move temporary file to final location
-        if parquet_path.exists():
-            parquet_path.unlink()  # Remove old file
-        temp_path.rename(parquet_path)
-
-        # Return list of transferred record identifiers for cleanup
-        if return_key and return_key in new_df.columns:
-            return new_df.select(return_key).to_series().to_list()
-        elif "id" in new_df.columns:
-            return new_df.select("id").to_series().to_list()
-        elif "response_id" in new_df.columns:
-            return new_df.select("response_id").to_series().to_list()
-        else:
-            # For tables without clear ID columns, return row count
-            return list(range(len(new_df)))
-
-    except Exception as e:
-        # Clean up temporary file on error
-        if temp_path.exists():
-            try:
-                temp_path.unlink()
-            except Exception:
-                pass
-        raise RuntimeError(f"Error backing up {table_name} to parquet: {e}")
+    # Return list of transferred record identifiers for cleanup
+    if return_key and return_key in new_df.columns:
+        return new_df.select(return_key).to_series().to_list()
+    elif "id" in new_df.columns:
+        return new_df.select("id").to_series().to_list()
+    elif "response_id" in new_df.columns:
+        return new_df.select("response_id").to_series().to_list()
+    else:
+        # For tables without clear ID columns, return row count
+        return list(range(len(new_df)))
 
 
 def sequester_metadata(metadata_rows: list[Dict], file_manager) -> Optional[list[str]]:
@@ -89,8 +58,22 @@ def sequester_metadata(metadata_rows: list[Dict], file_manager) -> Optional[list
         metadata_json = row["metadata"]
         provider_type = row["provider_type"]
 
+        agent_name = row["agent_name"]
+        seq_id = row["seq_id"]
+        session_id = row["session_id"]
+
         if metadata_json and provider_type in metadata_strings:
-            metadata_strings[provider_type].append((response_id, metadata_json))
+            metadata_strings[provider_type].append(
+                (
+                    {
+                        "response_id": response_id,
+                        "agent_name": agent_name,
+                        "seq_id": seq_id,
+                        "session_id": session_id,
+                    },
+                    metadata_json,
+                )
+            )
 
     if not metadata_strings:
         return

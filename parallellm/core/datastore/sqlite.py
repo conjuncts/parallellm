@@ -23,31 +23,6 @@ from parallellm.types import (
 )
 
 
-def _sql_table_to_dataframe(
-    conn: sqlite3.Connection, sql_query: str, params: tuple = ()
-) -> Optional[pl.DataFrame]:
-    """
-    Extract data from a SQL query and convert to a Polars DataFrame.
-
-    :param conn: SQLite connection
-    :param sql_query: SQL query to execute
-    :param params: Parameters for the SQL query
-    :returns: Polars DataFrame with the query results, or None if no data
-    """
-    cursor = conn.execute(sql_query, params)
-    rows = cursor.fetchall()
-
-    if not rows:
-        return None
-
-    # Convert to DataFrame
-    columns = [description[0] for description in cursor.description]
-    data = [dict(zip(columns, row)) for row in rows]
-    df = pl.DataFrame(data)
-
-    return df if not df.is_empty() else None
-
-
 class SQLiteDatastore(Datastore):
     """
     SQLite-backed Datastore implementation
@@ -122,7 +97,6 @@ class SQLiteDatastore(Datastore):
                         doc_hash TEXT NOT NULL,
                         response TEXT NOT NULL,
                         response_id TEXT,
-                        provider_type TEXT,
                         tool_calls TEXT
                     )
                 """)
@@ -132,6 +106,9 @@ class SQLiteDatastore(Datastore):
                     CREATE TABLE IF NOT EXISTS metadata (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         response_id TEXT,
+                        agent_name TEXT,
+                        seq_id INTEGER,
+                        session_id INTEGER,
                         metadata TEXT NOT NULL,
                         provider_type TEXT,
                         UNIQUE(response_id)
@@ -176,9 +153,6 @@ class SQLiteDatastore(Datastore):
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_anon_response_id ON anon_responses(response_id)
                 """)
-                conn.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_anon_provider_type ON anon_responses(provider_type)
-                """)
 
                 # Create indexes for metadata table
                 conn.execute("""
@@ -186,6 +160,9 @@ class SQLiteDatastore(Datastore):
                 """)
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_metadata_provider_type ON metadata(provider_type)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_metadata_triple ON metadata(agent_name, seq_id, session_id)
                 """)
 
                 # Create indexes for batch_pending table
@@ -232,7 +209,6 @@ class SQLiteDatastore(Datastore):
         conn = self._get_connection(None)
         table_name = "anon_responses"
 
-        # Build WHERE clause using helper method
         where_conditions, params = self._build_where_clause(agent_name, doc_hash)
 
         # Try with seq_id first (most specific), get oldest entry
@@ -263,12 +239,24 @@ class SQLiteDatastore(Datastore):
             except (json.JSONDecodeError, TypeError):
                 tool_calls = None
 
+        if metadata:
+            # Retrieve metadata
+            if row["response_id"]:
+                # If not null - legacy method
+                metadata_value = self.retrieve_metadata(row["response_id"])
+            else:
+                metadata_value = self.retrieve_metadata_new(
+                    call_id["agent_name"],
+                    call_id["seq_id"],
+                    call_id["session_id"],
+                )
+        else:
+            metadata_value = None
+
         return ParsedResponse(
             text=row["response"],
             response_id=row["response_id"],
-            metadata=self.retrieve_metadata(row["response_id"])
-            if metadata and row["response_id"]
-            else None,
+            metadata=metadata_value,
             tool_calls=tool_calls,
         )
 
@@ -281,10 +269,8 @@ class SQLiteDatastore(Datastore):
         :param response_id: The response ID to look up metadata for.
         :returns: The retrieved metadata as a dictionary, or None if not found.
         """
-        # Get main database connection
         conn = self._get_connection(None)
 
-        # First try SQLite database
         cursor = conn.execute(
             "SELECT metadata FROM metadata WHERE response_id = ?",
             (response_id,),
@@ -297,6 +283,34 @@ class SQLiteDatastore(Datastore):
         if not self._parquet_manager:
             self._parquet_manager = ParquetManager(self.file_manager)
         return self._parquet_manager.get_metadata(response_id)
+
+    def retrieve_metadata_new(
+        self, agent_name: str, seq_id: int, session_id: int
+    ) -> Optional[dict]:
+        """
+        Retrieve metadata from SQLite and parquet cache using agent_name, seq_id, and session_id.
+
+        Checks SQLite first, then falls back to cached parquet metadata.
+
+        :param agent_name: The agent name to look up metadata for.
+        :param seq_id: The sequence ID to look up metadata for.
+        :param session_id: The session ID to look up metadata for.
+        :returns: The retrieved metadata as a dictionary, or None if not found.
+        """
+        conn = self._get_connection(None)
+
+        cursor = conn.execute(
+            "SELECT metadata FROM metadata WHERE agent_name = ? AND seq_id = ? AND session_id = ?",
+            (agent_name, seq_id, session_id),
+        )
+        metadata_row = cursor.fetchone()
+        if metadata_row and metadata_row["metadata"]:
+            return json.loads(metadata_row["metadata"])
+
+        # If not found in SQLite, check the parquet manager's metadata cache
+        if not self._parquet_manager:
+            self._parquet_manager = ParquetManager(self.file_manager)
+        return self._parquet_manager.get_metadata_new(agent_name, seq_id, session_id)
 
     def _build_where_clause(
         self,
@@ -416,8 +430,7 @@ class SQLiteDatastore(Datastore):
                 "session_id": session_id,
                 "doc_hash": doc_hash,
                 "response": response,
-                "response_id": response_id,
-                "provider_type": provider_type,
+                # "response_id": response_id,
                 "tool_calls": tool_calls_json,
             }
 
@@ -441,8 +454,15 @@ class SQLiteDatastore(Datastore):
             if metadata:
                 metadata_json = json.dumps(metadata)
                 conn.execute(
-                    "INSERT OR REPLACE INTO metadata (response_id, metadata, provider_type) VALUES (?, ?, ?)",
-                    (response_id, metadata_json, provider_type),
+                    "INSERT OR REPLACE INTO metadata (response_id, agent_name, seq_id, session_id, metadata, provider_type) VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        response_id,
+                        agent_name,
+                        seq_id,
+                        session_id,
+                        metadata_json,
+                        provider_type,
+                    ),
                 )
 
             # Always commit immediately for thread safety
@@ -568,7 +588,6 @@ class SQLiteDatastore(Datastore):
                     "doc_hash": doc_hash,
                     "response": resp_text,
                     "response_id": custom_id,  # Use custom_id as response_id for batch results
-                    "provider_type": provider_type,
                     "tool_calls": tool_calls_json,
                 }
                 # Insert the response (or update if upsert=True)
@@ -591,8 +610,15 @@ class SQLiteDatastore(Datastore):
                 if metadata:
                     metadata_json = json.dumps(metadata)
                     conn.execute(
-                        "INSERT OR REPLACE INTO metadata (response_id, metadata, provider_type) VALUES (?, ?, ?)",
-                        (custom_id, metadata_json, provider_type),
+                        "INSERT OR REPLACE INTO metadata (response_id, agent_name, seq_id, session_id, metadata, provider_type) VALUES (?, ?, ?, ?, ?, ?)",
+                        (
+                            custom_id,
+                            agent_name,
+                            seq_id,
+                            session_id,
+                            metadata_json,
+                            provider_type,
+                        ),
                     )
 
             # Commit all changes
@@ -713,7 +739,7 @@ class SQLiteDatastore(Datastore):
         try:
             # Get all OpenAI metadata from the database
             cursor = conn.execute("""
-                SELECT m.response_id, m.metadata, m.provider_type
+                SELECT m.response_id, m.agent_name, m.seq_id, m.session_id, m.metadata, m.provider_type
                 FROM metadata m 
                 WHERE m.provider_type IN ('openai', 'google') OR m.provider_type IS NULL
             """)
@@ -730,8 +756,6 @@ class SQLiteDatastore(Datastore):
                 )
                 conn.commit()
 
-                # VACUUM database for debugging (reclaim space after deletion)
-                # print(f"Debug: VACUUMing database after deleting {len(succeeded)} metadata records")
                 # conn.execute("VACUUM")
         except sqlite3.Error as e:
             raise RuntimeError(f"SQLite error during metadata transfer: {e}")
