@@ -1,6 +1,10 @@
-Parallellm
+# Parallellm
 
 (Parallel Language Models)
+
+
+
+## 
 
 TODO make seq_id not necessarily auto-increment
 
@@ -48,3 +52,12 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 TODO
 - centrally track documents (and incorporate with MessageState) just as responses are also tracked
 - tree-based MessageState, which in turn stores all historical MessageState's
+
+## Philosophy
+
+1. A library designed with the Batch API in mind.
+2. We aim to support pipelines where LLMs are "input/output machines", rather than an interactive conversational agent.
+3. LLM pipeline control flow should be represented with Python, rather than data structures (ie. LangChain, LangGraph).
+4. Circumvent Vendor Lock-in and "Architecture Lock-in".
+5. Effortless parallelization.
+6. Improved Developer Experience (Develop and debug as synchronous, quickly scale up to huge pipelines).
