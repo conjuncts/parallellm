@@ -8,14 +8,13 @@ from parallellm.core.response import LLMResponse
 start = time.time()
 load_dotenv()
 
-# shutil.rmtree(".temp", ignore_errors=True)
 pllm = ParalleLLM.resume_directory(
-    ".pllm/tournament-enzy",
-    # ".temp",
-    provider="openai",  #
+    ".pllm/example/tournament-enzy",
+    provider="openai",
     strategy="async",
     datastore="sqlite",
     log_level=logging.DEBUG,
+    # ignore_cache=True,
 )
 
 with pllm.agent(dashboard=True) as d:

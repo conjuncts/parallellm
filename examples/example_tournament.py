@@ -10,9 +10,8 @@ print("Before")
 load_dotenv()
 
 pllm = ParalleLLM.resume_directory(
-    ".pllm/nfl",
-    # ".temp",
-    provider="openai",  #
+    ".pllm/example/nfl",
+    provider="openai",
     strategy="sync",
     log_level=logging.DEBUG,
 )

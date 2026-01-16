@@ -6,8 +6,7 @@ load_dotenv()
 
 with ParalleLLM.resume_directory(
     ".pllm/simplest",
-    # ".temp",
-    provider="openai",  #
+    provider="openai",
     strategy="sync",
     log_level=logging.DEBUG,
     # ignore_cache=True,

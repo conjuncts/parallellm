@@ -195,6 +195,94 @@ class SQLiteDatastore(Datastore):
         self._is_dirty = True
         return connections[connection_key]
 
+
+    def _transfer_metadata_to_parquet(self) -> None:
+        """Transfer supported metadata from SQLite to Parquet files."""
+        conn = self._get_connection(None)
+
+        try:
+            cursor = conn.execute("""
+                SELECT m.response_id, m.agent_name, m.seq_id, m.session_id, m.metadata, m.provider_type
+                FROM metadata m 
+                WHERE m.provider_type IN ('openai', 'google') OR m.provider_type IS NULL
+            """)
+            metadata_rows = cursor.fetchall()
+
+            if not metadata_rows:
+                return
+
+            mdir = self.file_manager.path_metadata_store()
+            sequestered = sequester_metadata(metadata_rows, mdir, self._metadata_index)
+            if sequestered:
+                placeholders = ",".join(["?" for _ in sequestered])
+                conn.execute(
+                    f"DELETE FROM metadata WHERE response_id IN ({placeholders}) AND (provider_type IN ('openai', 'google') OR provider_type IS NULL)",
+                    sequestered,
+                )
+                conn.commit()
+
+                # conn.execute("VACUUM")
+        except sqlite3.Error as e:
+            raise RuntimeError(f"SQLite error during metadata transfer: {e}")
+
+    def persist(self) -> None:
+        """
+        Persist (commit) changes to SQLite database and transfer metadata to Parquet files.
+
+        And closes all connections. After this call, the datastore is still usable,
+        but current connections are closed (connections will be recreated on demand).
+
+        Also, OpenAI metadata is transferred from SQLite to Parquet files
+        for better storage efficiency.
+        """
+        # Transfer all metadata to parquet
+        if hasattr(self, "_local") and hasattr(self._local, "connections"):
+            try:
+                self._transfer_metadata_to_parquet()
+                # Refresh parquet manager cache after sequestering
+                # self._metadata_parquet.commit()
+            except Exception as e:
+                # Log the error but don't fail the persist operation
+                print(f"Warning: Failed to transfer metadata to Parquet: {e}")
+
+        # Note: SQLite implementation always commits immediately
+
+        # Close all connections to ensure proper cleanup, especially important on Windows
+        self.close()
+
+    def close(self, db_name: Optional[str] = None) -> None:
+        """
+        Close SQLite connection(s) for the current thread.
+
+        :param db_name: The database name to close (if None, close all connections).
+        """
+        if hasattr(self, "_local") and hasattr(self._local, "connections"):
+            connections = self._get_connections()
+
+            if db_name is not None:
+                if db_name in connections:
+                    connections[db_name].close()
+                    del connections[db_name]
+            else:
+                # Close all connections for current thread
+                for conn in connections.values():
+                    conn.close()
+                connections.clear()
+
+    def __del__(self):
+        """
+        Cleanup: close all connections when the object is destroyed.
+        Note: Only closes connections from the current thread to avoid threading issues.
+        """
+        try:
+            # Only try to close connections if we're in a thread that has them
+            if hasattr(self, "_local") and hasattr(self._local, "connections"):
+                self.close()
+        except Exception:
+            # Ignore any errors during cleanup in destructor
+            pass
+
+
     def retrieve(
         self, call_id: CallIdentifier, metadata=False
     ) -> Optional[ParsedResponse]:
@@ -419,14 +507,7 @@ class SQLiteDatastore(Datastore):
         parsed_response: "ParsedResponse",
         *,
         upsert: bool = False,
-    ):
-        """
-        Store a response in SQLite.
-
-        :param call_id: The task identifier containing doc_hash, seq_id, and session_id.
-        :param parsed_response: The parsed response object containing text, response_id, and metadata.
-        :param upsert: If True, update existing record instead of inserting duplicate (default: False)
-        """
+    ) -> None:
         doc_hash = call_id["doc_hash"]
         seq_id = call_id["seq_id"]
         session_id = call_id["session_id"]
@@ -498,14 +579,6 @@ class SQLiteDatastore(Datastore):
         self,
         batch_id: BatchIdentifier,
     ) -> None:
-        """
-        Store pending batch information to track submitted batch requests.
-
-        This stores the call_ids, custom_ids, and batch_uuid so that when the batch completes,
-        the results can be matched back to the original calls.
-
-        :param batch_id: The batch identifier containing call_ids, custom_ids, and batch_uuid
-        """
         conn = self._get_connection(None)
 
         try:
@@ -549,17 +622,8 @@ class SQLiteDatastore(Datastore):
         *,
         upsert: bool = False,
     ) -> None:
-        """
-        Store completed batch results in the datastore.
-
-        This takes the BatchResult, matches each response back to its original
-        call_id using custom_id, and stores both the response and metadata.
-
-        :param batch_result: The completed batch results to store
-        :param upsert: If True, update existing records instead of inserting duplicates (default: False)
-        """
         if not batch_result.parsed_responses:
-            return  # Nothing to store
+            return
 
         conn = self._get_connection(None)
 
@@ -639,7 +703,6 @@ class SQLiteDatastore(Datastore):
                         ),
                     )
 
-            # Commit all changes
             conn.commit()
 
         except sqlite3.Error as e:
@@ -647,12 +710,6 @@ class SQLiteDatastore(Datastore):
             raise RuntimeError(f"SQLite error while storing batch results: {e}")
 
     def retrieve_batch_call_ids(self, batch_uuid: str) -> list[CallIdentifier]:
-        """
-        Retrieve all call_ids associated with an active batch_uuid.
-
-        :param batch_uuid: The batch UUID to look up
-        :returns: List of CallIdentifiers for this batch
-        """
         conn = self._get_connection(None)
 
         cursor = conn.execute(
@@ -680,11 +737,6 @@ class SQLiteDatastore(Datastore):
         return call_ids
 
     def get_all_pending_batch_uuids(self) -> list[str]:
-        """
-        Retrieve all active pending batches from the datastore.
-
-        :returns: List of BatchIdentifiers, one for each unique batch_uuid
-        """
         conn = self._get_connection(None)
 
         # Get all unique batch_uuids that are still active
@@ -701,11 +753,6 @@ class SQLiteDatastore(Datastore):
         return batch_uuids
 
     def clear_batch_pending(self, batch_uuid: str) -> None:
-        """
-        Deactivate all pending batch records for a completed batch.
-
-        :param batch_uuid: The batch UUID to deactivate
-        """
         conn = self._get_connection(None)
 
         try:
@@ -720,12 +767,6 @@ class SQLiteDatastore(Datastore):
             raise RuntimeError(f"SQLite error while deactivating batch: {e}")
 
     def is_call_in_pending_batch(self, call_id: CallIdentifier) -> bool:
-        """
-        Check if a call_id is already in an active pending batch.
-
-        :param call_id: The call identifier to check
-        :returns: True if the call_id is in an active pending batch, False otherwise
-        """
         conn = self._get_connection(None)
 
         agent_name = call_id["agent_name"]
@@ -740,89 +781,3 @@ class SQLiteDatastore(Datastore):
         )
         row = cursor.fetchone()
         return row["count"] > 0 if row else False
-
-    def _transfer_metadata_to_parquet(self) -> None:
-        """Transfer supported metadata from SQLite to Parquet files."""
-        conn = self._get_connection(None)
-
-        try:
-            cursor = conn.execute("""
-                SELECT m.response_id, m.agent_name, m.seq_id, m.session_id, m.metadata, m.provider_type
-                FROM metadata m 
-                WHERE m.provider_type IN ('openai', 'google') OR m.provider_type IS NULL
-            """)
-            metadata_rows = cursor.fetchall()
-
-            if not metadata_rows:
-                return
-
-            mdir = self.file_manager.path_metadata_store()
-            sequestered = sequester_metadata(metadata_rows, mdir, self._metadata_index)
-            if sequestered:
-                placeholders = ",".join(["?" for _ in sequestered])
-                conn.execute(
-                    f"DELETE FROM metadata WHERE response_id IN ({placeholders}) AND (provider_type IN ('openai', 'google') OR provider_type IS NULL)",
-                    sequestered,
-                )
-                conn.commit()
-
-                # conn.execute("VACUUM")
-        except sqlite3.Error as e:
-            raise RuntimeError(f"SQLite error during metadata transfer: {e}")
-
-    def persist(self) -> None:
-        """
-        Persist (commit) changes to SQLite database and transfer metadata to Parquet files.
-
-        And closes all connections. After this call, the datastore is still usable,
-        but current connections are closed (connections will be recreated on demand).
-
-        Also, OpenAI metadata is transferred from SQLite to Parquet files
-        for better storage efficiency.
-        """
-        # Transfer all metadata to parquet
-        if hasattr(self, "_local") and hasattr(self._local, "connections"):
-            try:
-                self._transfer_metadata_to_parquet()
-                # Refresh parquet manager cache after sequestering
-                # self._metadata_parquet.commit()
-            except Exception as e:
-                # Log the error but don't fail the persist operation
-                print(f"Warning: Failed to transfer metadata to Parquet: {e}")
-
-        # Note: SQLite implementation always commits immediately
-
-        # Close all connections to ensure proper cleanup, especially important on Windows
-        self.close()
-
-    def close(self, db_name: Optional[str] = None) -> None:
-        """
-        Close SQLite connection(s) for the current thread.
-
-        :param db_name: The database name to close (if None, close all connections).
-        """
-        if hasattr(self, "_local") and hasattr(self._local, "connections"):
-            connections = self._get_connections()
-
-            if db_name is not None:
-                if db_name in connections:
-                    connections[db_name].close()
-                    del connections[db_name]
-            else:
-                # Close all connections for current thread
-                for conn in connections.values():
-                    conn.close()
-                connections.clear()
-
-    def __del__(self):
-        """
-        Cleanup: close all connections when the object is destroyed.
-        Note: Only closes connections from the current thread to avoid threading issues.
-        """
-        try:
-            # Only try to close connections if we're in a thread that has them
-            if hasattr(self, "_local") and hasattr(self._local, "connections"):
-                self.close()
-        except Exception:
-            # Ignore any errors during cleanup in destructor
-            pass

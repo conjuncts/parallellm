@@ -9,9 +9,8 @@ from parallellm.types import MinorTweaks
 load_dotenv()
 
 with ParalleLLM.resume_directory(
-    ".pllm/simplest-throttle",
-    # ".temp",
-    provider="openai",  #
+    ".pllm/simple/throttle",
+    provider="openai",
     strategy="async",
     log_level=logging.DEBUG,
     ignore_cache=True,

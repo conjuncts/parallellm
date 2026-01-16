@@ -37,8 +37,7 @@ def ls_tool(directory) -> str:
 
 with ParalleLLM.resume_directory(
     ".pllm/simplest-tool",
-    # ".temp",
-    provider="openai",  #
+    provider="openai",
     strategy="sync",
     log_level=logging.DEBUG,
     # ignore_cache=True,
