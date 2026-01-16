@@ -5,7 +5,7 @@ from parallellm.core.agent.orchestrator import AgentOrchestrator
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import DashboardLogger
 from parallellm.logging.fancy import get_parallellm_log_handler
-from parallellm.provider.openai import BatchOpenAIProvider
+from parallellm.provider.openai.sdk import BatchOpenAIProvider
 from parallellm.types import MinorTweaks, ProviderType
 
 
@@ -50,8 +50,8 @@ class ParalleLLMGateway:
             raise NotImplementedError("Dry run is not implemented yet")
 
         # 2. Setup logger
-        dash_logger = DashboardLogger(k=10, display=False)
-        parallellm_log_handler = get_parallellm_log_handler(dash_logger)
+        dashlog = DashboardLogger(k=10, display=False)
+        parallellm_log_handler = get_parallellm_log_handler(dashlog)
 
         logger = logging.getLogger("parallellm")
         logger.setLevel(log_level)
@@ -73,7 +73,7 @@ class ParalleLLMGateway:
 
             backend = AsyncBackend(
                 fm,
-                dash_logger=dash_logger,
+                dashlog=dashlog,
                 datastore_cls=datastore_cls,
                 rewrite_cache=rewrite_cache,
                 max_concurrent=tweaks.async_max_concurrent,
@@ -84,7 +84,7 @@ class ParalleLLMGateway:
 
             backend = SyncBackend(
                 fm,
-                dash_logger=dash_logger,
+                dashlog=dashlog,
                 datastore_cls=datastore_cls,
                 rewrite_cache=rewrite_cache,
                 throttler=throttler,
@@ -94,7 +94,7 @@ class ParalleLLMGateway:
 
             backend = BatchBackend(
                 fm,
-                dash_logger=dash_logger,
+                dashlog=dashlog,
                 datastore_cls=datastore_cls,
                 session_id=fm._get_session_counter(),
                 confirm_batch_submission=tweaks.batch_user_confirmation,
@@ -105,7 +105,7 @@ class ParalleLLMGateway:
 
         logger.debug("Creating provider")
         if provider == "openai":
-            from parallellm.provider.openai import (
+            from parallellm.provider.openai.sdk import (
                 AsyncOpenAIProvider,
                 SyncOpenAIProvider,
             )
@@ -127,7 +127,7 @@ class ParalleLLMGateway:
                 client = OpenAI()
                 provider = SyncOpenAIProvider(client=client)
         elif provider == "google":
-            from parallellm.provider.google import (
+            from parallellm.provider.google.sdk import (
                 AsyncGoogleProvider,
                 BatchGoogleProvider,
                 SyncGoogleProvider,
@@ -144,7 +144,7 @@ class ParalleLLMGateway:
                 client = genai.Client()
                 provider = SyncGoogleProvider(client=client)
         elif provider == "anthropic":
-            from parallellm.provider.anthropic import (
+            from parallellm.provider.anthropic.sdk import (
                 AsyncAnthropicProvider,
                 SyncAnthropicProvider,
             )
@@ -169,8 +169,8 @@ class ParalleLLMGateway:
             backend=backend,
             provider=provider,
             logger=logger,
-            dash_logger=dash_logger,
-            special_dash_logger=special_dl,
+            dashlog=dashlog,
+            special_dashlog=special_dl,
             ignore_cache=ignore_cache,
             strategy=strategy,
         )

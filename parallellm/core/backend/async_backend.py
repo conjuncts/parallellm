@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import types
 import threading
 import atexit
@@ -37,7 +36,7 @@ class AsyncBackend(BaseBackend):
     def __init__(
         self,
         fm: FileManager,
-        dash_logger: DashboardLogger = PrimitiveDashboardLogger(),
+        dashlog: DashboardLogger = PrimitiveDashboardLogger(),
         *,
         datastore_cls=None,
         rewrite_cache: bool = False,
@@ -48,18 +47,17 @@ class AsyncBackend(BaseBackend):
         Initialize the AsyncBackend.
 
         :param fm: FileManager for data persistence
-        :param dash_logger: Optional dashboard logger for monitoring
+        :param dashlog: Optional dashboard logger for monitoring
         :param datastore_cls: Custom datastore class (defaults to SQLiteDatastore)
         :param rewrite_cache: Whether to overwrite existing cache entries
         :param max_concurrent: Maximum number of concurrent tasks
         :param throttler: Throttler instance for rate limiting (default: None)
         """
         self._fm = fm
-        self.dash_logger = dash_logger
+        self.dashlog = dashlog
         self._rewrite_cache = rewrite_cache
         self._max_concurrent = max_concurrent
 
-        # Throttling configuration
         if throttler is not None:
             self._throttler = throttler
         else:
@@ -162,13 +160,12 @@ class AsyncBackend(BaseBackend):
         This inverts control from provider calling backend.
         """
 
-        # Get the coroutine from the provider
         coro = provider.prepare_async_call(
             params,
             **kwargs,
         )
 
-        # Submit to the backend for asynchronous execution
+        # Submit for async execution
         self.submit_coro(call_id=call_id, coro=coro, provider=provider)
 
         return PendingLLMResponse(
@@ -221,7 +218,7 @@ class AsyncBackend(BaseBackend):
             self._create_and_store_task(call_id, coro, provider), self._loop
         )
 
-        self.dash_logger.update_hash(call_id["doc_hash"], HashStatus.SENT)
+        self.dashlog.update_hash(call_id["doc_hash"], HashStatus.SENT)
         # Don't wait for the result, just submit it
         return future
 
@@ -261,8 +258,7 @@ class AsyncBackend(BaseBackend):
             self._async_ds.store(call_id, parsed, upsert=self._rewrite_cache)
             done_tasks.append(metadata)
 
-            # do logging
-            self.dash_logger.update_hash(call_id["doc_hash"], HashStatus.RECEIVED)
+            self.dashlog.update_hash(call_id["doc_hash"], HashStatus.RECEIVED)
 
             # Stop if we reached the target
             if until_call_id is not None and _call_matches(until_call_id, call_id):
@@ -289,9 +285,8 @@ class AsyncBackend(BaseBackend):
         Synchronous persist that uses the backend's event loop.
         Cleans up any datastore resources.
         """
-        # SQLite commits immediately
 
-        # but we DO want to wait for all pending tasks to complete
+        # We want to wait for all pending tasks to complete
         if self._loop is not None and not self._loop.is_closed():
             # Create a dummy TaskIdentifier for _poll_changes - we'll pass None values to poll all
             future = asyncio.run_coroutine_threadsafe(
@@ -302,6 +297,7 @@ class AsyncBackend(BaseBackend):
             except Exception as e:
                 print(f"Warning: Failed to wait for pending tasks: {e}")
 
+        # Let datastore cleanup
         self._async_ds.persist()
 
         # Close datastore connections to ensure proper cleanup, especially important on Windows

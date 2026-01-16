@@ -47,7 +47,7 @@ def test_sequester_metadata(test_wkdir):
     assert new_count == 3
 
     # Check that parquet files were created
-    metadata_dir = fm.allocate_datastore() / "apimeta"
+    metadata_dir = fm.path_metadata_store()
     assert metadata_dir.exists()
 
     # Check for OpenAI metadata files

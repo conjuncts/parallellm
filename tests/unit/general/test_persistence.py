@@ -254,7 +254,7 @@ class TestDatastoreAllocation:
         with tempfile.TemporaryDirectory() as temp_dir:
             fm = FileManager(temp_dir)
 
-            path = fm.allocate_datastore()
+            path = fm.path_datastore()
 
             # Should create base datastore directory
             expected_path = Path(temp_dir) / "datastore"
@@ -271,7 +271,7 @@ class TestDatastoreAllocation:
             datastore_base = Path(temp_dir) / "datastore"
             assert not datastore_base.exists()
 
-            path = fm.allocate_datastore()
+            path = fm.path_datastore()
 
             assert datastore_base.exists()
             assert path == datastore_base
@@ -284,17 +284,13 @@ class TestAgentOrchestratorIntegration:
         """Test userdata operations through AgentOrchestrator"""
         with tempfile.TemporaryDirectory() as temp_dir:
             fm = FileManager(temp_dir)
-            mock_backend = Mock()
-            mock_provider = Mock()
-            mock_logger = Mock()
-            mock_dash_logger = Mock()
 
             orchestrator = AgentOrchestrator(
                 file_manager=fm,
-                backend=mock_backend,
-                provider=mock_provider,
-                logger=mock_logger,
-                dash_logger=mock_dash_logger,
+                backend=Mock(),
+                provider=Mock(),
+                logger=Mock(),
+                dashlog=Mock(),
             )
 
             # Test save/load through orchestrator
@@ -308,18 +304,15 @@ class TestAgentOrchestratorIntegration:
         """Test that orchestrator injects backend into LLMResponses"""
         with tempfile.TemporaryDirectory() as temp_dir:
             fm = FileManager(temp_dir)
-            mock_provider = Mock()
-            mock_logger = Mock()
-            mock_dash_logger = Mock()
 
             backend = MockBackend()
 
             orchestrator = AgentOrchestrator(
                 file_manager=fm,
                 backend=backend,
-                provider=mock_provider,
-                logger=mock_logger,
-                dash_logger=mock_dash_logger,
+                provider=Mock(),
+                logger=Mock(),
+                dashlog=Mock(),
             )
 
             call_id = self._create_mock_call_id()
@@ -354,11 +347,6 @@ class TestAgentOrchestratorIntegration:
         with tempfile.TemporaryDirectory() as temp_dir:
             fm = FileManager(temp_dir)
             mock_backend = Mock()
-            mock_provider = Mock()
-            mock_logger = Mock()
-            mock_dash_logger = Mock()
-
-            # Set up mock backend to return cached response
             mock_backend.retrieve.return_value = "cached_response"
 
             mock_call_id = self._create_mock_call_id()
@@ -370,9 +358,9 @@ class TestAgentOrchestratorIntegration:
             orchestrator = AgentOrchestrator(
                 file_manager=fm,
                 backend=mock_backend,
-                provider=mock_provider,
-                logger=mock_logger,
-                dash_logger=mock_dash_logger,
+                provider=Mock(),
+                logger=Mock(),
+                dashlog=Mock(),
                 ignore_cache=True,
             )
 

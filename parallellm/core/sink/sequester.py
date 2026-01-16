@@ -3,8 +3,6 @@ from typing import Dict, Optional
 import polars as pl
 
 from parallellm.core.sink.to_parquet import ParquetWriter, write_to_parquet
-from parallellm.provider.google._sink import google_metadata_sinker
-from parallellm.provider.openai._sink import openai_metadata_sinker
 
 
 def sequester_metadata(
@@ -55,24 +53,19 @@ def sequester_metadata(
         return
 
     # Process metadata using the existing sinker function
-    for provider_type, metas in provider_to_meta.items():
-        if provider_type == "openai":
-            processed_dfs = openai_metadata_sinker(metas)
+    _openai_met = provider_to_meta["openai"]
+    if _openai_met:
+        from parallellm.provider.openai._sink import openai_metadata_sinker
 
-        elif provider_type == "google":
-            processed_dfs = google_metadata_sinker(metas)
-        else:
-            # Unavailable
-            continue
+        processed_dfs = openai_metadata_sinker(_openai_met)
+        _sequester_dfs(processed_dfs, folder, provider_type="openai")
 
-        _sequester_dfs(processed_dfs, folder, provider_type=provider_type)
+    _google_met = provider_to_meta["google"]
+    if _google_met:
+        from parallellm.provider.google._sink import google_metadata_sinker
 
-        # Collect successfully sequestered response_ids
-        # response_df = processed_dfs["responses"]
-        # if not response_df.is_empty():
-        #     response_ids_to_delete.extend(
-        #         response_df.select("response_id").to_series().to_list()
-        #     )
+        processed_dfs = google_metadata_sinker(_google_met)
+        _sequester_dfs(processed_dfs, folder, provider_type="google")
 
     response_ids_to_delete = master_index.commit(
         mode="append", receipt_col="response_id"
@@ -86,7 +79,6 @@ def sequester_metadata(
 
 
 def _sequester_dfs(dfs: dict[str, pl.DataFrame], folder: Path, provider_type: str):
-    # Create metadata directory
     folder.mkdir(parents=True, exist_ok=True)
 
     for df_name, df in dfs.items():

@@ -10,7 +10,6 @@ from parallellm.logging.dash_logger import (
     HashStatus,
     PrimitiveDashboardLogger,
 )
-from parallellm.provider.schemas import guess_schema
 from parallellm.types import (
     CallIdentifier,
     CommonQueryParameters,
@@ -31,7 +30,7 @@ class SyncBackend(BaseBackend):
     def __init__(
         self,
         fm: FileManager,
-        dash_logger: DashboardLogger = PrimitiveDashboardLogger(),
+        dashlog: DashboardLogger = PrimitiveDashboardLogger(),
         *,
         datastore_cls=None,
         rewrite_cache: bool = False,
@@ -41,7 +40,7 @@ class SyncBackend(BaseBackend):
         Initialize the SyncBackend.
 
         :param fm: FileManager for data persistence
-        :param dash_logger: Optional dashboard logger for monitoring
+        :param dashlog: Optional dashboard logger for monitoring
         :param datastore_cls: Custom datastore class (defaults to SQLiteDatastore)
         :param rewrite_cache: Whether to overwrite existing cache entries
         :param throttler: Throttler instance for rate limiting (default: None)
@@ -52,10 +51,9 @@ class SyncBackend(BaseBackend):
             self._ds = SQLiteDatastore(self._fm)
         else:
             self._ds = datastore_cls(self._fm)
-        self.dash_logger = dash_logger
+        self.dashlog = dashlog
         self._rewrite_cache = rewrite_cache
 
-        # Throttling configuration
         if throttler is not None:
             self._throttler = throttler
         else:
@@ -98,14 +96,14 @@ class SyncBackend(BaseBackend):
             # Apply throttling before making the request
             self._apply_throttling()
 
-            self.dash_logger.update_hash(doc_hash, HashStatus.SENT)
+            self.dashlog.update_hash(doc_hash, HashStatus.SENT)
 
             # The below function typically calls the LLM
             result = provider.prepare_sync_call(
                 params,
                 **kwargs,
             )
-            self.dash_logger.update_hash(doc_hash, HashStatus.RECEIVED)
+            self.dashlog.update_hash(doc_hash, HashStatus.RECEIVED)
 
             parsed = provider.parse_response(result)
 
@@ -155,7 +153,7 @@ class SyncBackend(BaseBackend):
 
     def persist(self):
         """Persist any remaining data and datastore"""
-        # SQLite commits immediately, but we can clear pending results
+        # Let datastore cleanup
         self._ds.persist()
 
     def close(self):

@@ -29,7 +29,7 @@ from google.genai import types
 
 def _fix_docs_for_google(
     documents: Union[LLMDocument, List[LLMDocument]],
-) -> Union[str, List]:
+) -> List[Union[dict, types.Content]]:
     """Ensure documents are in the correct format for Gemini API"""
     if not isinstance(documents, list):
         documents = [documents]
@@ -124,7 +124,7 @@ def _prepare_tool_schema(func_schemas: List[dict]) -> List[types.Tool]:
     return google_tools
 
 
-def _prepare_google_config(params: CommonQueryParameters, **kwargs) -> tuple:
+def _prepare_google_config(params: CommonQueryParameters, **kwargs):
     """Prepare config and contents for Google API calls"""
     instructions = params["instructions"]
     documents = params["documents"]
@@ -227,8 +227,6 @@ class GoogleProvider(BaseProvider):
                     tools.append(
                         ToolCall(
                             name=func_call.name,
-                            # a bit annoying because we're doing str -> dict -> str -> dict
-                            # json.dumps(func_call.args),
                             arguments=func_call.args,
                             call_id=func_call.id,
                         )
@@ -239,7 +237,6 @@ class GoogleProvider(BaseProvider):
                 text=text, response_id=response_id, metadata=obj, tool_calls=tools
             )
         elif isinstance(raw_response, dict):
-            # Dict response
             resp_id = raw_response.pop("response_id", None) or raw_response.pop(
                 "responseId", None
             )
@@ -533,53 +530,7 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
                     )
             else:
                 raise ValueError("Batch job succeeded but no destination file found.")
-            # elif batch_job.dest and batch_job.dest.inlined_responses:
-            #     # Results are inline
-            #     try:
-            #         parsed_responses = []
-            #         for i, inline_response in enumerate(
-            #             batch_job.dest.inlined_responses
-            #         ):
-            #             custom_id = f"request-{i}"
 
-            #             if inline_response.response:
-            #                 response_dict = {
-            #                     "response": inline_response.response.model_dump()
-            #                 }
-            #                 parsed_response = self._decode_gemini_batch_result(
-            #                     response_dict, custom_id
-            #                 )
-            #             elif inline_response.error:
-            #                 error_dict = {"error": inline_response.error}
-            #                 parsed_response = self._decode_gemini_batch_error(
-            #                     error_dict, custom_id
-            #                 )
-            #             else:
-            #                 # Unexpected case
-            #                 parsed_response = ParsedResponse(
-            #                     text="",
-            #                     response_id=custom_id,
-            #                     metadata={},
-            #                     tool_calls=[],
-            #                 )
-
-            #             parsed_responses.append(parsed_response)
-
-            #         results.append(
-            #             BatchResult(
-            #                 status="ready",
-            #                 raw_output="inline_responses",
-            #                 parsed_responses=parsed_responses,
-            #             )
-            #         )
-            #     except Exception as e:
-            #         results.append(
-            #             BatchResult(
-            #                 status="error",
-            #                 raw_output=str(e),
-            #                 parsed_responses=None,
-            #             )
-            #         )
         else:
             # Job failed, cancelled, or expired
             error_msg = getattr(

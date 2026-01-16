@@ -36,7 +36,7 @@ class AgentContext(Askable):
         self.agent_name = agent_name
         self._bm = batch_manager
 
-        self._anonymous_counter = 0  # Anonymous mode counter, always starts from 0
+        self._anonymous_counter = 0
 
         self.ask_params = ask_params or {}
         self.ignore_cache = ignore_cache
@@ -46,12 +46,10 @@ class AgentContext(Askable):
         self._persist_msg_state: bool = True
 
     def __enter__(self):
-        # Any setup logic can go here if needed
+        # No setup needed
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        # Delegate to BatchManager's error handling logic
-
         # Save message state
         if self._msg_state is not None and self._persist_msg_state:
             self._try_persist_msg_state(self._msg_state)
@@ -68,7 +66,6 @@ class AgentContext(Askable):
         Print to console above the dashboard output.
         This ensures proper display ordering when the dashboard is active.
         """
-        # Use the dashboard logger's coordinated print method
         print(*args, **kwargs)
 
     @property
@@ -105,9 +102,6 @@ class AgentContext(Askable):
         elif isinstance(llm, str):
             llm = LLMIdentity(llm)
 
-        # Use dual counter system based on checkpoint mode
-
-        # In anonymous mode: use and increment anonymous counter
         seq_id = self._anonymous_counter
         self._anonymous_counter += 1
 
@@ -144,17 +138,15 @@ class AgentContext(Askable):
             self.update_hash_status(hashed, HashStatus.CACHED)
             return ReadyLLMResponse(
                 call_id=call_id,
-                pr=cached,  # Extract text from ParsedResponse
+                pr=cached,
             )
 
-        # Make sure the LLM is compatible with the provider
         if not self._bm._provider.is_compatible(llm.provider):
             raise ValueError(
                 f"LLM {llm.identity} is not compatible"
                 + f" with provider {self._bm._provider.provider_type}"
             )
 
-        # Create CommonQueryParameters dict
         params: CommonQueryParameters = {
             "instructions": instructions,
             "documents": documents,
@@ -213,25 +205,23 @@ class AgentDashboardContext(AgentContext):
             agent_name, batch_manager, ask_params=ask_params, ignore_cache=ignore_cache
         )
         self._was_displaying = False
-        self._bm.dash_logger.k = log_k
+        self._bm._dashlog.k = log_k
 
     @property
-    def _dash_logger(self):
-        return self._bm.dash_logger
+    def _dashlog(self):
+        return self._bm._dashlog
 
     def __enter__(self):
         # Store current display state and enable display
-        self._was_displaying = self._dash_logger.display
-        self._dash_logger.set_display(True)
+        self._was_displaying = self._dashlog.display
+        self._dashlog.set_display(True)
         return super().__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # Print final status of dashboard
-        self._dash_logger._update_console()
+        self._dashlog._update_console()
 
-        # Finalize the line and restore original display state
-        self._dash_logger.finalize_line()
-        self._dash_logger.set_display(self._was_displaying)
+        self._dashlog.finalize_line()
+        self._dashlog.set_display(self._was_displaying)
         print()
         return super().__exit__(exc_type, exc_val, exc_tb)
 
@@ -240,8 +230,7 @@ class AgentDashboardContext(AgentContext):
         Print to console above the dashboard output.
         This ensures proper display ordering when the dashboard is active.
         """
-        # Use the dashboard logger's print method
-        self._dash_logger.print(*args, **kwargs)
+        self._dashlog.print(*args, **kwargs)
 
     def update_hash_status(self, hash_value: str, status: HashStatus):
         """
@@ -251,4 +240,4 @@ class AgentDashboardContext(AgentContext):
             hash_value: The hash value to update
             status: New status - one of 'C' (cached), '↗' (sent), '↘' (received), '✓' (stored)
         """
-        self._dash_logger.update_hash(hash_value, status)
+        self._dashlog.update_hash(hash_value, status)

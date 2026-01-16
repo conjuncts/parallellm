@@ -14,7 +14,7 @@ from unittest.mock import Mock, AsyncMock, patch
 import asyncio
 from typing import Callable, Any, Tuple, Dict
 from parallellm.core.identity import LLMIdentity
-from parallellm.provider.openai import (
+from parallellm.provider.openai.sdk import (
     SyncOpenAIProvider,
     AsyncOpenAIProvider,
 )

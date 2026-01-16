@@ -2,13 +2,10 @@ from logging import Logger
 from typing import List, Literal, Optional, Union
 from parallellm.core.agent.agent import AgentContext, AgentDashboardContext
 from parallellm.core.backend import BaseBackend
-from parallellm.core.exception import IntegrityError
 from parallellm.core.msg.state import MessageState
 from parallellm.core.hydrate import hydrate_llm_response, hydrate_msg_state
 from parallellm.core.response import (
     LLMResponse,
-    PendingLLMResponse,
-    ReadyLLMResponse,
 )
 from parallellm.provider.base import BaseProvider
 from parallellm.file_io.file_manager import FileManager
@@ -24,8 +21,8 @@ class AgentOrchestrator:
         provider: BaseProvider,
         *,
         logger: Logger,
-        dash_logger: DashboardLogger,
-        special_dash_logger: DashboardLogger = None,
+        dashlog: DashboardLogger,
+        special_dashlog: DashboardLogger = None,
         ask_params: Optional[AskParameters] = None,
         ignore_cache: bool = False,
         strategy: Optional[Literal["sync", "async", "batch"]] = None,
@@ -37,8 +34,8 @@ class AgentOrchestrator:
         :param backend: Backend for data storage and retrieval
         :param provider: Provider for submitting queries to LLM APIs
         :param logger: Logger instance
-        :param dash_logger: Dashboard logger for pretty printing hash status
-        :param special_dash_logger: Dashboard logger for the beginning/end of lifecycle.
+        :param dashlog: Dashboard logger for pretty printing hash status
+        :param special_dashlog: Dashboard logger for the beginning/end of lifecycle.
         :param ask_params: Default parameters for ask_llm() calls
         :param ignore_cache: If True, always submit to the API instead of using cached responses
         """
@@ -47,11 +44,11 @@ class AgentOrchestrator:
         self._provider = provider
         self._logger = logger
 
-        # Initialize the hash logger with display disabled by default
-        self.dash_logger: DashboardLogger = dash_logger
-        if special_dash_logger is None:
-            special_dash_logger = dash_logger
-        self.special_dash_logger: DashboardLogger = special_dash_logger
+        # dashlog's display is disabled by default
+        self._dashlog: DashboardLogger = dashlog
+        if special_dashlog is None:
+            special_dashlog = dashlog
+        self.special_dashlog: DashboardLogger = special_dashlog
 
         self.ask_params = ask_params or {}
         self.ignore_cache = ignore_cache
@@ -127,7 +124,7 @@ class AgentOrchestrator:
         self._backend.persist()
 
         if getattr(self._backend, "execute_batch", None):
-            special_dl = self.special_dash_logger
+            special_dl = self.special_dashlog
             special_dl.set_display(True)
             self._backend.execute_batch(self._provider, special_dl=special_dl)
             special_dl._update_console()

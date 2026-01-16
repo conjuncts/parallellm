@@ -129,7 +129,7 @@ def mock_openai_calls(
     """Replace OpenAI client in BatchManager with mock"""
     provider = batch_manager._provider
 
-    from parallellm.provider.openai import AsyncOpenAIProvider
+    from parallellm.provider.openai.sdk import AsyncOpenAIProvider
 
     if isinstance(provider, AsyncOpenAIProvider):
         mock_client = MockAsyncOpenAIClient()

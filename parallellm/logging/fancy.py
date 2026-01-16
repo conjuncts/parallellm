@@ -1,11 +1,10 @@
 from colorama import Fore, Style, init
 import logging
 
-# Initialize colorama for colored output
+# Initialize colorama
 init()
 
 
-# Create a custom formatter with colors
 class ColoredFormatter(logging.Formatter):
     _status_colors = {
         logging.INFO: Fore.CYAN,
@@ -29,9 +28,9 @@ class DashboardAwareHandler(logging.StreamHandler):
     before outputting log messages.
     """
 
-    def __init__(self, dash_logger, stream=None):
+    def __init__(self, dashlog, stream=None):
         super().__init__(stream)
-        self._dash_logger = dash_logger
+        self._dashlog = dashlog
 
     def emit(self, record):
         """Emit a log record, coordinating with dashboard if active."""
@@ -39,8 +38,7 @@ class DashboardAwareHandler(logging.StreamHandler):
             msg = self.format(record)
 
             # Check if dashboard logger is active and displaying
-            if self._dash_logger.display and self._dash_logger._console_written:
-                # Dashboard is active, use coordinated approach
+            if self._dashlog.display and self._dashlog._console_written:
                 # Clear current line and print message
                 self.stream.write(f"\r\033[K{msg}\n")
                 self.stream.flush()
@@ -58,10 +56,10 @@ class DashboardAwareHandler(logging.StreamHandler):
 _parallellm_log_handler = None
 
 
-def get_parallellm_log_handler(dash_logger) -> DashboardAwareHandler:
+def get_parallellm_log_handler(dashlog) -> DashboardAwareHandler:
     global _parallellm_log_handler
     if _parallellm_log_handler is None:
-        _parallellm_log_handler = DashboardAwareHandler(dash_logger)
+        _parallellm_log_handler = DashboardAwareHandler(dashlog)
         _parallellm_log_handler.setFormatter(
             ColoredFormatter("%(levelname)s %(message)s")
         )

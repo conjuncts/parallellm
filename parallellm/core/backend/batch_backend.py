@@ -23,9 +23,6 @@ from parallellm.types import (
     ParsedResponse,
 )
 
-if TYPE_CHECKING:
-    from parallellm.provider.base import BatchProvider as BatchProviderType
-
 
 class BatchBackend(BaseBackend):
     """
@@ -37,7 +34,7 @@ class BatchBackend(BaseBackend):
     def __init__(
         self,
         fm: FileManager,
-        dash_logger: DashboardLogger = PrimitiveDashboardLogger(),
+        dashlog: DashboardLogger = PrimitiveDashboardLogger(),
         *,
         datastore_cls=None,
         session_id: int,
@@ -49,7 +46,7 @@ class BatchBackend(BaseBackend):
             self._ds = SQLiteDatastore(fm)
         else:
             self._ds = datastore_cls(fm)
-        self.dash_logger = dash_logger
+        self.dashlog = dashlog
         self._confirm_batch_submission = confirm_batch_submission
         self._rewrite_cache = rewrite_cache
 
@@ -96,7 +93,6 @@ class BatchBackend(BaseBackend):
     def retrieve(
         self, call_id: CallIdentifier, metadata=False
     ) -> Optional[ParsedResponse]:
-        # Fall back to datastore
         return self._ds.retrieve(call_id, metadata=metadata)
 
     def close(self):
@@ -318,7 +314,7 @@ class BatchBackend(BaseBackend):
             if save_to_disk == "zip":
                 ending = ".zip" if res.status == "ready" else "_err.zip"
                 batch_fname = os.path.basename(batch_uuid)
-                fpath = self._fm.allocate_batch_out() / f"{batch_fname}{ending}"
+                fpath = self._fm.path_batch_out() / f"{batch_fname}{ending}"
                 self.persist_to_zip(
                     res.raw_output, fpath=fpath, inner_fname=batch_uuid + ".jsonl"
                 )

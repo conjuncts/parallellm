@@ -38,9 +38,7 @@ class SQLiteDatastore(Datastore):
         self._is_dirty = False
 
         self._metadata_index = ParquetWriter(
-            self.file_manager.allocate_datastore()
-            / "apimeta"
-            / "metadata-index.parquet",
+            self.file_manager.path_metadata_store() / "metadata-index.parquet",
             schema={
                 "response_id": pl.Utf8,
                 "agent_name": pl.Utf8,
@@ -80,7 +78,7 @@ class SQLiteDatastore(Datastore):
 
         if connection_key not in connections:
             # Get the base datastore directory
-            datastore_dir = self.file_manager.allocate_datastore()
+            datastore_dir = self.file_manager.path_datastore()
 
             # Use main datastore file for None/main, or custom named files for others
             if db_name is None:
@@ -219,7 +217,7 @@ class SQLiteDatastore(Datastore):
 
         where_conditions, params = self._build_where_clause(agent_name, doc_hash)
 
-        # Try with seq_id first (most specific), get oldest entry
+        # Ideally, seq_id should match. Get oldest entry
         full_where = where_conditions + " AND seq_id = ?"
         full_params = params + [seq_id]
 
@@ -229,7 +227,7 @@ class SQLiteDatastore(Datastore):
         )
         row = cursor.fetchone()
         if not row:
-            # Fallback: try without seq_id (less specific), get oldest entry
+            # Fallback: allow seq_id to differ. Get oldest entry
             cursor = conn.execute(
                 f"SELECT response, response_id, tool_calls FROM {table_name} WHERE {where_conditions} ORDER BY id ASC LIMIT 1",
                 params,
@@ -298,8 +296,7 @@ class SQLiteDatastore(Datastore):
         else:
             provider_type = "google"
         relevant = ParquetWriter(
-            self.file_manager.allocate_datastore()
-            / "apimeta"
+            self.file_manager.path_metadata_store()
             / f"{provider_type}-responses.parquet"
         )
         return relevant.get({"response_id": response_id}).row(0, named=True)
@@ -336,8 +333,7 @@ class SQLiteDatastore(Datastore):
             resp_id = matches.item(0, "response_id")
 
             relevant = ParquetWriter(
-                self.file_manager.allocate_datastore()
-                / "apimeta"
+                self.file_manager.path_metadata_store()
                 / f"{provider_type}-responses.parquet"
             )
             return relevant.get({"response_id": resp_id}).row(0, named=True)
@@ -437,21 +433,17 @@ class SQLiteDatastore(Datastore):
         agent_name = call_id["agent_name"]
         provider_type = call_id.get("provider_type")
 
-        # Extract fields from parsed_response
         response = parsed_response.text
         response_id = parsed_response.response_id
         metadata = parsed_response.metadata
         tool_calls = parsed_response.tool_calls
 
-        # Get main database connection
         conn = self._get_connection(None)
 
-        # Determine table and build WHERE clause
-        table_name = "anon_responses"
+        # Build WHERE clause
         where_clause, where_params = self._build_where_clause(agent_name, doc_hash)
 
         try:
-            # Prepare record for INSERT/UPDATE
             tool_calls_json = dump_tool_calls(tool_calls)
 
             record = {
@@ -473,7 +465,7 @@ class SQLiteDatastore(Datastore):
                 where_clause = where_params = None
             self._insert_response(
                 conn,
-                table_name,
+                "anon_responses",
                 record,
                 where_clause=where_clause,
                 where_params=where_params,
@@ -598,10 +590,6 @@ class SQLiteDatastore(Datastore):
                 doc_hash = row["doc_hash"]
                 provider_type = row["provider_type"]
 
-                # Use anon_responses table
-                table_name = "anon_responses"
-
-                # Get response components from parsed_response
                 resp_text = parsed.text
                 response_id = parsed.response_id
                 metadata = parsed.metadata
@@ -629,7 +617,7 @@ class SQLiteDatastore(Datastore):
                     where_clause = where_params = None
                 self._insert_response(
                     conn,
-                    table_name,
+                    "anon_responses",
                     record,
                     where_clause=where_clause,
                     where_params=where_params,
@@ -768,7 +756,7 @@ class SQLiteDatastore(Datastore):
             if not metadata_rows:
                 return
 
-            mdir = self.file_manager.allocate_datastore() / "apimeta"
+            mdir = self.file_manager.path_metadata_store()
             sequestered = sequester_metadata(metadata_rows, mdir, self._metadata_index)
             if sequestered:
                 placeholders = ",".join(["?" for _ in sequestered])

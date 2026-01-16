@@ -9,18 +9,12 @@ Tests the Gemini provider functionality including:
 
 from dotenv import load_dotenv
 import pytest
-from unittest.mock import Mock, AsyncMock
 from parallellm.core.identity import LLMIdentity
-from parallellm.provider.google import (
+from parallellm.provider.google.sdk import (
     SyncGoogleProvider,
-    AsyncGoogleProvider,
     _fix_docs_for_google,
     GoogleProvider,
 )
-from parallellm.core.backend.sync_backend import SyncBackend
-from parallellm.core.backend.async_backend import AsyncBackend
-from parallellm.core.response import PendingLLMResponse, ReadyLLMResponse
-from parallellm.provider.schemas import guess_schema
 from parallellm.types import CallIdentifier
 
 

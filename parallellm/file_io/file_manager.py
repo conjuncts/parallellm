@@ -194,7 +194,7 @@ class FileManager:
         with open(data_file, "rb") as f:
             return pickle.load(f)
 
-    def allocate_datastore(self) -> Path:
+    def path_datastore(self) -> Path:
         """
         Get the base datastore directory.
 
@@ -204,7 +204,15 @@ class FileManager:
         datastore_dir.mkdir(parents=True, exist_ok=True)
         return datastore_dir
 
-    def allocate_batch_in(self) -> Path:
+    def path_metadata_store(self) -> Path:
+        """
+        Get directory for dumping metadata
+        """
+        folder = self.path_datastore() / "apimeta"
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
+
+    def path_batch_in(self) -> Path:
         """
         Get the base batches directory.
 
@@ -235,7 +243,7 @@ class FileManager:
 
         # Remnants of same-session_id files should not be possible, since
         # session_id should be unique per run.
-        path = self.allocate_batch_in() / preferred_name
+        path = self.path_batch_in() / preferred_name
 
         with open(path, "w", encoding="utf-8") as f:
             for item in stuff:
@@ -243,7 +251,7 @@ class FileManager:
 
         return path
 
-    def allocate_batch_out(self) -> Path:
+    def path_batch_out(self) -> Path:
         """
         Get the base batch outputs directory.
 
