@@ -3,6 +3,19 @@ import tempfile
 from unittest.mock import Mock
 import pytest
 from parallellm.core.response import ReadyLLMResponse
+from parallellm.types import CallIdentifier
+
+
+@pytest.fixture
+def generic_call_id() -> CallIdentifier:
+    """Fixture to create mock call identifiers for testing"""
+    return {
+        "agent_name": "test_agent",
+        "doc_hash": "test_hash_1237",
+        "seq_id": 1,
+        "session_id": 1,
+        "meta": {"provider_type": "openai", "tag": None},
+    }
 
 
 @pytest.fixture(scope="module")
@@ -32,7 +45,7 @@ def mock_orchestrator():
         "doc_hash": "test_hash",
         "seq_id": 0,
         "session_id": 1,
-        "provider_type": "openai",
+        "meta": {"provider_type": "openai", "tag": None},
     }
 
     mock_orch._provider.submit_query_to_provider.return_value = ReadyLLMResponse(

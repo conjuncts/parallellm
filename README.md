@@ -58,6 +58,10 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
     - async: ask_llm is fine, but resolve() raises an error
     - mode 1: exceptions are fatal
     - mode 2: log exceptions and continue
+    - three error handling modes: None, skip, retry (exponential backoff)
+
+
+- Force agent to always exist. This simplifies the SQL code. Chnage default agent name to empty string.
 
 ## Philosophy
 

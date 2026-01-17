@@ -44,8 +44,7 @@ def sample_call_id():
         "doc_hash": "test_hash_123",
         "seq_id": 1,
         "session_id": 1,
-        "provider_type": "openai",
-        "response_id": "resp_123",
+        "meta": {"provider_type": "openai", "tag": None},
     }
 
 

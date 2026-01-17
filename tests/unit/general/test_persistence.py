@@ -300,7 +300,7 @@ class TestAgentOrchestratorIntegration:
             loaded_data = orchestrator.load_userdata("test_data")
             assert loaded_data == test_data
 
-    def test_userdata_llm_responses(self):
+    def test_userdata_llm_responses(self, generic_call_id):
         """Test that orchestrator injects backend into LLMResponses"""
         with tempfile.TemporaryDirectory() as temp_dir:
             fm = FileManager(temp_dir)
@@ -315,16 +315,19 @@ class TestAgentOrchestratorIntegration:
                 dashlog=Mock(),
             )
 
-            call_id = self._create_mock_call_id()
             pr = ParsedResponse(
                 text="backend_test_value",
                 response_id="resp_123",
                 metadata=None,
             )
-            backend.store(call_id, pr)
+            backend.store(generic_call_id, pr)
 
-            pending_response = PendingLLMResponse(call_id=call_id, backend=backend)
-            ready_response = ReadyLLMResponse(call_id=call_id, value="test_value")
+            pending_response = PendingLLMResponse(
+                call_id=generic_call_id, backend=backend
+            )
+            ready_response = ReadyLLMResponse(
+                call_id=generic_call_id, value="test_value"
+            )
 
             # Save responses
             orchestrator.save_userdata("pending", pending_response)
@@ -342,16 +345,15 @@ class TestAgentOrchestratorIntegration:
             # Both depend solely on backend
             assert loaded_ready.resolve() == "backend_test_value"
 
-    def test_orchestrator_ignore_cache_parameter(self):
+    def test_orchestrator_ignore_cache_parameter(self, generic_call_id):
         """Test that ignore_cache parameter works correctly"""
         with tempfile.TemporaryDirectory() as temp_dir:
             fm = FileManager(temp_dir)
             mock_backend = Mock()
             mock_backend.retrieve.return_value = "cached_response"
 
-            mock_call_id = self._create_mock_call_id()
             mock_backend.submit_query.return_value = ReadyLLMResponse(
-                call_id=mock_call_id, value="fresh_response"
+                call_id=generic_call_id, value="fresh_response"
             )
 
             # Create orchestrator with ignore_cache=True
@@ -368,17 +370,6 @@ class TestAgentOrchestratorIntegration:
                 response = agent.ask_llm("Test prompt")
 
                 assert response.resolve() == "fresh_response"
-
-    def _create_mock_call_id(self) -> CallIdentifier:
-        """Helper to create mock call identifiers"""
-        return {
-            "agent_name": "test_agent",
-            "checkpoint": "test_checkpoint",
-            "doc_hash": "test_hash",
-            "seq_id": 1,
-            "session_id": 1,
-            "provider_type": "openai",
-        }
 
 
 class TestFileManagerPersistence:

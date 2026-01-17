@@ -115,7 +115,7 @@ class TestAskLLMMethod:
             assert call_id["agent_name"] == "test_agent"
             assert call_id["seq_id"] == 0  # First call
             assert call_id["session_id"] == 1
-            assert call_id["provider_type"] == "openai"
+            assert call_id["meta"]["provider_type"] == "openai"
 
     @patch("parallellm.core.agent.agent.compute_hash")
     def test_ask_llm_hash_computation(self, mock_compute_hash, mock_orchestrator):

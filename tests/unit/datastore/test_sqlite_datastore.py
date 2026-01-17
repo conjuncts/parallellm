@@ -30,15 +30,10 @@ def temp_datastore():
 
 
 class TestSQLite:
-    def test_store_and_retrieve_anonymous_response(self, temp_datastore):
+    def test_store_and_retrieve_anonymous_response(
+        self, temp_datastore, generic_call_id
+    ):
         """Test storing and retrieving an anonymous response"""
-        call_id: CallIdentifier = {
-            "agent_name": "test_agent",
-            "doc_hash": "test_hash_123",
-            "seq_id": 1,
-            "session_id": 100,
-            "provider_type": "openai",
-        }
 
         metadata = {"usage": {"total_tokens": 50}, "model": "gpt-4"}
         parsed_response = ParsedResponse(
@@ -46,32 +41,27 @@ class TestSQLite:
         )
 
         # Store the response
-        temp_datastore.store(call_id, parsed_response)
+        temp_datastore.store(generic_call_id, parsed_response)
 
         # Retrieve the response
-        retrieved = temp_datastore.retrieve(call_id)
+        retrieved = temp_datastore.retrieve(generic_call_id)
         assert retrieved is not None
         assert retrieved.text == "Test response"
 
         # Retrieve with metadata
-        retrieved_with_metadata = temp_datastore.retrieve(call_id, metadata=True)
+        retrieved_with_metadata = temp_datastore.retrieve(
+            generic_call_id, metadata=True
+        )
         assert retrieved_with_metadata.metadata == metadata
 
-    def test_store_update_existing_response(self, temp_datastore):
+    def test_store_update_existing_response(self, temp_datastore, generic_call_id):
         """Test that storing with same call_id updates existing response"""
-        call_id: CallIdentifier = {
-            "agent_name": "test_agent",
-            "doc_hash": "update_test_hash",
-            "seq_id": 1,
-            "session_id": 100,
-            "provider_type": "openai",
-        }
 
         # Store original response
         original_response = ParsedResponse(
             text="Original response", response_id="orig_123", metadata={}
         )
-        temp_datastore.store(call_id, original_response)
+        temp_datastore.store(generic_call_id, original_response)
 
         # Store updated response
         updated_response = ParsedResponse(
@@ -79,23 +69,16 @@ class TestSQLite:
             response_id="updated_123",
             metadata={"updated": True},
         )
-        temp_datastore.store(call_id, updated_response, upsert=True)
+        temp_datastore.store(generic_call_id, updated_response, upsert=True)
 
         # Retrieve should return updated response
-        retrieved = temp_datastore.retrieve(call_id)
+        retrieved = temp_datastore.retrieve(generic_call_id)
         assert retrieved.text == "Updated response"
 
-    def test_retrieve_nonexistent_response(self, temp_datastore):
+    def test_retrieve_nonexistent_response(self, temp_datastore, generic_call_id):
         """Test retrieving a response that doesn't exist"""
-        call_id: CallIdentifier = {
-            "agent_name": "nonexistent_agent",
-            "doc_hash": "nonexistent_hash",
-            "seq_id": 999,
-            "session_id": 100,
-            "provider_type": "openai",
-        }
 
-        retrieved = temp_datastore.retrieve(call_id)
+        retrieved = temp_datastore.retrieve(generic_call_id)
         assert retrieved is None
 
     def test_retrieve_fallback_without_seq_id(self, temp_datastore):
@@ -105,7 +88,7 @@ class TestSQLite:
             "doc_hash": "fallback_hash",
             "seq_id": 1,
             "session_id": 100,
-            "provider_type": "openai",
+            "meta": {"provider_type": "openai", "tag": None},
         }
 
         parsed_response = ParsedResponse(
@@ -114,6 +97,18 @@ class TestSQLite:
 
         # Store response
         temp_datastore.store(call_id, parsed_response)
+
+        not_this_one: CallIdentifier = {
+            "agent_name": "wrong_agent",
+            "doc_hash": "wrong_hash",
+            "seq_id": 999,
+            "session_id": 100,
+            "meta": {"provider_type": "openai", "tag": None},
+        }
+        temp_datastore.store(
+            not_this_one,
+            ParsedResponse(text="Wrong response", response_id="wrong_123", metadata={}),
+        )
 
         # Try to retrieve with different seq_id
         call_id_different_seq = call_id.copy()
@@ -134,8 +129,8 @@ class TestSQLiteBatch:
                 "agent_name": "batch_agent",
                 "doc_hash": f"batch_hash_{i}",
                 "seq_id": i,
-                "session_id": 300,
-                "provider_type": "openai",
+                "session_id": 100,
+                "meta": {"provider_type": "openai", "tag": None},
             }
             for i in range(1, 4)
         ]
@@ -178,8 +173,8 @@ class TestSQLiteBatch:
                 "agent_name": "ready_batch_agent",
                 "doc_hash": f"ready_hash_{i}",
                 "seq_id": i,
-                "session_id": 400,
-                "provider_type": "openai",
+                "session_id": 100,
+                "meta": {"provider_type": "openai", "tag": None},
             }
             for i in range(1, 3)
         ]
@@ -270,36 +265,23 @@ class TestSQLiteExtras:
         for table in expected_tables:
             assert table in tables
 
-    def test_null_agent_name_handling(self, temp_datastore):
+    def test_null_agent_name_handling(self, temp_datastore, generic_call_id):
         """Test handling of null agent names"""
-        call_id: CallIdentifier = {
-            "agent_name": None,
-            "doc_hash": "null_agent_hash",
-            "seq_id": 1,
-            "session_id": 100,
-            "provider_type": "openai",
-        }
+        generic_call_id["agent_name"] = None
 
         parsed_response = ParsedResponse(
             text="Null agent response", response_id="null_123", metadata={}
         )
 
         # Store and retrieve
-        temp_datastore.store(call_id, parsed_response)
-        retrieved = temp_datastore.retrieve(call_id)
+        temp_datastore.store(generic_call_id, parsed_response)
+        retrieved = temp_datastore.retrieve(generic_call_id)
 
         assert retrieved is not None
         assert retrieved.text == "Null agent response"
 
-    def test_metadata_operations(self, temp_datastore):
+    def test_metadata_operations(self, temp_datastore, generic_call_id):
         """Test metadata storage and retrieval"""
-        call_id: CallIdentifier = {
-            "agent_name": "metadata_agent",
-            "doc_hash": "metadata_hash",
-            "seq_id": 1,
-            "session_id": 500,
-            "provider_type": "openai",
-        }
 
         metadata = {
             "usage": {
@@ -316,28 +298,20 @@ class TestSQLiteExtras:
         )
 
         # Store response with metadata
-        temp_datastore.store(call_id, parsed_response)
+        temp_datastore.store(generic_call_id, parsed_response)
 
         # Retrieve metadata separately
         retrieved_metadata = temp_datastore.retrieve_metadata("meta_123")
         assert retrieved_metadata == metadata
 
-    def test_persist_and_close(self, temp_datastore):
+    def test_persist_and_close(self, temp_datastore, generic_call_id):
         """Test persist and close operations"""
-        # Store some data
-        call_id: CallIdentifier = {
-            "agent_name": "persist_agent",
-            "doc_hash": "persist_hash",
-            "seq_id": 1,
-            "session_id": 600,
-            "provider_type": "openai",
-        }
 
         parsed_response = ParsedResponse(
             text="Persist test response", response_id="persist_123", metadata={}
         )
 
-        temp_datastore.store(call_id, parsed_response)
+        temp_datastore.store(generic_call_id, parsed_response)
 
         # Persist should not raise any errors
         temp_datastore.persist()
@@ -346,7 +320,7 @@ class TestSQLiteExtras:
         temp_datastore.close()
 
         # Data should still be retrievable after reconnection
-        retrieved = temp_datastore.retrieve(call_id)
+        retrieved = temp_datastore.retrieve(generic_call_id)
         assert retrieved is not None
         assert retrieved.text == "Persist test response"
 
@@ -378,44 +352,31 @@ class TestSQLiteExtras:
         for thread_id, same_connection in results.items():
             assert same_connection, f"Thread {thread_id} got different connections"
 
-    def test_sql_error_handling(self, temp_datastore):
+    def test_sql_error_handling(self, temp_datastore, generic_call_id):
         """Test handling of SQL errors"""
         # Try to cause a database error by manually corrupting the database
         with pytest.raises(Exception):
-            # This should cause an error due to invalid parameters
-            call_id: CallIdentifier = {
-                "agent_name": "error_agent",
-                "doc_hash": None,  # This should cause an error
-                "seq_id": 1,
-                "session_id": 700,
-                "provider_type": "openai",
-            }
+            generic_call_id["doc_hash"] = None  # Invalid value
 
             parsed_response = ParsedResponse(
                 text="Error test", response_id="error_123", metadata={}
             )
 
-            temp_datastore.store(call_id, parsed_response)
+            temp_datastore.store(generic_call_id, parsed_response)
 
     @pytest.mark.skip("Fails but idk why")
     @patch("parallellm.core.sink.sequester.sequester_openai_metadata")
-    def test_metadata_transfer_on_persist(self, mock_sequester, temp_datastore):
+    def test_metadata_transfer_on_persist(
+        self, mock_sequester, temp_datastore, generic_call_id
+    ):
         """Test that metadata transfer is called during persist"""
-        # Store some OpenAI metadata
-        call_id: CallIdentifier = {
-            "agent_name": "transfer_agent",
-            "doc_hash": "transfer_hash",
-            "seq_id": 1,
-            "session_id": 800,
-            "provider_type": "openai",
-        }
 
         metadata = {"usage": {"total_tokens": 75}}
         parsed_response = ParsedResponse(
             text="Transfer test response", response_id="transfer_123", metadata=metadata
         )
 
-        temp_datastore.store(call_id, parsed_response)
+        temp_datastore.store(generic_call_id, parsed_response)
 
         # Mock the sequester function to return some succeeded transfers
         mock_sequester.return_value = ["transfer_123"]

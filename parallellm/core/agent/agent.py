@@ -90,6 +90,7 @@ class AgentContext(Askable):
         hash_by: Optional[List[Literal["llm"]]] = None,
         text_format: Optional[str] = None,
         tools: Optional[list[Union[dict, ServerTool]]] = None,
+        tag: Optional[str] = None,
         **kwargs,
     ) -> LLMResponse:
         # load ask_params defaults
@@ -128,7 +129,10 @@ class AgentContext(Askable):
             "doc_hash": hashed,
             "seq_id": seq_id,
             "session_id": self._bm.get_session_counter(),
-            "provider_type": self._bm._provider.provider_type,
+            "meta": {
+                "provider_type": self._bm._provider.provider_type,
+                "tag": tag,
+            },
         }
 
         # Cache using datastore

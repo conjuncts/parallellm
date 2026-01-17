@@ -115,6 +115,7 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
         hash_by: Optional[List[Literal["llm"]]] = None,
         text_format: Optional[str] = None,
         tools: Optional[list[Union[dict, ServerTool]]] = None,
+        tag: Optional[str] = None,
         **kwargs,
     ) -> LLMResponse:
         f"""
@@ -151,6 +152,7 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
             hash_by=hash_by,
             text_format=text_format,
             tools=tools,
+            tag=tag,
             **kwargs,
         )
         self._update_seq_counters(out)

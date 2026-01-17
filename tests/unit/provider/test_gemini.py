@@ -18,18 +18,6 @@ from parallellm.provider.google.sdk import (
 from parallellm.types import CallIdentifier
 
 
-@pytest.fixture
-def call_id() -> CallIdentifier:
-    """Fixture to create mock call identifiers for testing"""
-    return {
-        "agent_name": "test_agent",
-        "doc_hash": "test_hash",
-        "seq_id": 1,
-        "session_id": 1,
-        "provider_type": "google",
-    }
-
-
 class TestGeminiDocumentFormatting:
     """Test document formatting for Gemini API"""
 
@@ -58,7 +46,7 @@ class TestGeminiProviders:
         assert GoogleProvider.provider_type == "google"
 
     @pytest.mark.skip("costs real money")
-    def test_sync_gemini_provider_prepare_sync_call(self, call_id):
+    def test_sync_gemini_provider_prepare_sync_call(self):
         """Test SyncGeminiProvider prepares sync callable correctly"""
         load_dotenv()
         from google import genai

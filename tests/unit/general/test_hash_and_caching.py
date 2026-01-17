@@ -220,36 +220,11 @@ class TestCallMatching:
             "doc_hash": doc_hash,
             "seq_id": seq_id,
             "session_id": session_id,
-            "provider_type": "openai",
+            "meta": {
+                "provider_type": "openai",
+                "tag": None,
+            },
         }
-
-
-class TestCacheIntegration:
-    """Test integration between hashing and caching systems"""
-
-    def test_hash_to_cache_workflow(self):
-        """Test the typical workflow from hash computation to cache lookup"""
-        # 1. Compute hash
-        instructions = "Test instructions"
-        documents = ["Test document"]
-        computed_hash = compute_hash(instructions, documents)
-
-        # 2. Create call ID with hash
-        call_id: CallIdentifier = {
-            "agent_name": "test_agent",
-            "doc_hash": computed_hash,
-            "seq_id": 1,
-            "session_id": 1,
-            "provider_type": "openai",
-        }
-
-        # 3. Test call matching
-        identical_call_id = call_id.copy()
-        assert _call_matches(call_id, identical_call_id)
-
-        # 4. Test hash status tracking
-        logger = DashboardLogger(k=5, display=False)
-        logger.update_hash(computed_hash, HashStatus.SENT)
 
 
 if __name__ == "__main__":

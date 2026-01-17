@@ -32,6 +32,15 @@ class WorkingMetadata(TypedDict):
     """
 
 
+class CallMetadata(TypedDict):
+    """Not required metadata for a call."""
+
+    provider_type: Optional[str]
+    """Specific provider type (ie. openai, anthropic, etc)"""
+    tag: Optional[str]
+    """An optional tag to associate with the call."""
+
+
 class CallIdentifier(TypedDict):
     agent_name: str
     """Name of the agent (if any, otherwise default) making the call."""
@@ -40,8 +49,7 @@ class CallIdentifier(TypedDict):
     session_id: int
     """Numeric ID of session. For tracking/metadata purposes only."""
 
-    provider_type: Optional[str]
-    """Specific provider type (ie. openai, anthropic, etc)"""
+    meta: Optional[CallMetadata]
 
 
 @dataclass

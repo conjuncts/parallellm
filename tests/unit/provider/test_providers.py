@@ -35,18 +35,6 @@ _fix_docs_for_openai = lambda *args, **kwargs: SyncOpenAIProvider._fix_docs_for_
 )
 
 
-@pytest.fixture
-def call_id() -> CallIdentifier:
-    """Fixture to create mock call identifiers for testing"""
-    return {
-        "agent_name": "test_agent",
-        "doc_hash": "test_hash",
-        "seq_id": 1,
-        "session_id": 1,
-        "provider_type": "openai",
-    }
-
-
 class TestDocumentFixing:
     """Test document formatting` for OpenAI API"""
 
@@ -112,7 +100,7 @@ class TestDocumentFixing:
 class TestSyncOpenAIProvider:
     """Test SyncOpenAIProvider functionality with realistic scenarios"""
 
-    def test_successful_query_execution(self, call_id):
+    def test_successful_query_execution(self, generic_call_id):
         """Test that a query is properly executed and returns expected response"""
         mock_client = MockOpenAIClient()
         mock_client.set_default("The capital of France is Paris.")
@@ -123,7 +111,7 @@ class TestSyncOpenAIProvider:
         result = provider.submit_query_to_provider(
             instructions="Answer the question accurately.",
             documents=["What is the capital of France?"],
-            call_id=call_id,
+            call_id=generic_call_id,
         )
 
         # Should return ReadyLLMResponse with the actual response
@@ -137,14 +125,14 @@ class TestSyncOpenAIProvider:
         assert len(call_data["input"]) == 1
         assert call_data["input"][0]["content"] == "What is the capital of France?"
 
-    def test_cached_response_retrieval(self, call_id):
+    def test_cached_response_retrieval(self, generic_call_id):
         """Test that cached responses are returned without calling the client again"""
         mock_client = MockOpenAIClient()
         mock_client.set_default("Cached response")
         mock_backend = MockSyncBackend()
 
         # Pre-populate the cache
-        mock_backend.stored_responses[mock_backend._get_cache_key(call_id)] = (
+        mock_backend.stored_responses[mock_backend._get_cache_key(generic_call_id)] = (
             "Cached response",
             "cached_resp_123",
             {"cached": True},
@@ -155,7 +143,7 @@ class TestSyncOpenAIProvider:
         result = provider.submit_query_to_provider(
             instructions="Test instructions",
             documents=["Test document"],
-            call_id=call_id,
+            call_id=generic_call_id,
         )
 
         # Should return cached response
@@ -165,7 +153,7 @@ class TestSyncOpenAIProvider:
         # Client should not have been called since response was cached
         assert len(mock_client.calls) == 0
 
-    def test_llm_identity_parameter_usage(self, call_id):
+    def test_llm_identity_parameter_usage(self, generic_call_id):
         """Test that LLM identity is properly passed to the client"""
         mock_client = MockOpenAIClient()
         mock_client.set_default("Model-specific response")
@@ -177,7 +165,7 @@ class TestSyncOpenAIProvider:
         result = provider.submit_query_to_provider(
             instructions="Use the specified model",
             documents=["Test input"],
-            call_id=call_id,
+            call_id=generic_call_id,
             llm=llm_identity,
         )
 
@@ -188,7 +176,7 @@ class TestSyncOpenAIProvider:
         assert len(mock_client.calls) == 1
         assert mock_client.calls[0]["model"] == "gpt-4"
 
-    def test_document_processing_and_formatting(self, call_id):
+    def test_document_processing_and_formatting(self, generic_call_id):
         """Test that multiple documents are properly formatted for OpenAI API"""
         mock_client = MockOpenAIClient()
         mock_client.set_default("Processed multiple documents")
@@ -203,7 +191,9 @@ class TestSyncOpenAIProvider:
         ]
 
         result = provider.submit_query_to_provider(
-            instructions="Process these documents", documents=documents, call_id=call_id
+            instructions="Process these documents",
+            documents=documents,
+            call_id=generic_call_id,
         )
 
         assert isinstance(result, ReadyLLMResponse)
@@ -217,7 +207,7 @@ class TestSyncOpenAIProvider:
             assert input_messages[i]["role"] == "user"
             assert input_messages[i]["content"] == doc
 
-    def test_additional_kwargs_passthrough(self, call_id):
+    def test_additional_kwargs_passthrough(self, generic_call_id):
         """Test that additional parameters are passed through to the client"""
         mock_client = MockOpenAIClient()
         mock_client.set_default("Response with custom params")
@@ -228,7 +218,7 @@ class TestSyncOpenAIProvider:
         result = provider.submit_query_to_provider(
             instructions="Test with custom parameters",
             documents=["Test input"],
-            call_id=call_id,
+            call_id=generic_call_id,
             temperature=0.7,
             max_tokens=150,
             top_p=0.9,
@@ -242,7 +232,7 @@ class TestSyncOpenAIProvider:
         assert call_data["kwargs"]["max_tokens"] == 150
         assert call_data["kwargs"]["top_p"] == 0.9
 
-    def test_error_handling_from_client(self, call_id):
+    def test_error_handling_from_client(self, generic_call_id):
         """Test that client errors are properly propagated"""
         mock_client = MockOpenAIClient()
         mock_backend = MockSyncBackend()
@@ -256,7 +246,9 @@ class TestSyncOpenAIProvider:
 
         with pytest.raises(Exception, match="OpenAI API Error: Rate limit exceeded"):
             provider.submit_query_to_provider(
-                instructions="This will fail", documents=["Test"], call_id=call_id
+                instructions="This will fail",
+                documents=["Test"],
+                call_id=generic_call_id,
             )
 
 
@@ -264,7 +256,7 @@ class TestAsyncOpenAIProvider:
     """Test AsyncOpenAIProvider functionality with realistic async scenarios"""
 
     @pytest.mark.asyncio
-    async def test_successful_async_query_execution(self, call_id):
+    async def test_successful_async_query_execution(self, generic_call_id):
         """Test that an async query is properly executed and can be resolved"""
         mock_client = MockAsyncOpenAIClient()
         mock_client.set_default("Async response: The capital of Italy is Rome.")
@@ -275,20 +267,20 @@ class TestAsyncOpenAIProvider:
         result = provider.submit_query_to_provider(
             instructions="Answer the geographical question.",
             documents=["What is the capital of Italy?", "Answer in a full sentence."],
-            call_id=call_id,
+            call_id=generic_call_id,
         )
 
         # Should return PendingLLMResponse
         assert isinstance(result, PendingLLMResponse)
-        assert result.call_id == call_id
+        assert result.call_id == generic_call_id
         assert result._backend == mock_backend
 
         # Resolve the pending response
-        resolved_value = await mock_backend.resolve_call(call_id)
+        resolved_value = await mock_backend.resolve_call(generic_call_id)
         assert resolved_value == "Async response: The capital of Italy is Rome."
 
     @pytest.mark.asyncio
-    async def test_async_llm_identity_usage(self, call_id):
+    async def test_async_llm_identity_usage(self, generic_call_id):
         """Test that LLM identity is properly used in async calls"""
         mock_client = MockAsyncOpenAIClient()
         mock_client.set_default("GPT-3.5 specific response")
@@ -300,14 +292,14 @@ class TestAsyncOpenAIProvider:
         result = provider.submit_query_to_provider(
             instructions="Use GPT-3.5 for this task",
             documents=["Test async input"],
-            call_id=call_id,
+            call_id=generic_call_id,
             llm=llm_identity,
         )
 
         assert isinstance(result, PendingLLMResponse)
 
         # Execute the coroutine to verify the model was used
-        resolved_value = await mock_backend.resolve_call(call_id)
+        resolved_value = await mock_backend.resolve_call(generic_call_id)
         assert resolved_value == "GPT-3.5 specific response"
 
 
@@ -315,7 +307,7 @@ class TestProviderIntegration:
     """Test provider integration and cross-cutting concerns"""
 
     @pytest.mark.asyncio
-    async def test_sync_vs_async_behavior(self, call_id):
+    async def test_sync_vs_async_behavior(self, generic_call_id):
         """Test that sync and async providers produce equivalent results"""
         mock_sync_client = MockOpenAIClient()
         mock_async_client = MockAsyncOpenAIClient()
@@ -341,11 +333,11 @@ class TestProviderIntegration:
 
         # Test sync provider
         sync_result = sync_provider.submit_query_to_provider(
-            instructions=instructions, documents=documents, call_id=call_id
+            instructions=instructions, documents=documents, call_id=generic_call_id
         )
 
         # Test async provider
-        async_call_id = call_id.copy()
+        async_call_id = generic_call_id.copy()
         async_call_id["seq_id"] = 2  # Different seq_id to avoid cache collision
 
         async_result = async_provider.submit_query_to_provider(
@@ -365,7 +357,7 @@ class TestProviderIntegration:
 class TestProviderErrorScenarios:
     """Test error scenarios and edge cases with realistic behavior"""
 
-    def test_none_instructions_handling(self, call_id):
+    def test_none_instructions_handling(self, generic_call_id):
         """Test that providers handle None instructions gracefully"""
         mock_client = MockOpenAIClient()
         mock_client.set_default("Response with no instructions/documents")
@@ -374,7 +366,7 @@ class TestProviderErrorScenarios:
         provider = SyncOpenAIProvider(client=mock_client, backend=mock_backend)
 
         result = provider.submit_query_to_provider(
-            instructions=None, documents=[], call_id=call_id
+            instructions=None, documents=[], call_id=generic_call_id
         )
 
         assert isinstance(result, ReadyLLMResponse)
@@ -385,7 +377,7 @@ class TestProviderErrorScenarios:
         assert mock_client.calls[0]["instructions"] is None
         assert mock_client.calls[0]["input"] == []
 
-    def test_client_api_error_propagation(self, call_id):
+    def test_client_api_error_propagation(self, generic_call_id):
         """Test that API errors from the client are properly propagated"""
         mock_client = MockOpenAIClient()
         mock_backend = MockSyncBackend()
@@ -401,11 +393,11 @@ class TestProviderErrorScenarios:
             provider.submit_query_to_provider(
                 instructions="This will fail",
                 documents=["Test document"],
-                call_id=call_id,
+                call_id=generic_call_id,
             )
 
     @pytest.mark.asyncio
-    async def test_async_client_error_propagation(self, call_id):
+    async def test_async_client_error_propagation(self, generic_call_id):
         """Test that async API errors are properly propagated"""
         mock_client = MockAsyncOpenAIClient()
         mock_backend = MockAsyncBackend()
@@ -420,14 +412,14 @@ class TestProviderErrorScenarios:
         result = provider.submit_query_to_provider(
             instructions="This will fail async",
             documents=["Test document"],
-            call_id=call_id,
+            call_id=generic_call_id,
         )
 
         assert isinstance(result, PendingLLMResponse)
 
         # The error should be raised when we try to resolve
         with pytest.raises(Exception, match="Async API timeout"):
-            await mock_backend.resolve_call(call_id)
+            await mock_backend.resolve_call(generic_call_id)
 
 
 if __name__ == "__main__":

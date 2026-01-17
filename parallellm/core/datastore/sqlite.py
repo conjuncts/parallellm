@@ -46,6 +46,7 @@ class SQLiteDatastore(Datastore):
                 "seq_id": pl.Int64,
                 "session_id": pl.Int64,
                 "provider_type": pl.Utf8,
+                "tag": pl.Utf8,
             },
         )
 
@@ -546,7 +547,10 @@ class SQLiteDatastore(Datastore):
         seq_id = call_id["seq_id"]
         session_id = call_id["session_id"]
         agent_name = call_id["agent_name"]
-        provider_type = call_id.get("provider_type")
+
+        call_meta = call_id.get("meta", {})
+        provider_type = call_meta.get("provider_type")
+        tag = call_meta.get("tag")
 
         response = parsed_response.text
         response_id = parsed_response.response_id
@@ -620,10 +624,6 @@ class SQLiteDatastore(Datastore):
         :param call_id: The task identifier containing doc_hash, seq_id, and session_id.
         :param err: The error response object containing error details.
         """
-        doc_hash = call_id["doc_hash"]
-        seq_id = call_id["seq_id"]
-        session_id = call_id["session_id"]
-        agent_name = call_id["agent_name"]
 
         conn = self._get_connection(None)
 
@@ -635,10 +635,10 @@ class SQLiteDatastore(Datastore):
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    agent_name,
-                    seq_id,
-                    session_id,
-                    doc_hash,
+                    call_id["agent_name"],
+                    call_id["seq_id"],
+                    call_id["session_id"],
+                    call_id["doc_hash"],
                     err.msg,
                     err.err_code,
                     err.error_id,
@@ -661,12 +661,7 @@ class SQLiteDatastore(Datastore):
         try:
             # Insert each call_id from the batch into the batch_pending table
             for call_id, custom_id in zip(batch_id.call_ids, batch_id.custom_ids):
-                agent_name = call_id["agent_name"]
-                seq_id = call_id["seq_id"]
-                session_id = call_id["session_id"]
-                doc_hash = call_id["doc_hash"]
-                provider_type = call_id.get("provider_type")
-                batch_uuid = batch_id.batch_uuid
+                call_meta = call_id.get("meta", {})
 
                 # Insert or replace the pending batch record
                 conn.execute(
@@ -676,12 +671,12 @@ class SQLiteDatastore(Datastore):
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        agent_name,
-                        seq_id,
-                        session_id,
-                        doc_hash,
-                        provider_type,
-                        batch_uuid,
+                        call_id["agent_name"],
+                        call_id["seq_id"],
+                        call_id["session_id"],
+                        call_id["doc_hash"],
+                        call_meta.get("provider_type"),
+                        batch_id.batch_uuid,
                         custom_id,
                     ),
                 )

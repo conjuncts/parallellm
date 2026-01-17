@@ -13,7 +13,7 @@ def _call_to_concise_dict(call: CallIdentifier) -> dict:
 def _concise_dict_to_call(d: dict) -> CallIdentifier:
     """Convert concise dict back to CallIdentifier. Mutates in place."""
     d.setdefault("session_id", None)
-    d.setdefault("provider_type", None)
+    d.setdefault("meta", {"provider_type": None, "tag": None})
     return d
 
 

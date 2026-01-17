@@ -24,6 +24,7 @@ class Askable(ABC):
         hash_by: Optional[List[Literal["llm"]]] = None,
         text_format: Optional[str] = None,
         tools: Optional[list[Union[dict, ServerTool]]] = None,
+        tag: Optional[str] = None,
         **kwargs,
     ) -> LLMResponse:
         """
@@ -44,6 +45,7 @@ class Askable(ABC):
         :param tools: A list of tools to make available to the LLM.
             Both user-defined tools (function tools) and server-defined tools
             (ie. web search, code interpreter) are supported.
+        :param tag: An optional tag to associate with the request.
         :returns: A LLMResponse. The value is **lazy loaded**: for best efficiency,
             it should not be resolved until you actually need it.
         """
