@@ -5,6 +5,7 @@ from parallellm.types import (
     BatchIdentifier,
     BatchResult,
     CallIdentifier,
+    ParsedError,
     ParsedResponse,
 )
 
@@ -54,6 +55,21 @@ class Datastore(ABC):
         :param call_id: The task identifier containing doc_hash, seq_id, and session_id.
         :param parsed_response: The parsed response object containing text, response_id, and metadata.
         :param upsert: If True, update existing record instead of inserting duplicate (default: False)
+        """
+        raise NotImplementedError
+
+    # === begin error methods ===
+
+    def store_error(
+        self,
+        call_id: CallIdentifier,
+        err: ParsedError,
+    ) -> None:
+        """
+        Store an error response in the backend.
+
+        :param call_id: The task identifier containing doc_hash, seq_id, and session_id.
+        :param err: The error response object containing error details.
         """
         raise NotImplementedError
 

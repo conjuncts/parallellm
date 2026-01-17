@@ -285,6 +285,8 @@ class SyncGoogleProvider(SyncProvider, GoogleProvider):
         """Prepare a synchronous callable for Gemini API"""
         model_name, contents, config = _prepare_google_config(params, **kwargs)
 
+        # from google.genai.errors import ClientError
+
         return self.client.models.generate_content(
             model=model_name,
             contents=contents,

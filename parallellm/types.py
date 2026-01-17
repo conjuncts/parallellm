@@ -232,3 +232,22 @@ class MinorTweaks:
 
     batch_wait_until_complete: bool = True
     "Whether to wait for all batches to complete before proceeding."
+
+
+@dataclass(slots=True)
+class ParsedError:
+    """
+    Represents a parsed error from an LLM provider.
+    """
+
+    msg: str
+    """The error message."""
+
+    err_code: int
+    """The error code, such as 429, 500, or 503."""
+
+    error_id: Optional[str]
+    """A unique identifier for this error from the provider."""
+
+    metadata: Optional[dict]
+    """Additional metadata from the provider (usage stats, model info, etc.)."""

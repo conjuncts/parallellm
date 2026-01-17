@@ -49,9 +49,15 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 | Google | ✅ | ✅ | TODO |
 
 
-TODO
+## TODO
 - centrally track documents (and incorporate with MessageState) just as responses are also tracked
 - tree-based MessageState, which in turn stores all historical MessageState's
+
+- Error handling: 
+    - sync: ask_llm raises an error OR ask_llm produces an error object (ErrorResponse), which is raised when resolve() is called
+    - async: ask_llm is fine, but resolve() raises an error
+    - mode 1: exceptions are fatal
+    - mode 2: log exceptions and continue
 
 ## Philosophy
 

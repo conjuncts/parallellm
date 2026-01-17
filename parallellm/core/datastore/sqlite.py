@@ -17,6 +17,7 @@ from parallellm.types import (
     BatchIdentifier,
     BatchResult,
     CallIdentifier,
+    ParsedError,
     ParsedResponse,
 )
 
@@ -137,6 +138,21 @@ class SQLiteDatastore(Datastore):
                     )
                 """)
 
+                # Create errors table for storing error responses
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS errors (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        agent_name TEXT,
+                        seq_id INTEGER NOT NULL,
+                        session_id INTEGER NOT NULL,
+                        doc_hash TEXT NOT NULL,
+                        error_message TEXT NOT NULL,
+                        error_code INTEGER NOT NULL,
+                        error_id TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
                 # Migrate existing schema if needed
                 _migrate_sql_schema(conn, None)
 
@@ -183,6 +199,26 @@ class SQLiteDatastore(Datastore):
                 """)
                 conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_batch_pending_doc_hash ON batch_pending(doc_hash)
+                """)
+
+                # Create indexes for errors table
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_errors_agent_name ON errors(agent_name)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_errors_doc_hash ON errors(doc_hash)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_errors_agent_doc_hash ON errors(agent_name, doc_hash)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_errors_session_id ON errors(session_id)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_errors_seq_id ON errors(seq_id)
+                """)
+                conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_errors_error_code ON errors(error_code)
                 """)
             else:
                 raise NotImplementedError(
@@ -574,6 +610,49 @@ class SQLiteDatastore(Datastore):
         except sqlite3.Error as e:
             conn.rollback()
             raise RuntimeError(f"SQLite error while storing response: {e}")
+
+    def store_error(
+        self,
+        call_id: CallIdentifier,
+        err: ParsedError,
+    ) -> None:
+        """
+        Store an error response in the backend.
+
+        :param call_id: The task identifier containing doc_hash, seq_id, and session_id.
+        :param err: The error response object containing error details.
+        """
+        doc_hash = call_id["doc_hash"]
+        seq_id = call_id["seq_id"]
+        session_id = call_id["session_id"]
+        agent_name = call_id["agent_name"]
+
+        conn = self._get_connection(None)
+
+        try:
+            # Insert the error record
+            conn.execute(
+                """
+                INSERT INTO errors (agent_name, seq_id, session_id, doc_hash, error_message, error_code, error_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    agent_name,
+                    seq_id,
+                    session_id,
+                    doc_hash,
+                    err.msg,
+                    err.err_code,
+                    err.error_id,
+                ),
+            )
+
+            # Always commit immediately for thread safety
+            conn.commit()
+
+        except sqlite3.Error as e:
+            conn.rollback()
+            raise RuntimeError(f"SQLite error while storing error: {e}")
 
     def store_pending_batch(
         self,
