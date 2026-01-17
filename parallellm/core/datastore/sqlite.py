@@ -99,7 +99,7 @@ class SQLiteDatastore(Datastore):
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS anon_responses (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        agent_name TEXT,
+                        agent_name TEXT NOT NULL,
                         seq_id INTEGER NOT NULL,
                         session_id INTEGER NOT NULL,
                         doc_hash TEXT NOT NULL,
@@ -114,9 +114,9 @@ class SQLiteDatastore(Datastore):
                     CREATE TABLE IF NOT EXISTS metadata (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         response_id TEXT,
-                        agent_name TEXT,
-                        seq_id INTEGER,
-                        session_id INTEGER,
+                        agent_name TEXT NOT NULL,
+                        seq_id INTEGER NOT NULL,
+                        session_id INTEGER NOT NULL,
                         metadata TEXT NOT NULL,
                         provider_type TEXT,
                         UNIQUE(response_id)
@@ -127,7 +127,7 @@ class SQLiteDatastore(Datastore):
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS batch_pending (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        agent_name TEXT,
+                        agent_name TEXT NOT NULL,
                         seq_id INTEGER NOT NULL,
                         session_id INTEGER NOT NULL,
                         doc_hash TEXT NOT NULL,
@@ -143,7 +143,7 @@ class SQLiteDatastore(Datastore):
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS errors (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        agent_name TEXT,
+                        agent_name TEXT NOT NULL,
                         seq_id INTEGER NOT NULL,
                         session_id INTEGER NOT NULL,
                         doc_hash TEXT NOT NULL,
@@ -461,29 +461,6 @@ class SQLiteDatastore(Datastore):
             )
             return relevant.get({"response_id": resp_id}).row(0, named=True)
 
-    def _build_where_clause(
-        self,
-        agent_name: Optional[str],
-        doc_hash: str,
-    ) -> tuple[str, list]:
-        """
-        Build a WHERE clause for querying responses by agent_name and doc_hash.
-
-        :param agent_name: The agent name (can be None)
-        :param doc_hash: The document hash
-        :returns: Tuple of (where_clause, params)
-        """
-        where_conditions = ["doc_hash = ?"]
-        params = [doc_hash]
-
-        if agent_name is not None:
-            where_conditions.append("agent_name = ?")
-            params.append(agent_name)
-        else:
-            where_conditions.append("agent_name IS NULL")
-
-        return " AND ".join(where_conditions), params
-
     def _insert_response(
         self,
         conn: sqlite3.Connection,
@@ -559,9 +536,6 @@ class SQLiteDatastore(Datastore):
 
         conn = self._get_connection(None)
 
-        # Build WHERE clause
-        where_clause, where_params = self._build_where_clause(agent_name, doc_hash)
-
         try:
             tool_calls_json = dump_tool_calls(tool_calls)
 
@@ -575,19 +549,13 @@ class SQLiteDatastore(Datastore):
                 "tool_calls": tool_calls_json,
             }
 
-            # Insert the response (or update if upsert=True)
-            if upsert:
-                where_clause, where_params = self._build_where_clause(
-                    agent_name, doc_hash
-                )
-            else:
-                where_clause = where_params = None
+            # Insert/upsert the response
             self._insert_response(
                 conn,
                 "anon_responses",
                 record,
-                where_clause=where_clause,
-                where_params=where_params,
+                where_clause="doc_hash = ? AND agent_name = ?" if upsert else None,
+                where_params=[doc_hash, agent_name] if upsert else None,
                 upsert=upsert,
             )
 
@@ -744,19 +712,13 @@ class SQLiteDatastore(Datastore):
                     "response_id": custom_id,  # Use custom_id as response_id for batch results
                     "tool_calls": tool_calls_json,
                 }
-                # Insert the response (or update if upsert=True)
-                if upsert:
-                    where_clause, where_params = self._build_where_clause(
-                        agent_name, doc_hash
-                    )
-                else:
-                    where_clause = where_params = None
+                # Insert/upsert the response
                 self._insert_response(
                     conn,
                     "anon_responses",
                     record,
-                    where_clause=where_clause,
-                    where_params=where_params,
+                    where_clause="doc_hash = ? AND agent_name = ?" if upsert else None,
+                    where_params=[doc_hash, agent_name] if upsert else None,
                     upsert=upsert,
                 )
 
@@ -844,12 +806,10 @@ class SQLiteDatastore(Datastore):
         agent_name = call_id["agent_name"]
         doc_hash = call_id["doc_hash"]
 
-        # Build WHERE clause using helper method
-        where_clause, params = self._build_where_clause(agent_name, doc_hash)
-
         cursor = conn.execute(
-            f"SELECT COUNT(*) as count FROM batch_pending WHERE {where_clause} AND is_pending = 1",
-            params,
+            "SELECT COUNT(*) as count FROM batch_pending "
+            "WHERE doc_hash = ? AND agent_name = ? AND is_pending = 1",
+            (doc_hash, agent_name),
         )
         row = cursor.fetchone()
         return row["count"] > 0 if row else False
