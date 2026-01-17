@@ -1,5 +1,14 @@
+from abc import ABC
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Literal, TypedDict, Optional, Union, Tuple
+from typing import (
+    TYPE_CHECKING,
+    List,
+    Literal,
+    TypedDict,
+    Optional,
+    Union,
+    Tuple,
+)
 import json
 
 from PIL import Image
@@ -161,6 +170,21 @@ class ToolCallOutput:
 
     def __str__(self):
         return self.__repr__()
+
+
+ServerToolType = Literal["web_search", "code_interpreter"]
+
+
+class ServerTool(ABC):
+    """
+    Represents a tool implemented by the server, such as web search or code interpreter.
+    """
+
+    server_tool_type: ServerToolType
+    """Must be set by subclasses to identify the provider type."""
+
+    kwargs: dict
+    """Extra custom kwargs"""
 
 
 LLMDocument = Union[

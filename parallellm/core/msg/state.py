@@ -4,7 +4,7 @@ from parallellm.core.ask import Askable
 from parallellm.core.cast.fix_docs import cast_documents
 from parallellm.core.identity import LLMIdentity
 from parallellm.core.response import LLMResponse
-from parallellm.types import LLMDocument
+from parallellm.types import LLMDocument, ServerTool
 
 if TYPE_CHECKING:
     from parallellm.core.agent.agent import AgentContext
@@ -114,7 +114,7 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
         salt: Optional[str] = None,
         hash_by: Optional[List[Literal["llm"]]] = None,
         text_format: Optional[str] = None,
-        tools: Optional[list] = None,
+        tools: Optional[list[Union[dict, ServerTool]]] = None,
         **kwargs,
     ) -> LLMResponse:
         f"""
@@ -134,6 +134,9 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
             For OpenAI: uses structured output via responses.parse().
             For Google: sets response_mime_type and response_schema.
             For Anthropic: not supported.
+        :param tools: A list of tools to make available to the LLM.
+            Both user-defined tools (function tools) and server-defined tools 
+            (ie. web search, code interpreter) are supported.
         :returns: A LLMResponse. The value is **lazy loaded**: for best efficiency,
             it should not be resolved until you actually need it.
         """

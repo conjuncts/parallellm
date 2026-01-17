@@ -18,6 +18,7 @@ from parallellm.types import (
     CommonQueryParameters,
     LLMDocument,
     ParsedResponse,
+    ServerTool,
     ToolCall,
     ToolCallOutput,
     ToolCallRequest,
@@ -103,13 +104,25 @@ def _fix_docs_for_google(
     return formatted_docs
 
 
-def _prepare_tool_schema(func_schemas: List[dict]) -> List[types.Tool]:
+def _prepare_tool_schema(
+    func_schemas: List[Union[dict, ServerTool]],
+) -> List[types.Tool]:
     """Convert tool definitions to Google Tool schema"""
 
     # if not isinstance(tools[0], types.Tool):
     #     tools = [types.Tool(function_declarations=[tool]) for tool in tools]
     google_tools = []
     for sch in func_schemas:
+        if isinstance(sch, ServerTool):
+            if sch.server_tool_type == "web_search":
+                google_tools.append(
+                    types.Tool(google_search=types.GoogleSearch(**sch.kwargs))
+                )
+            elif sch.server_tool_type == "code_interpreter":
+                google_tools.append(
+                    types.Tool(code_execution=types.ToolCodeExecution(**sch.kwargs))
+                )
+            continue
         if isinstance(sch, types.Tool):
             google_tools.append(sch)
             continue
@@ -328,7 +341,6 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
         """Convert CommonQueryParameters to Gemini batch request format"""
         instructions = params["instructions"]
         fixed_documents = _fix_docs_for_google(params["documents"])
-        llm = params["llm"]
         text_format = params.get("text_format")
         tools = params.get("tools")
 

@@ -12,15 +12,13 @@ from parallellm.provider.base import (
 from parallellm.provider.openai.openai_tools import to_strict_json_schema
 from parallellm.provider.schemas import guess_schema
 from parallellm.types import (
-    BatchIdentifier,
     BatchResult,
-    BatchStatus,
-    CallIdentifier,
     CommonQueryParameters,
     ToolCallRequest,
     ToolCallOutput,
     LLMDocument,
     ParsedResponse,
+    ServerTool,
     ToolCall,
 )
 
@@ -91,8 +89,26 @@ class OpenAIProvider(BaseProvider):
                 raise ValueError(f"Unsupported document type: {type(doc)}")
         return formatted_docs
 
+    def _fix_server_tools_for_openai(
+        self,
+        tools: list[Union[dict, ServerTool]],
+    ):
+        """Translate ServerTool into OpenAI API format"""
+        if tools is None:
+            return None
+        openai_tools = []
+        for tool in tools:
+            if isinstance(tool, ServerTool):
+                if tool.server_tool_type == "web_search":
+                    openai_tools.append({"type": "web_search", **tool.kwargs})
+                elif tool.server_tool_type == "code_interpreter":
+                    openai_tools.append({"type": "code_interpreter", **tool.kwargs})
+            else:
+                openai_tools.append(tool)
+        return openai_tools
+
     def get_default_llm_identity(self) -> LLMIdentity:
-        return LLMIdentity("gpt-4.1-nano", provider=self.provider_type)
+        return LLMIdentity("gpt-5-nano", provider=self.provider_type)
 
     def parse_response(self, raw_response: Union[BaseModel, dict]) -> ParsedResponse:
         """Parse OpenAI API response into common format"""
@@ -182,6 +198,7 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
         documents = self._fix_docs_for_openai(params["documents"])
         llm = params["llm"]
         text_format = params.get("text_format")
+        tools = self._fix_server_tools_for_openai(params.get("tools"))
 
         if text_format is not None:
             return self.client.responses.parse(
@@ -189,7 +206,7 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
                 instructions=instructions,
                 input=documents,
                 text_format=text_format,
-                tools=params.get("tools"),
+                tools=tools,
                 **kwargs,
             )
 
@@ -207,7 +224,7 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
             model=llm.model_name,
             instructions=instructions,
             input=documents,
-            tools=params.get("tools"),
+            tools=tools,
             **kwargs,
         )
 
@@ -226,6 +243,7 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
         documents = self._fix_docs_for_openai(params["documents"])
         llm = params["llm"]
         text_format = params.get("text_format")
+        tools = self._fix_server_tools_for_openai(params.get("tools"))
 
         if text_format is not None:
             coro = self.client.responses.parse(
@@ -233,7 +251,7 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
                 instructions=instructions,
                 input=documents,
                 text_format=text_format,
-                tools=params.get("tools"),
+                tools=tools,
                 **kwargs,
             )
         else:
@@ -241,7 +259,7 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
                 model=llm.model_name,
                 instructions=instructions,
                 input=documents,
-                tools=params.get("tools"),
+                tools=tools,
                 **kwargs,
             )
 
@@ -262,6 +280,8 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         fixed_documents = self._fix_docs_for_openai(params["documents"])
         llm = params["llm"]
         text_format = params.get("text_format")
+        # tools = self._fix_server_tools_for_openai(params.get("tools"))
+        # TODO: verify batch tools
 
         if text_format is not None:
             if "text" not in kwargs:

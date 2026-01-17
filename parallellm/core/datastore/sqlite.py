@@ -231,7 +231,6 @@ class SQLiteDatastore(Datastore):
         self._is_dirty = True
         return connections[connection_key]
 
-
     def _transfer_metadata_to_parquet(self) -> None:
         """Transfer supported metadata from SQLite to Parquet files."""
         conn = self._get_connection(None)
@@ -317,7 +316,6 @@ class SQLiteDatastore(Datastore):
         except Exception:
             # Ignore any errors during cleanup in destructor
             pass
-
 
     def retrieve(
         self, call_id: CallIdentifier, metadata=False

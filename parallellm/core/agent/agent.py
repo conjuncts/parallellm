@@ -1,5 +1,4 @@
 from typing import TYPE_CHECKING, List, Literal, Optional, Union
-from colorama import Fore, Style, init
 from parallellm.core.ask import Askable
 from parallellm.core.cast.fix_docs import cast_documents
 from parallellm.core.exception import NotAvailable
@@ -16,6 +15,7 @@ from parallellm.types import (
     CallIdentifier,
     CommonQueryParameters,
     LLMDocument,
+    ServerTool,
 )
 
 if TYPE_CHECKING:
@@ -89,7 +89,7 @@ class AgentContext(Askable):
         salt: Optional[str] = None,
         hash_by: Optional[List[Literal["llm"]]] = None,
         text_format: Optional[str] = None,
-        tools: Optional[list] = None,
+        tools: Optional[list[Union[dict, ServerTool]]] = None,
         **kwargs,
     ) -> LLMResponse:
         # load ask_params defaults

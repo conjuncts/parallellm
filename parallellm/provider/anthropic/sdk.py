@@ -7,6 +7,7 @@ from parallellm.types import (
     CommonQueryParameters,
     CallIdentifier,
     LLMDocument,
+    ServerTool,
     ToolCallRequest,
     ToolCallOutput,
     ToolCall,
@@ -122,11 +123,26 @@ def _prepare_anthropic_config(params: CommonQueryParameters, **kwargs) -> tuple:
     return model_name, messages, config
 
 
-def _prepare_tool_schema(func_schemas: List[dict]) -> List[dict]:
+def _prepare_tool_schema(func_schemas: List[Union[dict, ServerTool]]) -> List[dict]:
     """Convert tool definitions to Anthropic tool schema"""
 
     anthropic_tools = []
     for sch in func_schemas:
+        if isinstance(sch, ServerTool):
+            if sch.server_tool_type == "web_search":
+                anthropic_tools.append(
+                    {
+                        "type": "web_search_20250305",
+                        "name": "web_search",
+                        "max_uses": 5,
+                        **sch.kwargs,
+                    }
+                )
+            elif sch.server_tool_type == "code_interpreter":
+                # TODO: support this (it is in beta)
+                raise NotImplementedError
+            continue
+
         sch2 = None
         if "type" in sch:
             # remove type field (used by openai)
