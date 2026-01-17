@@ -56,6 +56,18 @@ def _migrate_sql_schema(conn: sqlite3.Connection, db_name: Optional[str]) -> Non
         # Add agent_name, seq_id, session_id columns to metadata table
         _add_metadata_columns(conn)
 
+        # Add tag column to metadata table if it doesn't exist
+        cursor = conn.execute("PRAGMA table_info(metadata)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "tag" not in columns:
+            conn.execute("ALTER TABLE metadata ADD COLUMN tag TEXT")
+
+        # Add tag column to batch_pending table if it doesn't exist
+        cursor = conn.execute("PRAGMA table_info(batch_pending)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "tag" not in columns:
+            conn.execute("ALTER TABLE batch_pending ADD COLUMN tag TEXT")
+
     except sqlite3.Error as e:
         # If migration fails, continue - tables will be created fresh
         db_label = "main database" if db_name is None else f"{db_name} database"

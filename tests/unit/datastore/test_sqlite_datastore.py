@@ -29,6 +29,32 @@ def temp_datastore():
         datastore.close()
 
 
+@pytest.fixture
+def batch_call_ids():
+    """Create batch call_ids for testing batch operations"""
+    return [
+        {
+            "agent_name": "batch_agent",
+            "doc_hash": f"batch_hash_{i}",
+            "seq_id": i,
+            "session_id": 100,
+            "meta": {"provider_type": "openai", "tag": f"batch_tag_{i}"},
+        }
+        for i in range(1, 4)
+    ]
+
+
+@pytest.fixture
+def batch_identifier(batch_call_ids):
+    """Create a BatchIdentifier for testing"""
+    custom_ids = [f"custom_{i}" for i in range(1, 4)]
+    batch_uuid = "test-batch-uuid-123"
+
+    return BatchIdentifier(
+        call_ids=batch_call_ids, custom_ids=custom_ids, batch_uuid=batch_uuid
+    )
+
+
 class TestSQLite:
     def test_store_and_retrieve_anonymous_response(
         self, temp_datastore, generic_call_id
@@ -81,22 +107,15 @@ class TestSQLite:
         retrieved = temp_datastore.retrieve(generic_call_id)
         assert retrieved is None
 
-    def test_retrieve_fallback_without_seq_id(self, temp_datastore):
+    def test_retrieve_fallback_without_seq_id(self, temp_datastore, generic_call_id):
         """Test that retrieve falls back to matching without seq_id"""
-        call_id: CallIdentifier = {
-            "agent_name": "fallback_agent",
-            "doc_hash": "fallback_hash",
-            "seq_id": 1,
-            "session_id": 100,
-            "meta": {"provider_type": "openai", "tag": None},
-        }
 
         parsed_response = ParsedResponse(
             text="Fallback response", response_id="fallback_123", metadata={}
         )
 
         # Store response
-        temp_datastore.store(call_id, parsed_response)
+        temp_datastore.store(generic_call_id, parsed_response)
 
         not_this_one: CallIdentifier = {
             "agent_name": "wrong_agent",
@@ -111,32 +130,73 @@ class TestSQLite:
         )
 
         # Try to retrieve with different seq_id
-        call_id_different_seq = call_id.copy()
+        call_id_different_seq = generic_call_id.copy()
         call_id_different_seq["seq_id"] = 999
 
         retrieved = temp_datastore.retrieve(call_id_different_seq)
         assert retrieved is not None
         assert retrieved.text == "Fallback response"
 
+    def test_tag_storage_and_retrieval(self, temp_datastore, generic_call_id):
+        """Test that tag is correctly stored and retrieved"""
+        call_id = generic_call_id
+        call_id["meta"]["tag"] = "test_tag_value"
+
+        metadata = {"usage": {"total_tokens": 50}, "model": "gpt-4"}
+        parsed_response = ParsedResponse(
+            text="Test response with tag", response_id="tag_resp_123", metadata=metadata
+        )
+
+        # Store the response
+        temp_datastore.store(call_id, parsed_response)
+
+        # Check that tag is stored in metadata table
+        conn = temp_datastore._get_connection()
+        cursor = conn.execute(
+            "SELECT tag FROM metadata WHERE agent_name = ? AND seq_id = ? AND session_id = ?",
+            (call_id["agent_name"], call_id["seq_id"], call_id["session_id"]),
+        )
+        row = cursor.fetchone()
+        assert row is not None
+        assert row["tag"] == "test_tag_value"
+
 
 # @pytest.mark.skip("Takes extra time")
 class TestSQLiteBatch:
-    def test_batch_operations(self, temp_datastore):
+    def test_batch_operations(self, temp_datastore, batch_identifier):
         """Test batch-related operations"""
-        # Create batch identifier
-        call_ids = [
-            {
-                "agent_name": "batch_agent",
-                "doc_hash": f"batch_hash_{i}",
-                "seq_id": i,
-                "session_id": 100,
-                "meta": {"provider_type": "openai", "tag": None},
-            }
-            for i in range(1, 4)
-        ]
+        # Store pending batch
+        temp_datastore.store_pending_batch(batch_identifier)
 
-        custom_ids = [f"custom_{i}" for i in range(1, 4)]
-        batch_uuid = "test-batch-uuid-123"
+        # Check that call IDs can be retrieved
+        retrieved_call_ids = temp_datastore.retrieve_batch_call_ids(
+            batch_identifier.batch_uuid
+        )
+        assert len(retrieved_call_ids) == 3
+        assert retrieved_call_ids[0]["doc_hash"] == "batch_hash_1"
+
+        # Check if call is in pending batch
+        assert temp_datastore.is_call_in_pending_batch(batch_identifier.call_ids[0])
+
+        # Get all pending batch UUIDs
+        pending_uuids = temp_datastore.get_all_pending_batch_uuids()
+        assert batch_identifier.batch_uuid in pending_uuids
+
+        # Clear batch pending
+        temp_datastore.clear_batch_pending(batch_identifier.batch_uuid)
+
+        # Verify cleared
+        assert not temp_datastore.is_call_in_pending_batch(batch_identifier.call_ids[0])
+        pending_uuids_after = temp_datastore.get_all_pending_batch_uuids()
+        assert batch_identifier.batch_uuid not in pending_uuids_after
+
+    def test_batch_tag_storage(self, temp_datastore, batch_call_ids):
+        """Test that tag is correctly stored in batch operations"""
+        # Use only first 2 call_ids for this test
+        call_ids = batch_call_ids[:2]
+
+        custom_ids = [f"tag_custom_{i}" for i in range(1, 3)]
+        batch_uuid = "tag-batch-uuid-123"
 
         batch_id = BatchIdentifier(
             call_ids=call_ids, custom_ids=custom_ids, batch_uuid=batch_uuid
@@ -145,57 +205,58 @@ class TestSQLiteBatch:
         # Store pending batch
         temp_datastore.store_pending_batch(batch_id)
 
-        # Check that call IDs can be retrieved
-        retrieved_call_ids = temp_datastore.retrieve_batch_call_ids(batch_uuid)
-        assert len(retrieved_call_ids) == 3
-        assert retrieved_call_ids[0]["doc_hash"] == "batch_hash_1"
+        # Check that tags are stored in batch_pending table
+        conn = temp_datastore._get_connection()
+        cursor = conn.execute(
+            "SELECT tag FROM batch_pending WHERE batch_uuid = ? ORDER BY seq_id",
+            (batch_uuid,),
+        )
+        rows = cursor.fetchall()
+        assert len(rows) == 2
+        assert rows[0]["tag"] == "batch_tag_1"
+        assert rows[1]["tag"] == "batch_tag_2"
 
-        # Check if call is in pending batch
-        assert temp_datastore.is_call_in_pending_batch(call_ids[0])
-
-        # Get all pending batch UUIDs
-        pending_uuids = temp_datastore.get_all_pending_batch_uuids()
-        assert batch_uuid in pending_uuids
-
-        # Clear batch pending
-        temp_datastore.clear_batch_pending(batch_uuid)
-
-        # Verify cleared
-        assert not temp_datastore.is_call_in_pending_batch(call_ids[0])
-        pending_uuids_after = temp_datastore.get_all_pending_batch_uuids()
-        assert batch_uuid not in pending_uuids_after
-
-    def test_store_ready_batch(self, temp_datastore):
-        """Test storing completed batch results"""
-        # First store pending batch
-        call_ids = [
-            {
-                "agent_name": "ready_batch_agent",
-                "doc_hash": f"ready_hash_{i}",
-                "seq_id": i,
-                "session_id": 100,
-                "meta": {"provider_type": "openai", "tag": None},
-            }
+        # Test store_ready_batch preserves tag in metadata
+        parsed_responses = [
+            ParsedResponse(
+                text=f"Batch response {i}",
+                response_id=f"tag_custom_{i}",
+                metadata={"batch": True},
+            )
             for i in range(1, 3)
         ]
 
-        custom_ids = [f"ready_custom_{i}" for i in range(1, 3)]
-        batch_uuid = "ready-batch-uuid-123"
-
-        batch_id = BatchIdentifier(
-            call_ids=call_ids, custom_ids=custom_ids, batch_uuid=batch_uuid
+        batch_result = BatchResult(
+            status="ready", raw_output="batch output", parsed_responses=parsed_responses
         )
 
-        temp_datastore.store_pending_batch(batch_id)
+        # Store ready batch
+        temp_datastore.store_ready_batch(batch_result)
+
+        # Verify tags are transferred to metadata table
+        cursor = conn.execute(
+            "SELECT tag FROM metadata WHERE response_id IN (?, ?) ORDER BY response_id",
+            ("tag_custom_1", "tag_custom_2"),
+        )
+        metadata_rows = cursor.fetchall()
+        assert len(metadata_rows) == 2
+        assert metadata_rows[0]["tag"] == "batch_tag_1"
+        assert metadata_rows[1]["tag"] == "batch_tag_2"
+
+    def test_store_ready_batch(self, temp_datastore, batch_identifier: BatchIdentifier):
+        """Test storing completed batch results"""
+
+        temp_datastore.store_pending_batch(batch_identifier)
+        call_ids = batch_identifier.call_ids
 
         # Create batch result
         parsed_responses = [
             ParsedResponse(
                 text=f"Batch response {i}",
-                response_id=f"ready_custom_{i}",
+                response_id=f"custom_{i}",
                 metadata={"batch": True},
             )
-            for i in range(1, 3)
+            for i in range(1, 4)
         ]
 
         batch_result = BatchResult(

@@ -119,6 +119,7 @@ class SQLiteDatastore(Datastore):
                         session_id INTEGER NOT NULL,
                         metadata TEXT NOT NULL,
                         provider_type TEXT,
+                        tag TEXT,
                         UNIQUE(response_id)
                     )
                 """)
@@ -135,6 +136,7 @@ class SQLiteDatastore(Datastore):
                         batch_uuid TEXT NOT NULL,
                         custom_id TEXT,
                         is_pending BOOLEAN DEFAULT 1,
+                        tag TEXT,
                         UNIQUE(custom_id, batch_uuid)
                     )
                 """)
@@ -238,7 +240,7 @@ class SQLiteDatastore(Datastore):
 
         try:
             cursor = conn.execute("""
-                SELECT m.response_id, m.agent_name, m.seq_id, m.session_id, m.metadata, m.provider_type
+                SELECT m.response_id, m.agent_name, m.seq_id, m.session_id, m.metadata, m.provider_type, m.tag
                 FROM metadata m 
                 WHERE m.provider_type IN ('openai', 'google') OR m.provider_type IS NULL
             """)
@@ -338,7 +340,8 @@ class SQLiteDatastore(Datastore):
         conn = self._get_connection(None)
         table_name = "anon_responses"
 
-        where_conditions, params = self._build_where_clause(agent_name, doc_hash)
+        where_conditions = "agent_name = ? AND doc_hash = ?"
+        params = [agent_name, doc_hash]
 
         # Ideally, seq_id should match. Get oldest entry
         full_where = where_conditions + " AND seq_id = ?"
@@ -563,7 +566,7 @@ class SQLiteDatastore(Datastore):
             if metadata:
                 metadata_json = json.dumps(metadata)
                 conn.execute(
-                    "INSERT OR REPLACE INTO metadata (response_id, agent_name, seq_id, session_id, metadata, provider_type) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO metadata (response_id, agent_name, seq_id, session_id, metadata, provider_type, tag) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         response_id,
                         agent_name,
@@ -571,6 +574,7 @@ class SQLiteDatastore(Datastore):
                         session_id,
                         metadata_json,
                         provider_type,
+                        tag,
                     ),
                 )
 
@@ -635,8 +639,8 @@ class SQLiteDatastore(Datastore):
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO batch_pending 
-                    (agent_name, seq_id, session_id, doc_hash, provider_type, batch_uuid, custom_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (agent_name, seq_id, session_id, doc_hash, provider_type, batch_uuid, custom_id, tag)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         call_id["agent_name"],
@@ -646,6 +650,7 @@ class SQLiteDatastore(Datastore):
                         call_meta.get("provider_type"),
                         batch_id.batch_uuid,
                         custom_id,
+                        call_meta.get("tag"),
                     ),
                 )
 
@@ -674,7 +679,7 @@ class SQLiteDatastore(Datastore):
                 # Look up the call_id using custom_id from active batch_pending
                 cursor = conn.execute(
                     """
-                    SELECT agent_name, seq_id, session_id, doc_hash, provider_type
+                    SELECT agent_name, seq_id, session_id, doc_hash, provider_type, tag
                     FROM batch_pending
                     WHERE custom_id = ? AND is_pending = 1
                     LIMIT 1
@@ -693,6 +698,7 @@ class SQLiteDatastore(Datastore):
                 session_id = row["session_id"]
                 doc_hash = row["doc_hash"]
                 provider_type = row["provider_type"]
+                tag = row["tag"]
 
                 resp_text = parsed.text
                 response_id = parsed.response_id
@@ -726,7 +732,7 @@ class SQLiteDatastore(Datastore):
                 if metadata:
                     metadata_json = json.dumps(metadata)
                     conn.execute(
-                        "INSERT OR REPLACE INTO metadata (response_id, agent_name, seq_id, session_id, metadata, provider_type) VALUES (?, ?, ?, ?, ?, ?)",
+                        "INSERT OR REPLACE INTO metadata (response_id, agent_name, seq_id, session_id, metadata, provider_type, tag) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (
                             custom_id,
                             agent_name,
@@ -734,6 +740,7 @@ class SQLiteDatastore(Datastore):
                             session_id,
                             metadata_json,
                             provider_type,
+                            tag,
                         ),
                     )
 

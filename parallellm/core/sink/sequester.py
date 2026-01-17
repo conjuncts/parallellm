@@ -36,6 +36,7 @@ def sequester_metadata(
                 "seq_id": seq_id,
                 "session_id": session_id,
                 "provider_type": provider_type,
+                "tag": row["tag"],
             }
         )
 
