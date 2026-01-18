@@ -39,7 +39,7 @@ class FileManager:
             self.metadata = {}
         self.metadata.setdefault(
             "agents",
-            {"default-agent": {}},
+            {"": {}},
         )
 
         # session_counter: default to 0

@@ -74,7 +74,7 @@ class AgentContext(Askable):
         Metadata for this agent.
         Backed by the AgentOrchestrator's FileManager.
         """
-        key = self.agent_name if self.agent_name is not None else "default-agent"
+        key = self.agent_name if self.agent_name is not None else ""
         return self._bm._fm.metadata["agents"].setdefault(
             key,
             {},

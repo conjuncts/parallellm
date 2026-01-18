@@ -54,10 +54,10 @@ class TestFileManagerBasics:
             # Should have default metadata structure
             assert "agents" in fm.metadata
             assert "session_counter" in fm.metadata
-            assert "default-agent" in fm.metadata["agents"]
+            assert "" in fm.metadata["agents"]
 
             # Default agent should have proper structure
-            default_agent = fm.metadata["agents"]["default-agent"]
+            default_agent = fm.metadata["agents"][""]
             assert default_agent == {}
 
     def test_session_counter_increments(self):
