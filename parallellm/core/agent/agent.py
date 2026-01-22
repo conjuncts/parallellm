@@ -91,6 +91,7 @@ class AgentContext(Askable):
         text_format: Optional[str] = None,
         tools: Optional[list[Union[dict, ServerTool]]] = None,
         tag: Optional[str] = None,
+        save_input: bool = False,
         **kwargs,
     ) -> LLMResponse:
         # load ask_params defaults
@@ -112,7 +113,7 @@ class AgentContext(Askable):
             documents = cast_documents(documents, list(additional_documents))
 
         # Compute salt
-        salt_terms = []
+        salt_terms: list[str] = []
         if salt is not None:
             salt_terms.append(salt)
         if hash_by is not None:
@@ -123,6 +124,16 @@ class AgentContext(Askable):
                     else:
                         salt_terms.append(self._bm._provider.provider_type)
         hashed = compute_hash(instructions, documents + salt_terms)
+
+        if save_input:
+            msg_hashes = [compute_hash(None, msg) for msg in documents]
+            self._bm._backend._get_datastore().store_doc_hash(
+                hashed,
+                instructions=instructions,
+                documents=documents,
+                salt_terms=salt_terms,
+                msg_hashes=msg_hashes,
+            )
 
         call_id: CallIdentifier = {
             "agent_name": self.agent_name,

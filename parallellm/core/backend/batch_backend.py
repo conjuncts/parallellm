@@ -55,6 +55,9 @@ class BatchBackend(BaseBackend):
 
         self._private_increment = 0
 
+    def _get_datastore(self):
+        return self._ds
+
     def submit_query(
         self,
         provider: "BatchProvider",
@@ -94,6 +97,17 @@ class BatchBackend(BaseBackend):
         self, call_id: CallIdentifier, metadata=False
     ) -> Optional[ParsedResponse]:
         return self._ds.retrieve(call_id, metadata=metadata)
+
+    def store_doc_hash(
+        self, doc_hash, *, instructions, documents, salt_terms, msg_hashes
+    ):
+        return self._ds.store_doc_hash(
+            doc_hash,
+            instructions=instructions,
+            documents=documents,
+            salt_terms=salt_terms,
+            msg_hashes=msg_hashes,
+        )
 
     def close(self):
         """Clean up resources"""

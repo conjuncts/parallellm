@@ -116,6 +116,7 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
         text_format: Optional[str] = None,
         tools: Optional[list[Union[dict, ServerTool]]] = None,
         tag: Optional[str] = None,
+        save_input: bool = False,
         **kwargs,
     ) -> LLMResponse:
         f"""
@@ -138,6 +139,8 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
         :param tools: A list of tools to make available to the LLM.
             Both user-defined tools (function tools) and server-defined tools 
             (ie. web search, code interpreter) are supported.
+        :param tag: An optional tag to associate with the request.
+        :param save_input: Whether to save input documents. Default False.
         :returns: A LLMResponse. The value is **lazy loaded**: for best efficiency,
             it should not be resolved until you actually need it.
         """
@@ -153,6 +156,7 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
             text_format=text_format,
             tools=tools,
             tag=tag,
+            save_input=save_input,
             **kwargs,
         )
         self._update_seq_counters(out)

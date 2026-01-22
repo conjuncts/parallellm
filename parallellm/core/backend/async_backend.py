@@ -83,6 +83,9 @@ class AsyncBackend(BaseBackend):
         # Register cleanup to run on program exit
         atexit.register(self.shutdown)
 
+    def _get_datastore(self):
+        return self._async_ds
+
     def _start_event_loop(self):
         """Start the event loop in a separate thread"""
 

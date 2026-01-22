@@ -2,7 +2,7 @@ import sqlite3
 import json
 import threading
 import polars as pl
-from typing import Optional
+from typing import List, Optional, Union
 
 from parallellm.core.cast.fix_tools import dump_tool_calls, load_tool_calls
 from parallellm.core.datastore.base import Datastore
@@ -10,6 +10,7 @@ from parallellm.core.datastore.sql_migrate import (
     _check_and_migrate,
     _migrate_sql_schema,
 )
+from parallellm.core.msg.state import MessageState
 from parallellm.core.sink.sequester import sequester_metadata
 from parallellm.core.sink.to_parquet import ParquetWriter
 from parallellm.file_io.file_manager import FileManager
@@ -17,6 +18,7 @@ from parallellm.types import (
     BatchIdentifier,
     BatchResult,
     CallIdentifier,
+    LLMDocument,
     ParsedError,
     ParsedResponse,
 )
@@ -47,6 +49,24 @@ class SQLiteDatastore(Datastore):
                 "session_id": pl.Int64,
                 "provider_type": pl.Utf8,
                 "tag": pl.Utf8,
+            },
+        )
+
+        self.doc_hash_table = ParquetWriter(
+            self.file_manager.path_doc_hash_table(),
+            schema={
+                "doc_hash": pl.Utf8,
+                "instructions": pl.Utf8,
+                "msg_hashes": pl.List(pl.Utf8),
+                "salt_terms": pl.List(pl.Utf8),
+            },
+        )
+
+        self.msg_hash_table = ParquetWriter(
+            self.file_manager.path_msg_hash_table(),
+            schema={
+                "msg_hash": pl.Utf8,
+                "msg_value": pl.Utf8,
             },
         )
 
@@ -273,6 +293,9 @@ class SQLiteDatastore(Datastore):
         Also, OpenAI metadata is transferred from SQLite to Parquet files
         for better storage efficiency.
         """
+        self.doc_hash_table.commit(mode="unique", on="doc_hash")
+        self.msg_hash_table.commit(mode="unique", on="msg_hash")
+
         # Transfer all metadata to parquet
         if hasattr(self, "_local") and hasattr(self._local, "connections"):
             try:
@@ -623,6 +646,38 @@ class SQLiteDatastore(Datastore):
         except sqlite3.Error as e:
             conn.rollback()
             raise RuntimeError(f"SQLite error while storing error: {e}")
+
+    def store_doc_hash(
+        self,
+        doc_hash: str,
+        *,
+        instructions: Optional[str],
+        documents: Union[LLMDocument, List[LLMDocument], MessageState],
+        salt_terms: list[str],
+        msg_hashes: list[str],
+    ):
+        self.doc_hash_table.log(
+            {
+                "doc_hash": doc_hash,
+                "instructions": instructions,
+                "msg_hashes": msg_hashes,
+                "salt_terms": salt_terms,
+            }
+        )
+        if not isinstance(documents, (list, MessageState)):
+            documents = [documents]
+
+        if len(documents) != len(msg_hashes):
+            raise ValueError(
+                f"Number of documents ({len(documents)}) must equal number of hashes ({len(msg_hashes)})"
+            )
+
+        for msg, msg_hash in zip(documents, msg_hashes):
+            if isinstance(msg, str):
+                self.msg_hash_table.log({"msg_hash": msg_hash, "msg_value": msg})
+            else:
+                # TODO (I can't be bothered right now)
+                pass
 
     def store_pending_batch(
         self,

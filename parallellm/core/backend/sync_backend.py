@@ -66,6 +66,9 @@ class SyncBackend(BaseBackend):
         # Store results directly instead of managing async tasks
         self._pending_results: Dict[str, Any] = {}
 
+    def _get_datastore(self):
+        return self._ds
+
     def _apply_throttling(self) -> None:
         """Apply throttling by waiting if necessary"""
         delay = self._throttler.calculate_delay()

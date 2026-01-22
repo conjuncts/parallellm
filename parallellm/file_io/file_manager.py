@@ -212,6 +212,12 @@ class FileManager:
         folder.mkdir(parents=True, exist_ok=True)
         return folder
 
+    def path_doc_hash_table(self) -> Path:
+        return self.path_datastore() / "doc_hash_table.parquet"
+
+    def path_msg_hash_table(self) -> Path:
+        return self.path_datastore() / "msg_hash_table.parquet"
+
     def path_batch_in(self) -> Path:
         """
         Get the base batches directory.

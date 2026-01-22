@@ -14,7 +14,10 @@ with ParalleLLM.resume_directory(
     # with pllm.default():
     with pllm.agent(dashboard=True) as dash:
         resp = dash.ask_llm(
-            "Please name a power of 3.", hash_by=["llm"], tag="power-of-3"
+            "Please name a power of 3.",
+            hash_by=["llm"],
+            tag="power-of-3",
+            save_input=True,
         )
 
         dash.print(resp.resolve())

@@ -1,12 +1,24 @@
-from typing import Optional
+from typing import TYPE_CHECKING, List, Optional, Union
 from parallellm.provider.base import BaseProvider
-from parallellm.types import CallIdentifier, CommonQueryParameters, ParsedResponse
+from parallellm.types import (
+    CallIdentifier,
+    CommonQueryParameters,
+    LLMDocument,
+    ParsedResponse,
+)
+
+if TYPE_CHECKING:
+    from parallellm.core.msg.state import MessageState
+    from parallellm.core.datastore.base import Datastore
 
 
 class BaseBackend:
     """
     A backend is a data store, but also a way to poll
     """
+
+    def _get_datastore(self) -> "Datastore":
+        raise NotImplementedError
 
     async def _poll_changes(self, call_id: CallIdentifier):
         """

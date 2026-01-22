@@ -61,7 +61,11 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
     - three error handling modes: None, skip, retry (exponential backoff)
 
 
-- Force agent to always exist. This simplifies the SQL code. Chnage default agent name to empty string.
+Input storage:
+1. doc_hash <=> list of message hashes (doc_table)
+2. message_hash <=> message_value (message_table)
+
+
 
 ## Philosophy
 

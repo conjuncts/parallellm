@@ -22,7 +22,7 @@ def write_to_parquet(
         Unique: Adds only new rows that don't exist in the existing data.
         Update: Updates existing rows with new data.
     :param on: Columns which collectively should serve as primary key.
-        If mode is "unique", these are the columns compared.
+        If mode is "unique", these are the columns ensured unique.
         If mode is "update", these are the columns used to identify rows to update.
     :param receipt_col: These column(s) will be taken from
         whatever is **newly added** to the dataframe.
@@ -103,8 +103,9 @@ class ParquetWriter:
                 schema=self.schema,
                 receipt_col=receipt_col,
             )
-        self._log = []
-        return ret
+            self._log = []
+            return ret
+        return None
 
     def get(self, item: dict):
         """Retrieve items. Ignores any uncommitted items."""

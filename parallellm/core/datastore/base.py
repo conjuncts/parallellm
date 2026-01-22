@@ -1,13 +1,17 @@
 from abc import ABC
-from typing import Optional
+from typing import TYPE_CHECKING, List, Optional, Union
 
 from parallellm.types import (
     BatchIdentifier,
     BatchResult,
     CallIdentifier,
+    LLMDocument,
     ParsedError,
     ParsedResponse,
 )
+
+if TYPE_CHECKING:
+    from parallellm.core.msg.state import MessageState
 
 
 class Datastore(ABC):
@@ -72,6 +76,19 @@ class Datastore(ABC):
         :param err: The error response object containing error details.
         """
         raise NotImplementedError
+
+    # === begin methods ===
+
+    def store_doc_hash(
+        self,
+        doc_hash: str,
+        *,
+        instructions: Optional[str],
+        documents: Union[LLMDocument, List[LLMDocument], "MessageState"],
+        salt_terms: list[str],
+        msg_hashes: list[str],
+    ):
+        pass
 
     # === begin batch methods ===
 
