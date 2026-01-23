@@ -1,2 +1,3 @@
 ParquetWriter
 ParquetUniqueWriter
+cast_document_to_str

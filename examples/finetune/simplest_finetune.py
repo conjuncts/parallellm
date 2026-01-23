@@ -6,7 +6,7 @@ load_dotenv()
 
 with ParalleLLM.resume_directory(
     ".pllm/simple/finetune",
-    provider="google",
+    provider="openai",
     strategy="sync",
     log_level=logging.DEBUG,
     # ignore_cache=True,
@@ -14,8 +14,7 @@ with ParalleLLM.resume_directory(
     # with pllm.default():
     with pllm.agent(dashboard=True) as dash:
         resp = dash.ask_llm(
-            "Please name a power of 17.",
-            hash_by=["llm"],
+            "Please name a power of 19.",
             tag="power-of-n",
             save_input=True,
         )

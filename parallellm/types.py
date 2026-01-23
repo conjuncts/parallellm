@@ -206,6 +206,11 @@ LLMDocument = Union[
 Type alias for documents that can be either text or images.
 """
 
+DocumentType = Literal["text", "function_call", "function_call_output"]
+"""
+Enum for valid document types. Closely matches OpenAI's document types.
+"""
+
 
 ProviderType = Literal["openai", "anthropic", "google"]
 

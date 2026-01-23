@@ -4,6 +4,7 @@ import threading
 import polars as pl
 from typing import List, Optional, Union
 
+from parallellm.core.cast.doc_to_str import cast_document_to_str
 from parallellm.core.cast.fix_tools import dump_tool_calls, load_tool_calls
 from parallellm.core.datastore.base import Datastore
 from parallellm.core.datastore.sql_migrate import (
@@ -68,6 +69,8 @@ class SQLiteDatastore(Datastore):
             schema={
                 "msg_hash": pl.Utf8,
                 "msg_value": pl.Utf8,
+                "msg_type": pl.Utf8,
+                "msg_extra": pl.Utf8,
             },
             unique_column_name="msg_hash",
         )
@@ -675,11 +678,11 @@ class SQLiteDatastore(Datastore):
             )
 
         for msg, msg_hash in zip(documents, msg_hashes):
-            if isinstance(msg, str):
-                self.msg_hash_table.log_kv(msg_hash, {"msg_value": msg})
-            else:
-                # TODO (I can't be bothered right now)
-                pass
+            content, msg_type, msg_extra = cast_document_to_str(msg)
+            self.msg_hash_table.log_kv(
+                msg_hash,
+                {"msg_value": content, "msg_type": msg_type, "msg_extra": msg_extra},
+            )
 
     def store_pending_batch(
         self,
