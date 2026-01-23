@@ -8,8 +8,8 @@ To see the diverse formats that need support:
 # https://platform.openai.com/docs/guides/function-calling#custom-tools
 computed_tool_output = {
     "type": "function_call_output",
-    "call_id": tool_calls[0][2],
-    "output": ls_tool(tool_calls[0][1]),
+    "call_id": function_calls[0][2],
+    "output": ls_tool(function_calls[0][1]),
 }
 
 # anthropic
@@ -19,8 +19,8 @@ computed_tool_output = {
     "content": [
         {
             "type": "tool_result",
-            "tool_use_id": tool_calls[0][2],
-            "output": ls_tool(tool_calls[0][1]),
+            "tool_use_id": function_calls[0][2],
+            "output": ls_tool(function_calls[0][1]),
         },
         {
             "type": "text",
@@ -32,7 +32,7 @@ computed_tool_output = {
 # gemini
 # https://ai.google.dev/gemini-api/docs/function-calling?example=meeting
 function_response_part = types.Part.from_function_response(
-    name=tool_call.name,
+    name=function_call.name,
     response={"result": result},
 )
 

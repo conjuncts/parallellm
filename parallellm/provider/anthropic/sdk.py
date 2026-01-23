@@ -8,9 +8,9 @@ from parallellm.types import (
     CallIdentifier,
     LLMDocument,
     ServerTool,
-    ToolCallRequest,
-    ToolCallOutput,
-    ToolCall,
+    FunctionCallRequest,
+    FunctionCallOutput,
+    FunctionCall,
 )
 
 if TYPE_CHECKING:
@@ -34,7 +34,7 @@ def _fix_docs_for_anthropic(
             }
             formatted_docs.append(msg)
             continue
-        elif isinstance(doc, ToolCallRequest):
+        elif isinstance(doc, FunctionCallRequest):
             msg_contents = []
             if doc.text_content:
                 msg_contents.append(
@@ -55,7 +55,7 @@ def _fix_docs_for_anthropic(
             msg = {"role": "assistant", "content": msg_contents}
             formatted_docs.append(msg)
             continue
-        elif isinstance(doc, ToolCallOutput):
+        elif isinstance(doc, FunctionCallOutput):
             msg = {
                 "role": "user",
                 "content": [
@@ -181,7 +181,7 @@ class AnthropicProvider(BaseProvider):
                     text_contents.append(content_item.text)
                 elif content_item.type == "tool_use":
                     tool_calls.append(
-                        ToolCall(
+                        FunctionCall(
                             name=content_item.name,
                             arguments=content_item.input,
                             call_id=content_item.id,
@@ -213,7 +213,7 @@ class AnthropicProvider(BaseProvider):
                         text_contents.append(content_item["text"])
                     elif content_item.get("type") == "tool_use":
                         tool_calls.append(
-                            ToolCall(
+                            FunctionCall(
                                 name=content_item.get("name"),
                                 arguments=content_item.get("input"),
                                 call_id=content_item.get("id"),
@@ -233,7 +233,7 @@ class AnthropicProvider(BaseProvider):
             text=text_content,
             response_id=resp_id,
             metadata=parsed_metadata,
-            tool_calls=tool_calls,
+            function_calls=tool_calls,
         )
 
 

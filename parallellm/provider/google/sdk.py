@@ -19,9 +19,9 @@ from parallellm.types import (
     LLMDocument,
     ParsedResponse,
     ServerTool,
-    ToolCall,
-    ToolCallOutput,
-    ToolCallRequest,
+    FunctionCall,
+    FunctionCallOutput,
+    FunctionCallRequest,
 )
 
 from google import genai
@@ -45,7 +45,7 @@ def _fix_docs_for_google(
     for doc in documents:
         if isinstance(doc, str):
             formatted_docs.append(doc)
-        elif isinstance(doc, ToolCallOutput):
+        elif isinstance(doc, FunctionCallOutput):
             # https://ai.google.dev/gemini-api/docs/function-calling?example=meeting
             function_response_part = types.Part(
                 function_response=types.FunctionResponse(
@@ -56,7 +56,7 @@ def _fix_docs_for_google(
             formatted_docs.append(
                 types.Content(role="user", parts=[function_response_part])
             )
-        elif isinstance(doc, ToolCallRequest):
+        elif isinstance(doc, FunctionCallRequest):
             parts = []
             if doc.text_content:
                 parts.append(types.Part(text=types.Text(content=doc.text_content)))
@@ -238,7 +238,7 @@ class GoogleProvider(BaseProvider):
                 if part.function_call:
                     func_call: types.FunctionCall = part.function_call
                     tools.append(
-                        ToolCall(
+                        FunctionCall(
                             name=func_call.name,
                             arguments=func_call.args,
                             call_id=func_call.id,
@@ -247,7 +247,7 @@ class GoogleProvider(BaseProvider):
             if tools and text is None:
                 text = ""  # I guess this can happen
             return ParsedResponse(
-                text=text, response_id=response_id, metadata=obj, tool_calls=tools
+                text=text, response_id=response_id, metadata=obj, function_calls=tools
             )
         elif isinstance(raw_response, dict):
             resp_id = raw_response.pop("response_id", None) or raw_response.pop(
@@ -267,7 +267,7 @@ class GoogleProvider(BaseProvider):
                 if "function_call" in part:
                     func_call = part["function_call"]
                     tools.append(
-                        ToolCall(
+                        FunctionCall(
                             name=func_call["name"],
                             arguments=func_call["args"],
                             call_id=func_call["id"],
@@ -280,7 +280,7 @@ class GoogleProvider(BaseProvider):
                 text=text_content,
                 response_id=resp_id,
                 metadata=raw_response,
-                tool_calls=tools,
+                function_calls=tools,
             )
         else:
             raise ValueError(f"Unsupported response type: {type(raw_response)}")
@@ -402,7 +402,7 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
                 text=parsed.text,
                 response_id=custom_id,
                 metadata=parsed.metadata,
-                tool_calls=parsed.tool_calls,
+                function_calls=parsed.function_calls,
             )
         else:
             # Fallback parsing
@@ -410,7 +410,7 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
                 text=result.get("text", ""),
                 response_id=custom_id,
                 metadata=result,
-                tool_calls=[],
+                function_calls=[],
             )
 
     def _decode_gemini_batch_error(
@@ -425,7 +425,7 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
             text=error_message,
             response_id=custom_id,
             metadata=error_info,
-            tool_calls=[],
+            function_calls=[],
         )
 
     def get_batch_custom_ids(self, stuff):

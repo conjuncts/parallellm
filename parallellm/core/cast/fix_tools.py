@@ -1,24 +1,24 @@
 import json
 from typing import List, Tuple
 
-from parallellm.types import ToolCall
+from parallellm.types import FunctionCall
 
 
-def dump_tool_calls(tool_calls: List[ToolCall]) -> str:
+def dump_function_calls(function_calls: List[FunctionCall]) -> str:
     """
-    Serialize a list of ToolCall objects into a JSON-ified list of tuples.
+    Serialize a list of FunctionCall objects into a JSON-ified list of tuples.
     """
-    if tool_calls is None:
+    if function_calls is None:
         return None
-    return json.dumps([[call.name, call.args, call.call_id] for call in tool_calls])
+    return json.dumps([[call.name, call.args, call.call_id] for call in function_calls])
 
 
-def load_tool_calls(data: str) -> List[ToolCall]:
+def load_function_calls(data: str) -> List[FunctionCall]:
     """
-    Deserialize a list of tuples into a list of ToolCall objects.
+    Deserialize a list of tuples into a list of FunctionCall objects.
     """
     tuples = json.loads(data)
     return [
-        ToolCall(name=name, arguments=arguments, call_id=call_id)
+        FunctionCall(name=name, arguments=arguments, call_id=call_id)
         for name, arguments, call_id in tuples
     ]

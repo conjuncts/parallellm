@@ -98,8 +98,8 @@ class BatchResult:
     """List of parsed responses, if available."""
 
 
-class ToolCall:
-    """Represents a single tool/function call."""
+class FunctionCall:
+    """Represents a single tool call to a user-defined function."""
 
     __slots__ = ("name", "call_id", "args", "arg_str")
 
@@ -110,13 +110,13 @@ class ToolCall:
         call_id: str,
     ):
         """
-        Initialize a ToolCall.
+        Initialize a FunctionCall.
 
         Args:
-            name: The name of the tool/function being called.
-            call_id: The unique identifier for this tool call.
-            arguments: The arguments for the tool call as a dictionary.
-            arg_str: The arguments for the tool call as a JSON string.
+            name: The name of the function being called.
+            call_id: The unique identifier for this function call.
+            arguments: The arguments for the function call as a dictionary.
+            arg_str: The arguments for the function call as a JSON string.
         """
         self.name = name
         self.call_id = call_id
@@ -134,34 +134,34 @@ class ToolCall:
         return iter((self.name, self.args, self.call_id))
 
     def __repr__(self):
-        return f"ToolCall(name={self.name}, call_id={(self.call_id or '')[:8]}, args={self.args})"
+        return f"FunctionCall(name={self.name}, call_id={(self.call_id or '')[:8]}, args={self.args})"
 
     def __str__(self):
         return self.__repr__()
 
 
 @dataclass(slots=True)
-class ToolCallRequest:
+class FunctionCallRequest:
     """Represents the LLM requesting function/tool call(s)"""
 
     text_content: str
-    """Text content, like thoughts about invoking a tool."""
+    """Text content, like thoughts about invoking a function."""
 
-    calls: List[ToolCall]
-    """List of tool calls."""
+    calls: List[FunctionCall]
+    """List of function calls."""
 
     def __repr__(self):
         brief_calls = [
             f"{call.name}({(call.call_id or '')[:8]})" for call in self.calls
         ]
-        return f"ToolCallRequest(text_content={self.text_content}, calls={brief_calls})"
+        return f"FunctionCallRequest(text_content={self.text_content}, calls={brief_calls})"
 
     def __str__(self):
         return self.__repr__()
 
 
 @dataclass(slots=True)
-class ToolCallOutput:
+class FunctionCallOutput:
     """Represents the output/result of a function/tool call."""
 
     content: str
@@ -174,7 +174,7 @@ class ToolCallOutput:
     """The name of the function call this output corresponds to."""
 
     def __repr__(self):
-        return f"ToolCallOutput(name={self.name}, call_id={(self.call_id or '')[:8]}, content={self.content[:20]}...)"
+        return f"FunctionCallOutput(name={self.name}, call_id={(self.call_id or '')[:8]}, content={self.content[:20]}...)"
 
     def __str__(self):
         return self.__repr__()
@@ -199,8 +199,8 @@ LLMDocument = Union[
     str,
     Image.Image,
     Tuple[Literal["user", "assistant", "system", "developer"], str],
-    ToolCallRequest,
-    ToolCallOutput,
+    FunctionCallRequest,
+    FunctionCallOutput,
 ]
 """
 Type alias for documents that can be either text or images.
@@ -235,7 +235,7 @@ class ParsedResponse:
     metadata: Optional[dict]
     """Additional metadata from the provider (usage stats, model info, etc.)."""
 
-    tool_calls: Optional[List[ToolCall]] = None
+    function_calls: Optional[List[FunctionCall]] = None
 
     def __iter__(self):
         """Allow unpacking into tuple for backward compatibility."""

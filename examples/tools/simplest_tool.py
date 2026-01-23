@@ -2,7 +2,7 @@ import logging
 
 from pydantic import BaseModel
 from parallellm.core.gateway import ParalleLLM
-from parallellm.types import ToolCallOutput
+from parallellm.types import FunctionCallOutput
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -58,7 +58,7 @@ with ParalleLLM.resume_directory(
         )
 
         dash.print(resp.resolve())
-        tool_calls = resp.resolve_tool_calls(to_dict=False)
+        tool_calls = resp.resolve_function_calls(to_dict=False)
         for call in tool_calls:
             dash.print(
                 f"Tool call: `{call.name}` with args {call.args} call_id {call.call_id}"
@@ -68,7 +68,7 @@ with ParalleLLM.resume_directory(
         assert tool_calls[0].name == "count_files"
         msgs.append(resp.to_assistant_message())
 
-        computed_tool_output = ToolCallOutput(
+        computed_tool_output = FunctionCallOutput(
             name=tool_calls[0].name,
             content=ls_tool(tool_calls[0].args),
             call_id=tool_calls[0].call_id,

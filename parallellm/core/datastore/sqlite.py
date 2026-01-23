@@ -5,7 +5,7 @@ import polars as pl
 from typing import List, Optional, Union
 
 from parallellm.core.cast.doc_to_str import cast_document_to_str
-from parallellm.core.cast.fix_tools import dump_tool_calls, load_tool_calls
+from parallellm.core.cast.fix_tools import dump_function_calls, load_function_calls
 from parallellm.core.datastore.base import Datastore
 from parallellm.core.datastore.sql_migrate import (
     _check_and_migrate,
@@ -395,7 +395,7 @@ class SQLiteDatastore(Datastore):
         tool_calls = None
         if row["tool_calls"]:
             try:
-                tool_calls = load_tool_calls(row["tool_calls"])
+                tool_calls = load_function_calls(row["tool_calls"])
             except (json.JSONDecodeError, TypeError):
                 tool_calls = None
 
@@ -417,7 +417,7 @@ class SQLiteDatastore(Datastore):
             text=row["response"],
             response_id=row["response_id"],
             metadata=metadata_value,
-            tool_calls=tool_calls,
+            function_calls=tool_calls,
         )
 
     def retrieve_metadata_legacy(self, response_id: str) -> Optional[dict]:
@@ -563,12 +563,12 @@ class SQLiteDatastore(Datastore):
         response = parsed_response.text
         response_id = parsed_response.response_id
         metadata = parsed_response.metadata
-        tool_calls = parsed_response.tool_calls
+        tool_calls = parsed_response.function_calls
 
         conn = self._get_connection(None)
 
         try:
-            tool_calls_json = dump_tool_calls(tool_calls)
+            tool_calls_json = dump_function_calls(tool_calls)
 
             record = {
                 "agent_name": agent_name,
@@ -763,10 +763,10 @@ class SQLiteDatastore(Datastore):
                 resp_text = parsed.text
                 response_id = parsed.response_id
                 metadata = parsed.metadata
-                tool_calls = parsed.tool_calls
+                tool_calls = parsed.function_calls
 
                 # Serialize tool_calls to JSON if present
-                tool_calls_json = dump_tool_calls(tool_calls)
+                tool_calls_json = dump_function_calls(tool_calls)
 
                 # Prepare record for INSERT/UPDATE
                 record = {

@@ -3,7 +3,7 @@ from typing import List, Optional
 from io import BytesIO
 from PIL import Image
 
-from parallellm.types import LLMDocument, ToolCallRequest, ToolCallOutput
+from parallellm.types import LLMDocument, FunctionCallRequest, FunctionCallOutput
 
 
 def _updateh(hasher, val: Optional[str]):
@@ -29,7 +29,7 @@ def compute_hash(instructions: Optional[str], documents: List[LLMDocument]) -> s
             with BytesIO() as img_buffer:
                 doc.save(img_buffer, format="PNG")
                 hasher.update(img_buffer.getvalue())
-        elif isinstance(doc, ToolCallRequest):
+        elif isinstance(doc, FunctionCallRequest):
             hasher.update(b"function_call")
             _updateh(hasher, doc.text_content)
             for call in doc.calls:
@@ -37,7 +37,7 @@ def compute_hash(instructions: Optional[str], documents: List[LLMDocument]) -> s
                 _updateh(hasher, call.name)
                 _updateh(hasher, call.arg_str)
                 _updateh(hasher, call.call_id)
-        elif isinstance(doc, ToolCallOutput):
+        elif isinstance(doc, FunctionCallOutput):
             hasher.update(b"function_call_output")
             _updateh(hasher, doc.name)
             _updateh(hasher, doc.content)

@@ -7,7 +7,7 @@ import logging
 
 from pydantic import BaseModel
 from parallellm.core.gateway import ParalleLLM
-from parallellm.types import ToolCallOutput
+from parallellm.types import FunctionCallOutput
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -57,11 +57,11 @@ with ParalleLLM.resume_directory(
             # llm="gpt-4o"
         )
 
-        tool_calls = resp.resolve_tool_calls(to_dict=False)
+        tool_calls = resp.resolve_function_calls(to_dict=False)
         assert len(tool_calls) == 1
         assert tool_calls[0].name == "count_files"
 
-        computed_tool_output = ToolCallOutput(
+        computed_tool_output = FunctionCallOutput(
             name=tool_calls[0].name,
             content=ls_tool(tool_calls[0].args),
             call_id=tool_calls[0].call_id,

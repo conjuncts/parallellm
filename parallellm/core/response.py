@@ -6,8 +6,8 @@ from parallellm.types import (
     CallIdentifier,
     LLMDocument,
     ParsedResponse,
-    ToolCallRequest,
-    ToolCall,
+    FunctionCallRequest,
+    FunctionCall,
 )
 
 
@@ -37,24 +37,24 @@ class LLMResponse:
         value = self.resolve()
         return json.loads(value)
 
-    def resolve_tool_calls(self, to_dict=False) -> list[ToolCall]:
+    def resolve_function_calls(self, to_dict=False) -> list[FunctionCall]:
         """
-        Resolve the tool calls associated with this response.
+        Resolve function calls (tool calls to user-defined functions) associated with this response.
 
-        :param to_dict: Whether to parse the tool calls' arguments into dictionaries (if they're JSON strings)
-        :returns: A list of ToolCall objects
+        :param to_dict: Whether to parse the function calls' arguments into dictionaries (if they're JSON strings)
+        :returns: A list of FunctionCall objects
         """
-        if self._pr and self._pr.tool_calls:
+        if self._pr and self._pr.function_calls:
             # cast and jsonify if needed
-            return self._pr.tool_calls
+            return self._pr.function_calls
         return []
 
     def to_assistant_message(self) -> LLMDocument:
         """Converts the self back into a LLMDocument."""
         val = self.resolve()
-        if self._pr and self._pr.tool_calls:
-            return ToolCallRequest(
-                text_content=val, calls=self.resolve_tool_calls(to_dict=False)
+        if self._pr and self._pr.function_calls:
+            return FunctionCallRequest(
+                text_content=val, calls=self.resolve_function_calls(to_dict=False)
             )
         return ("assistant", val)
 

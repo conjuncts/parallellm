@@ -79,14 +79,14 @@ def google_message_parts_sinker(meta: dict, *, remove_content=True):
                 part.pop("text", None)
 
             thought_signature = part.pop("thought_signature", None)
-            tool_call = part.pop("function_call", None)
+            function_call = part.pop("function_call", None)
             yield {
                 **overall,
                 "j": j,
                 "candidates[i].content.part[j]": json.dumps(part),
                 "candidates[i].content.part[j].thought_signature": thought_signature,
-                "candidates[i].content.part[j].function_call": json.dumps(tool_call)
-                if tool_call
+                "candidates[i].content.part[j].function_call": json.dumps(function_call)
+                if function_call
                 else None,
             }
 

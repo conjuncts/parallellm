@@ -14,12 +14,12 @@ from parallellm.provider.schemas import guess_schema
 from parallellm.types import (
     BatchResult,
     CommonQueryParameters,
-    ToolCallRequest,
-    ToolCallOutput,
+    FunctionCallRequest,
+    FunctionCallOutput,
     LLMDocument,
     ParsedResponse,
     ServerTool,
-    ToolCall,
+    FunctionCall,
 )
 
 if TYPE_CHECKING:
@@ -49,7 +49,7 @@ class OpenAIProvider(BaseProvider):
                     "content": doc,
                 }
                 formatted_docs.append(msg)
-            elif isinstance(doc, ToolCallRequest):
+            elif isinstance(doc, FunctionCallRequest):
                 if doc.text_content:
                     formatted_docs.append(
                         {
@@ -66,7 +66,7 @@ class OpenAIProvider(BaseProvider):
                             type="function_call",
                         )
                     )
-            elif isinstance(doc, ToolCallOutput):
+            elif isinstance(doc, FunctionCallOutput):
                 msg = {
                     "type": "function_call_output",
                     "call_id": doc.call_id,
@@ -120,19 +120,19 @@ class OpenAIProvider(BaseProvider):
             resp_id = response.id
             obj.pop("id", None)
 
-            tool_calls = []
+            function_calls = []
             for item in response.output:
                 if item.type == "function_call":
-                    tool_calls.append(
-                        ToolCall(
+                    function_calls.append(
+                        FunctionCall(
                             name=item.name,
                             arguments=item.arguments,
                             call_id=item.call_id,
                         )
                     )
                 elif item.type == "custom_tool_call":
-                    tool_calls.append(
-                        ToolCall(
+                    function_calls.append(
+                        FunctionCall(
                             name=item.name, arguments=item.input, call_id=item.call_id
                         )
                     )
@@ -144,10 +144,10 @@ class OpenAIProvider(BaseProvider):
             if "output_text" in raw_response:
                 # Used in testing
                 text = raw_response["output_text"]
-                tool_calls = []
+                function_calls = []
             else:
                 # Extract text from OpenAI responses API format
-                tool_calls = []
+                function_calls = []
                 texts: List[str] = []
                 for output in raw_response.get("output", []):
                     if output["type"] == "message":
@@ -155,16 +155,16 @@ class OpenAIProvider(BaseProvider):
                             if content["type"] == "output_text":
                                 texts.append(content["text"])
                             elif content["type"] == "function_call":
-                                tool_calls.append(
-                                    ToolCall(
+                                function_calls.append(
+                                    FunctionCall(
                                         name=content["name"],
                                         arguments=content["arguments"],
                                         call_id=content.get("call_id"),
                                     )
                                 )
                             elif content["type"] == "custom_tool_call":
-                                tool_calls.append(
-                                    ToolCall(
+                                function_calls.append(
+                                    FunctionCall(
                                         name=content["name"],
                                         arguments=content["input"],
                                         call_id=content.get("call_id"),
@@ -180,7 +180,7 @@ class OpenAIProvider(BaseProvider):
             text=text,
             response_id=resp_id,
             metadata=parsed_metadata,
-            tool_calls=tool_calls,
+            function_calls=function_calls,
         )
 
 
