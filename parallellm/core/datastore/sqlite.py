@@ -12,7 +12,7 @@ from parallellm.core.datastore.sql_migrate import (
 )
 from parallellm.core.msg.state import MessageState
 from parallellm.core.sink.sequester import sequester_metadata
-from parallellm.core.sink.to_parquet import ParquetWriter
+from parallellm.core.sink.to_parquet import ParquetUniqueWriter, ParquetWriter
 from parallellm.file_io.file_manager import FileManager
 from parallellm.types import (
     BatchIdentifier,
@@ -52,7 +52,7 @@ class SQLiteDatastore(Datastore):
             },
         )
 
-        self.doc_hash_table = ParquetWriter(
+        self.doc_hash_table = ParquetUniqueWriter(
             self.file_manager.path_doc_hash_table(),
             schema={
                 "doc_hash": pl.Utf8,
@@ -60,14 +60,16 @@ class SQLiteDatastore(Datastore):
                 "msg_hashes": pl.List(pl.Utf8),
                 "salt_terms": pl.List(pl.Utf8),
             },
+            unique_column_name="doc_hash",
         )
 
-        self.msg_hash_table = ParquetWriter(
+        self.msg_hash_table = ParquetUniqueWriter(
             self.file_manager.path_msg_hash_table(),
             schema={
                 "msg_hash": pl.Utf8,
                 "msg_value": pl.Utf8,
             },
+            unique_column_name="msg_hash",
         )
 
         # Check if migration is needed (only on first initialization)
@@ -656,13 +658,13 @@ class SQLiteDatastore(Datastore):
         salt_terms: list[str],
         msg_hashes: list[str],
     ):
-        self.doc_hash_table.log(
+        self.doc_hash_table.log_kv(
+            doc_hash,
             {
-                "doc_hash": doc_hash,
                 "instructions": instructions,
                 "msg_hashes": msg_hashes,
                 "salt_terms": salt_terms,
-            }
+            },
         )
         if not isinstance(documents, (list, MessageState)):
             documents = [documents]
@@ -674,7 +676,7 @@ class SQLiteDatastore(Datastore):
 
         for msg, msg_hash in zip(documents, msg_hashes):
             if isinstance(msg, str):
-                self.msg_hash_table.log({"msg_hash": msg_hash, "msg_value": msg})
+                self.msg_hash_table.log_kv(msg_hash, {"msg_value": msg})
             else:
                 # TODO (I can't be bothered right now)
                 pass

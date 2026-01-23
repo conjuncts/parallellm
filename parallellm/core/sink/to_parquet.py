@@ -63,7 +63,7 @@ def write_to_parquet(
 
 
 class ParquetWriter:
-    def __init__(self, parquet_fpath: Path, schema=None):
+    def __init__(self, parquet_fpath: Path, *, schema=None):
         """
         Manages a single Parquet file (akin to a table).
 
@@ -115,3 +115,50 @@ class ParquetWriter:
             query_df, on=list(item.keys()), how="semi", nulls_equal=True
         )
         return result_df
+
+
+class ParquetUniqueWriter(ParquetWriter):
+    def __init__(self, parquet_fpath: Path, *, schema=None, unique_column_name: str):
+        """
+        Version of ParquetWriter that is more efficient for unique writes
+        :param unique_column_name: Name of the unique column for unique writes
+        """
+        super().__init__(parquet_fpath, schema=schema)
+        self._log_kv = {}
+        self._unique_column_name = unique_column_name
+
+    def log(self, item: dict):
+        if self._unique_column_name not in item:
+            raise ValueError(
+                "Item must contain unique column", self._unique_column_name
+            )
+        key = item.pop(self._unique_column_name)
+        self._log_kv[key] = item
+
+    def log_kv(self, key: str, value: dict):
+        """Convenience method. See commit()."""
+        self._log_kv[key] = value
+
+    def commit(
+        self,
+        mode: Literal["append", "replace", "unique", "update"],
+        on: list[str] = None,
+        receipt_col: Union[str, list[str]] = None,
+    ):
+        if self._log_kv:
+            _log = [
+                {self._unique_column_name: key, **value}
+                for key, value in self._log_kv.items()
+            ]
+            for key, value in self._log_kv.items():
+                ret = write_to_parquet(
+                    self.parquet_fpath,
+                    _log,
+                    mode=mode,
+                    on=on,
+                    schema=self.schema,
+                    receipt_col=receipt_col,
+                )
+            self._log = []
+            return ret
+        return None
