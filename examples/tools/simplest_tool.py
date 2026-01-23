@@ -66,7 +66,7 @@ with ParalleLLM.resume_directory(
 
         assert len(tool_calls) == 1
         assert tool_calls[0].name == "count_files"
-        msgs.append(resp.to_assistant_message())
+        msgs.append(resp)
 
         computed_tool_output = FunctionCallOutput(
             name=tool_calls[0].name,

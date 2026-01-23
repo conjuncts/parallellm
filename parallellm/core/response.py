@@ -49,15 +49,6 @@ class LLMResponse:
             return self._pr.function_calls
         return []
 
-    def to_assistant_message(self) -> LLMDocument:
-        """Converts the self back into a LLMDocument."""
-        val = self.resolve()
-        if self._pr and self._pr.function_calls:
-            return FunctionCallRequest(
-                text_content=val, calls=self.resolve_function_calls(to_dict=False)
-            )
-        return ("assistant", val)
-
     def __getstate__(self):
         """
         Support for pickling. Only store the call_id since that uniquely identifies the response.

@@ -1,7 +1,19 @@
 from typing import List, Optional, Union
 
 from parallellm.core.response import LLMResponse
-from parallellm.types import LLMDocument
+from parallellm.types import FunctionCallRequest, LLMDocument
+
+
+def _to_assistant_message(resp: LLMResponse) -> LLMDocument:
+    """Converts LLMResponse back into a LLMDocument."""
+    val = resp.resolve()
+    if resp._pr and resp._pr.function_calls:
+        return FunctionCallRequest(
+            text_content=val,
+            calls=resp.resolve_function_calls(to_dict=False),
+            call_id=resp.call_id,
+        )
+    return ("assistant", val)
 
 
 def cast_documents(
@@ -18,4 +30,7 @@ def cast_documents(
     if additional_documents is None:
         additional_documents = []
     result = documents + additional_documents
+    for i, item in enumerate(result):
+        if isinstance(item, LLMResponse):
+            result[i] = _to_assistant_message(item)
     return result

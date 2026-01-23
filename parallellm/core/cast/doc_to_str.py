@@ -22,11 +22,7 @@ def cast_document_to_str(
     if isinstance(doc, str):
         return doc, "text", None
     elif isinstance(doc, FunctionCallRequest):
-        # This is an assistant message that should be stored in the datastore anyway.
-        # TODO: determine whether this should be serialized.
-        # TODO: you could probably store the serial identifier instead
-        # ({agent_name}:{seq_id}:{sess_id})
-        pass
+        return to_serial_id(doc.call_id), "function_call", None
     elif isinstance(doc, FunctionCallOutput):
         return doc.content, "function_call_output", doc.call_id
     elif isinstance(doc, tuple):

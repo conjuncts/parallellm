@@ -156,6 +156,8 @@ class FunctionCallRequest:
     calls: List[FunctionCall]
     """List of function calls."""
 
+    call_id: CallIdentifier
+
     def __repr__(self):
         brief_calls = [
             f"{call.name}({(call.call_id or '')[:8]})" for call in self.calls

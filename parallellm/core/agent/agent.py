@@ -108,9 +108,9 @@ class AgentContext(Askable):
         self._anonymous_counter += 1
 
         if isinstance(documents, MessageState):
-            documents = documents.cast_documents() + list(additional_documents)
-        else:
-            documents = cast_documents(documents, list(additional_documents))
+            documents = list(documents)
+
+        documents = cast_documents(documents, list(additional_documents))
 
         # Compute salt
         salt_terms: list[str] = []

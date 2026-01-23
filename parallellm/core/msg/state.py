@@ -1,7 +1,6 @@
 from collections import UserList
 from typing import TYPE_CHECKING, List, Literal, Optional, Union
 from parallellm.core.ask import Askable
-from parallellm.core.cast.fix_docs import cast_documents
 from parallellm.core.identity import LLMIdentity
 from parallellm.core.response import LLMResponse
 from parallellm.types import LLMDocument, ServerTool
@@ -145,8 +144,8 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
             it should not be resolved until you actually need it.
         """
         if documents is not None:
-            fixed_docs = cast_documents(documents, list(additional_documents))
-            self.extend(fixed_docs)
+            self.extend(documents)
+            self.extend(list(additional_documents))
         out = self._true_agent.ask_llm(
             self,
             instructions=instructions,
@@ -173,16 +172,3 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
         """Persist the current message state to the agent's storage."""
         if self._true_agent:
             self._true_agent._try_persist_msg_state(self)
-
-    def cast_documents(self) -> List[LLMDocument]:
-        """
-        Cast the MessageState to a list of standardized LLMDocuments.
-        """
-        # Convert LLMResponse into corresponding messages
-        result = []
-        for i, doc in enumerate(self):
-            if isinstance(doc, LLMResponse):
-                result.append(doc.to_assistant_message())
-            else:
-                result.append(doc)
-        return result
