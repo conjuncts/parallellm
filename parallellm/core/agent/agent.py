@@ -126,7 +126,7 @@ class AgentContext(Askable):
         hashed = compute_hash(instructions, documents + salt_terms)
 
         if save_input:
-            msg_hashes = [compute_hash(None, msg) for msg in documents]
+            msg_hashes = [compute_hash(None, [msg]) for msg in documents]
             self._bm._backend._get_datastore().store_doc_hash(
                 hashed,
                 instructions=instructions,

@@ -678,11 +678,17 @@ class SQLiteDatastore(Datastore):
             )
 
         for msg, msg_hash in zip(documents, msg_hashes):
-            content, msg_type, msg_extra = cast_document_to_str(msg)
-            self.msg_hash_table.log_kv(
-                msg_hash,
-                {"msg_value": content, "msg_type": msg_type, "msg_extra": msg_extra},
-            )
+            val = cast_document_to_str(msg)
+            if val is not None:
+                content, msg_type, msg_extra = val
+                self.msg_hash_table.log_kv(
+                    msg_hash,
+                    {
+                        "msg_value": content,
+                        "msg_type": msg_type,
+                        "msg_extra": msg_extra,
+                    },
+                )
 
     def store_pending_batch(
         self,

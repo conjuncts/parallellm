@@ -124,7 +124,7 @@ class FunctionCall:
         if isinstance(arguments, str):
             # Parse arg_str to arguments
             self.args = json.loads(arguments)
-            self.arg_str = arguments
+            self.arg_str = json.dumps(arguments)
         else:
             self.args = arguments
             self.arg_str = json.dumps(arguments)
