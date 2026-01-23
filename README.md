@@ -65,7 +65,8 @@ Input storage:
 1. doc_hash <=> list of message hashes (doc_table)
 2. message_hash <=> message_value (message_table)
 
-
+- tool calls for batch mode
+- image as valid document type
 
 ## Philosophy
 

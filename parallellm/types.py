@@ -52,6 +52,12 @@ class CallIdentifier(TypedDict):
     meta: Optional[CallMetadata]
 
 
+def to_serial_id(call_id: CallIdentifier, *, add_sess=True) -> str:
+    if not add_sess:
+        return f"{call_id['agent_name']}:{call_id['seq_id']}"
+    return f"{call_id['agent_name']}:{call_id['seq_id']}:{call_id['session_id']}"
+
+
 @dataclass
 class BatchIdentifier:
     call_ids: List[CallIdentifier]
@@ -206,9 +212,10 @@ LLMDocument = Union[
 Type alias for documents that can be either text or images.
 """
 
-DocumentType = Literal["text", "function_call", "function_call_output"]
+DocumentType = Literal["text", "function_call", "function_call_output", "llm_response"]
 """
 Enum for valid document types. Closely matches OpenAI's document types.
+LLMResponse: Any response from the LLM.
 """
 
 

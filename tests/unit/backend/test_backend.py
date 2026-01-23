@@ -17,7 +17,7 @@ from pathlib import Path
 from parallellm.core.backend.async_backend import AsyncBackend
 from parallellm.core.backend.sync_backend import SyncBackend
 from parallellm.file_io.file_manager import FileManager
-from parallellm.types import ParsedResponse
+from parallellm.types import ParsedResponse, to_serial_id
 
 
 pytest.skip("Takes ~1s", allow_module_level=True)
@@ -223,7 +223,7 @@ class TestSyncBackend:
         assert resp_metadata is not None
 
         # Check that result is stored in pending results
-        key = f"{sample_call_id['doc_hash']}:{sample_call_id['seq_id']}"
+        key = to_serial_id(sample_call_id, add_sess=False)
         assert key in backend._pending_results
         assert backend._pending_results[key] == resp_text
 

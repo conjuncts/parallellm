@@ -15,6 +15,7 @@ from parallellm.types import (
     CommonQueryParameters,
     ParsedResponse,
     CommonQueryParameters,
+    to_serial_id,
 )
 
 if TYPE_CHECKING:
@@ -113,15 +114,15 @@ class SyncBackend(BaseBackend):
             self._ds.store(call_id, parsed, upsert=self._rewrite_cache)
 
             # Store in pending results for immediate retrieval
-            key = f"{doc_hash}:{seq_id}"
-            self._pending_results[key] = parsed.text
+            # key = to_serial_id(call_id, add_sess=False)
+            # self._pending_results[key] = parsed.text
 
             return ReadyLLMResponse(call_id=call_id, pr=parsed)
 
         except Exception as e:
             # Store the exception for later retrieval
-            key = f"{doc_hash}:{seq_id}"
-            self._pending_results[key] = e
+            # key = to_serial_id(call_id, add_sess=False)
+            # self._pending_results[key] = e
             raise
 
     def _poll_changes(self, call_id: CallIdentifier):
@@ -143,13 +144,13 @@ class SyncBackend(BaseBackend):
         """
         # Check if we have a pending result
         # Within one session, doc_hash should not be necessary
-        key = f"{call_id['agent_name']}:{call_id['seq_id']}"
-        if key in self._pending_results:
-            result = self._pending_results[key]
-            if isinstance(result, Exception):
-                raise result
-            # If we have a pending result (which is just text), wrap it in ParsedResponse
-            return ParsedResponse(text=result, response_id=None, metadata=None)
+        # key = to_serial_id(call_id, add_sess=False)
+        # if key in self._pending_results:
+        #     result = self._pending_results[key]
+        #     if isinstance(result, Exception):
+        #         raise result
+        #     # If we have a pending result (which is just text), wrap it in ParsedResponse
+        #     return ParsedResponse(text=result, response_id=None, metadata=None)
 
         # Fall back to datastore
         return self._ds.retrieve(call_id, metadata=metadata)

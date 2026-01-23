@@ -6,6 +6,7 @@ from parallellm.types import (
     FunctionCall,
     FunctionCallOutput,
     FunctionCallRequest,
+    to_serial_id,
 )
 
 
@@ -23,12 +24,16 @@ def cast_document_to_str(
     elif isinstance(doc, FunctionCallRequest):
         # This is an assistant message that should be stored in the datastore anyway.
         # TODO: determine whether this should be serialized.
-        # TODO: you could probably store the unique identifier instead
+        # TODO: you could probably store the serial identifier instead
         # ({agent_name}:{seq_id}:{sess_id})
         pass
     elif isinstance(doc, FunctionCallOutput):
         return doc.content, "function_call_output", doc.call_id
     elif isinstance(doc, tuple):
         return doc[1], "text", doc[0]
+    elif isinstance(doc, LLMResponse):
+        # Serialize based on LLMResponse ID rather than content
+        serial_id = to_serial_id(doc.call_id)
+        return serial_id, "llm_response", None
     else:
         raise NotImplementedError(f"Unknown document type: {type(doc)}")
