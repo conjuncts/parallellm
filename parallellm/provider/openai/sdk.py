@@ -299,13 +299,12 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
             }
 
         body = {
-            "custom_id": custom_id,
             "model": llm.model_name,
             "instructions": instructions,
             "input": fixed_documents,
             **kwargs,
         }
-        return {"method": "POST", "url": "/v1/responses", "body": body}
+        return {"custom_id": custom_id, "method": "POST", "url": "/v1/responses", "body": body}
 
     def prepare_batch_call(
         self,
@@ -371,8 +370,13 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
             text=error_code or "", response_id=custom_id, metadata=body_error
         )
 
-    def get_batch_ids(self, stuff: list[dict]) -> list[str]:
-        return [s["custom_id"] for s in stuff]
+    def get_batch_custom_ids(self, stuff: list[dict]) -> list[str]:
+        custom_ids = []
+        for s in stuff:
+            if not s.get("custom_id"):
+                raise ValueError("Missing custom_id in batch item")
+            custom_ids.append(s["custom_id"])
+        return custom_ids
 
     def submit_batch_to_provider(self, fpath: Path, llm: str) -> str:
         """
@@ -408,6 +412,9 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         batch = self.client.batches.retrieve(batch_uuid)
         err_file_id = batch.error_file_id
         out_file_id = batch.output_file_id
+
+        if batch.errors:
+            raise RuntimeError(f"Batch {batch_uuid} failed with errors: {batch.errors}")
 
         if out_file_id is None and err_file_id is None:
             return []

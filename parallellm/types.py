@@ -130,10 +130,9 @@ class FunctionCall:
         if isinstance(arguments, str):
             # Parse arg_str to arguments
             self.args = json.loads(arguments)
-            self.arg_str = json.dumps(arguments)
         else:
             self.args = arguments
-            self.arg_str = json.dumps(arguments)
+        self.arg_str = json.dumps(self.args)
 
     def __iter__(self):
         """Allow unpacking into tuple for backward compatibility."""
