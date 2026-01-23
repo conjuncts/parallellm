@@ -15,7 +15,6 @@ from parallellm.types import (
     CommonQueryParameters,
     ParsedResponse,
     CommonQueryParameters,
-    to_serial_id,
 )
 
 if TYPE_CHECKING:
@@ -64,9 +63,6 @@ class SyncBackend(BaseBackend):
                 window_seconds=None,
             )
 
-        # Store results directly instead of managing async tasks
-        self._pending_results: Dict[str, Any] = {}
-
     def _get_datastore(self):
         return self._ds
 
@@ -94,36 +90,22 @@ class SyncBackend(BaseBackend):
 
         """Submit a synchronous function call and store the result immediately"""
         doc_hash = call_id["doc_hash"]
-        seq_id = call_id["seq_id"]
 
-        try:
-            # Apply throttling before making the request
-            self._apply_throttling()
+        # Apply throttling before making the request
+        self._apply_throttling()
 
-            self.dashlog.update_hash(doc_hash, HashStatus.SENT)
+        self.dashlog.update_hash(doc_hash, HashStatus.SENT)
 
-            # The below function typically calls the LLM
-            result = provider.prepare_sync_call(
-                params,
-                **kwargs,
-            )
-            self.dashlog.update_hash(doc_hash, HashStatus.RECEIVED)
+        # The below function typically calls the LLM
+        result = provider.prepare_sync_call(
+            params,
+            **kwargs,
+        )
+        self.dashlog.update_hash(doc_hash, HashStatus.RECEIVED)
+        parsed = provider.parse_response(result)
+        self._ds.store(call_id, parsed, upsert=self._rewrite_cache)
 
-            parsed = provider.parse_response(result)
-
-            self._ds.store(call_id, parsed, upsert=self._rewrite_cache)
-
-            # Store in pending results for immediate retrieval
-            # key = to_serial_id(call_id, add_sess=False)
-            # self._pending_results[key] = parsed.text
-
-            return ReadyLLMResponse(call_id=call_id, pr=parsed)
-
-        except Exception as e:
-            # Store the exception for later retrieval
-            # key = to_serial_id(call_id, add_sess=False)
-            # self._pending_results[key] = e
-            raise
+        return ReadyLLMResponse(call_id=call_id, pr=parsed)
 
     def _poll_changes(self, call_id: CallIdentifier):
         """
@@ -137,21 +119,11 @@ class SyncBackend(BaseBackend):
         self, call_id: CallIdentifier, metadata=False
     ) -> Optional[ParsedResponse]:
         """
-        Synchronous retrieve that checks pending results first, then datastore.
+        Synchronous retrieve that checks datastore.
 
         The required fields from call_id are:
         - agent_name, doc_hash, seq_id
         """
-        # Check if we have a pending result
-        # Within one session, doc_hash should not be necessary
-        # key = to_serial_id(call_id, add_sess=False)
-        # if key in self._pending_results:
-        #     result = self._pending_results[key]
-        #     if isinstance(result, Exception):
-        #         raise result
-        #     # If we have a pending result (which is just text), wrap it in ParsedResponse
-        #     return ParsedResponse(text=result, response_id=None, metadata=None)
-
         # Fall back to datastore
         return self._ds.retrieve(call_id, metadata=metadata)
 
@@ -164,7 +136,6 @@ class SyncBackend(BaseBackend):
         """Clean up resources"""
         if hasattr(self._ds, "close"):
             self._ds.close()
-        self._pending_results.clear()
 
     def __del__(self):
         """Clean up resources when the SyncBackend is destroyed"""
