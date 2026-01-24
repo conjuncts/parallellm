@@ -1,5 +1,6 @@
 import json
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Literal, Optional, Union, TYPE_CHECKING
 from parallellm.core.backend import BaseBackend
@@ -22,6 +23,16 @@ from parallellm.types import (
     CohortIdentifier,
     ParsedResponse,
 )
+
+
+@dataclass
+class _BatchRecord:
+    """Private dataclass for organizing batch data"""
+
+    call_ids: List[CallIdentifier] = field(default_factory=list)
+    model_name: Optional[str] = None
+    data: List[dict] = field(default_factory=list)
+    custom_ids: List[str] = field(default_factory=list)
 
 
 class BatchBackend(BaseBackend):
@@ -195,20 +206,15 @@ class BatchBackend(BaseBackend):
         index_groups = _bdr
 
         # dict with keys: call_ids, model_name, stuff, custom_ids
-        batches: list[dict] = []
+        batches: list[_BatchRecord] = []
         for index_gp in index_groups:
-            rowwise = {
-                "call_ids": [],
-                "model_name": None,
-                "data": [],
-                "custom_ids": [],
-            }
+            rowwise = _BatchRecord()
             for i in index_gp:
                 call_id, model_name, stuff = self._batch_buffer[i]
-                rowwise["call_ids"].append(call_id)
-                rowwise["model_name"] = model_name
-                rowwise["data"].append(stuff)
-            rowwise["custom_ids"] = provider.get_batch_custom_ids(rowwise["data"])
+                rowwise.call_ids.append(call_id)
+                rowwise.model_name = model_name
+                rowwise.data.append(stuff)
+            rowwise.custom_ids = provider.get_batch_custom_ids(rowwise.data)
             batches.append(rowwise)
 
         pending_fpaths = []
@@ -225,7 +231,7 @@ class BatchBackend(BaseBackend):
                 # Preview: write them to file, but do not yet submit
                 _saved_already = True
                 for record in batches:
-                    fpath = self._fm.save_batch_in(record["data"])
+                    fpath = self._fm.save_batch_in(record.data)
                     pending_fpaths.append(fpath)
                 special_dl.cprint(f"Batch preview files written to {pending_fpaths[0]}")
                 confirmed = special_dl.confirm_batch_submission(
@@ -239,16 +245,16 @@ class BatchBackend(BaseBackend):
             # else, proceed
         if not _saved_already:
             for record in batches:
-                fpath = self._fm.save_batch_in(record["data"])
+                fpath = self._fm.save_batch_in(record.data)
                 pending_fpaths.append(fpath)
 
         # 3. Submit each batch
         batch_ids = []
         for fpath, record in zip(pending_fpaths, batches):
-            batch_uuid = provider.submit_batch_to_provider(fpath, record["model_name"])
+            batch_uuid = provider.submit_batch_to_provider(fpath, record.model_name)
             ident = BatchIdentifier(
-                call_ids=record["call_ids"],
-                custom_ids=record["custom_ids"],
+                call_ids=record.call_ids,
+                custom_ids=record.custom_ids,
                 batch_uuid=batch_uuid,
             )
             self._ds.store_pending_batch(ident)

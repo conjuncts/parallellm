@@ -8,10 +8,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-class MyModel(BaseModel):
-    final_answer: str
-
-
 tools = [
     {
         "type": "function",
@@ -38,23 +34,17 @@ def ls_tool(directory) -> str:
 with ParalleLLM.resume_directory(
     ".pllm/simplest-tool",
     provider="openai",
-    strategy="batch",
+    strategy="sync",
     log_level=logging.DEBUG,
     # ignore_cache=True,
 ) as pllm:
     with pllm.agent(dashboard=True) as dash:
-        # Structured output
-        # resp = dash.ask_llm(
-        # "Please name a power of 3.", hash_by=["llm"], text_format=MyModel
-        # )
-
         # Tools
         msgs = ["How many files are in '~/examples'? Give the final answer in words."]
         resp = dash.ask_llm(
             msgs,
             hash_by=["llm"],
             tools=tools,
-            # llm="gpt-4o"
         )
 
         dash.print(resp.resolve())
@@ -76,6 +66,3 @@ with ParalleLLM.resume_directory(
 
         resp = dash.ask_llm(msgs + [computed_tool_output], hash_by=["llm"])
         dash.print(resp.resolve())
-        # Should respond by putting it in:
-        # - function_call_output (openai)
-        # - tool_result (anthropic)

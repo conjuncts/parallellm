@@ -175,6 +175,8 @@ class ParalleLLMGateway:
             strategy=strategy,
         )
 
+        logger.info(f"Resuming with session_id={bm.get_session_counter()}")
+
         # try downloading previous batches if any
         if strategy == "batch":
             special_dl.set_display(True)
@@ -186,7 +188,6 @@ class ParalleLLMGateway:
                 # TODO: handle this better
                 exit(0)
 
-        logger.info(f"Resuming with session_id={bm.get_session_counter()}")
         return bm
 
 
