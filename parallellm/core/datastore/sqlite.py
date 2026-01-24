@@ -741,7 +741,7 @@ class SQLiteDatastore(Datastore):
         try:
             # Process each response in the batch
             for i, parsed in enumerate(batch_result.parsed_responses):
-                custom_id = parsed.response_id
+                custom_id = parsed.custom_id
                 # Look up the call_id using custom_id from active batch_pending
                 cursor = conn.execute(
                     """
@@ -781,7 +781,8 @@ class SQLiteDatastore(Datastore):
                     "session_id": session_id,
                     "doc_hash": doc_hash,
                     "response": resp_text,
-                    "response_id": custom_id,  # Use custom_id as response_id for batch results
+                    # "response_id": custom_id,
+                    # NB: response_id column is deprecated
                     "tool_calls": tool_calls_json,
                 }
                 # Insert/upsert the response
@@ -800,7 +801,7 @@ class SQLiteDatastore(Datastore):
                     conn.execute(
                         "INSERT OR REPLACE INTO metadata (response_id, agent_name, seq_id, session_id, metadata, provider_type, tag) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (
-                            custom_id,
+                            response_id,
                             agent_name,
                             seq_id,
                             session_id,

@@ -245,9 +245,8 @@ class ParsedResponse:
 
     function_calls: Optional[List[FunctionCall]] = None
 
-    def __iter__(self):
-        """Allow unpacking into tuple for backward compatibility."""
-        return iter((self.text, self.response_id, self.metadata))
+    custom_id: Optional[str] = None
+    """The unique identifier for this response, only populated in batch requests."""
 
 
 class CommonQueryParameters(TypedDict):

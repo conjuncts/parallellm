@@ -220,7 +220,8 @@ class TestSQLiteBatch:
         parsed_responses = [
             ParsedResponse(
                 text=f"Batch response {i}",
-                response_id=f"tag_custom_{i}",
+                response_id=f"resp_{i}",
+                custom_id=f"tag_custom_{i}",
                 metadata={"batch": True},
             )
             for i in range(1, 3)
@@ -236,7 +237,7 @@ class TestSQLiteBatch:
         # Verify tags are transferred to metadata table
         cursor = conn.execute(
             "SELECT tag FROM metadata WHERE response_id IN (?, ?) ORDER BY response_id",
-            ("tag_custom_1", "tag_custom_2"),
+            ("resp_1", "resp_2"),
         )
         metadata_rows = cursor.fetchall()
         assert len(metadata_rows) == 2
@@ -253,7 +254,8 @@ class TestSQLiteBatch:
         parsed_responses = [
             ParsedResponse(
                 text=f"Batch response {i}",
-                response_id=f"custom_{i}",
+                response_id=f"resp_{i}",
+                custom_id=f"custom_{i}",
                 metadata={"batch": True},
             )
             for i in range(1, 4)

@@ -397,21 +397,11 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
             response_data = result["response"]
             # Use existing parse_response method to handle the response
             parsed = self.parse_response(response_data)
-            # Override response_id with custom_id
-            return ParsedResponse(
-                text=parsed.text,
-                response_id=custom_id,
-                metadata=parsed.metadata,
-                function_calls=parsed.function_calls,
-            )
+            parsed.custom_id = custom_id
+            return parsed
         else:
             # Fallback parsing
-            return ParsedResponse(
-                text=result.get("text", ""),
-                response_id=custom_id,
-                metadata=result,
-                function_calls=[],
-            )
+            raise ValueError("Unexpected gemini response format")
 
     def _decode_gemini_batch_error(
         self, result: dict, custom_id: str
@@ -420,10 +410,12 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
 
         error_info = result.get("error", {})
         error_message = error_info.get("message", "Unknown error")
+        response_id = result.get("response_id", None)
 
         return ParsedResponse(
             text=error_message,
-            response_id=custom_id,
+            response_id=response_id,
+            custom_id=custom_id,
             metadata=error_info,
             function_calls=[],
         )
