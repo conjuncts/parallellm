@@ -44,7 +44,7 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 
 | Tool Calls | Sync | Async | Batch |
 | --- | --- | --- | --- |
-| OpenAI | ✅ | ✅ | TODO |
+| OpenAI | ✅ | ✅ | ✅ |
 | Anthropic | ✅ | ✅ | TODO |
 | Google | ✅ | ✅ | TODO |
 
@@ -67,6 +67,7 @@ Input storage:
 
 - tool calls for batch mode
 - image as valid document type
+- fix tag for batches
 
 ## Philosophy
 

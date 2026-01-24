@@ -10,7 +10,6 @@ from parallellm.provider.base import (
     SyncProvider,
 )
 from parallellm.provider.openai.openai_tools import to_strict_json_schema
-from parallellm.provider.schemas import guess_schema
 from parallellm.types import (
     BatchResult,
     CommonQueryParameters,
@@ -59,12 +58,12 @@ class OpenAIProvider(BaseProvider):
                     )
                 for call in doc.calls:
                     formatted_docs.append(
-                        ResponseFunctionToolCall(
-                            name=call.name,
-                            arguments=call.arg_str,
-                            call_id=call.call_id,
-                            type="function_call",
-                        )
+                        {
+                            "name": call.name,
+                            "arguments": call.arg_str,
+                            "call_id": call.call_id,
+                            "type": "function_call",
+                        }
                     )
             elif isinstance(doc, FunctionCallOutput):
                 msg = {
@@ -150,26 +149,26 @@ class OpenAIProvider(BaseProvider):
                 function_calls = []
                 texts: List[str] = []
                 for output in raw_response.get("output", []):
-                    if output["type"] == "message":
+                    if output["type"] == "function_call":
+                        function_calls.append(
+                            FunctionCall(
+                                name=output["name"],
+                                arguments=output["arguments"],
+                                call_id=output.get("call_id"),
+                            )
+                        )
+                    elif output["type"] == "custom_tool_call":
+                        function_calls.append(
+                            FunctionCall(
+                                name=output["name"],
+                                arguments=output["input"],
+                                call_id=output.get("call_id"),
+                            )
+                        )
+                    elif output["type"] == "message":
                         for content in output["content"]:
                             if content["type"] == "output_text":
                                 texts.append(content["text"])
-                            elif content["type"] == "function_call":
-                                function_calls.append(
-                                    FunctionCall(
-                                        name=content["name"],
-                                        arguments=content["arguments"],
-                                        call_id=content.get("call_id"),
-                                    )
-                                )
-                            elif content["type"] == "custom_tool_call":
-                                function_calls.append(
-                                    FunctionCall(
-                                        name=content["name"],
-                                        arguments=content["input"],
-                                        call_id=content.get("call_id"),
-                                    )
-                                )
                 text = "".join(texts)
 
             resp_id = raw_response.pop("id", None)
@@ -270,18 +269,18 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
     def __init__(self, client: "OpenAI"):
         self.client = client
 
-    def _turn_to_openai_batch(
+    def prepare_batch_call(
         self,
         params: CommonQueryParameters,
         custom_id: str,
         **kwargs,
     ):
+        """Prepare batch call data for OpenAI"""
         instructions = params["instructions"]
         fixed_documents = self._fix_docs_for_openai(params["documents"])
         llm = params["llm"]
         text_format = params.get("text_format")
-        # tools = self._fix_server_tools_for_openai(params.get("tools"))
-        # TODO: verify batch tools
+        tools = self._fix_server_tools_for_openai(params.get("tools"))
 
         if text_format is not None:
             if "text" not in kwargs:
@@ -302,22 +301,15 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
             "model": llm.model_name,
             "instructions": instructions,
             "input": fixed_documents,
+            "tools": tools,
             **kwargs,
         }
-        return {"custom_id": custom_id, "method": "POST", "url": "/v1/responses", "body": body}
-
-    def prepare_batch_call(
-        self,
-        params: CommonQueryParameters,
-        custom_id: str,
-        **kwargs,
-    ):
-        """Prepare batch call data for OpenAI"""
-        return self._turn_to_openai_batch(
-            params,
-            custom_id=custom_id,
-            **kwargs,
-        )
+        return {
+            "custom_id": custom_id,
+            "method": "POST",
+            "url": "/v1/responses",
+            "body": body,
+        }
 
     def _decode_openai_batch_result(self, result: dict) -> ParsedResponse:
         """Decode a single result from OpenAI batch response"""
@@ -333,11 +325,9 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         #   result["response"]["request_id"]
         #   result["response"]["body"]["id"]
 
-        parsed = guess_schema(body, provider_type="openai")
-        # Note: custom_id overrides the response_id from the body
-        return ParsedResponse(
-            text=parsed.text, response_id=custom_id, metadata=parsed.metadata
-        )
+        parsed = self.parse_response(body)
+        parsed.custom_id = custom_id
+        return parsed
 
     def _decode_openai_batch_error(self, result: dict) -> ParsedResponse:
         """Decode a single error from OpenAI batch response
@@ -353,6 +343,7 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         # actually, error_obj is usually None, and the real error is in response.body.error
 
         resp_obj = result.get("response", {})
+        resp_id = (resp_obj.get("body") or {}).get("id", None)
         error_code = resp_obj.get("status_code")
         if error_code is not None:
             error_code = str(error_code)
@@ -360,14 +351,20 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
         if err_obj is not None:
             # unusually, the error is indeed here
             return ParsedResponse(
-                text=error_code or "", response_id=custom_id, metadata=err_obj
+                text=error_code or "",
+                response_id=resp_id,
+                custom_id=custom_id,
+                metadata=err_obj,
             )
 
         # need to retrieve error from response body
         body = resp_obj.get("body", {})
         body_error = body.get("error", {})
         return ParsedResponse(
-            text=error_code or "", response_id=custom_id, metadata=body_error
+            text=error_code or "",
+            response_id=resp_id,
+            custom_id=custom_id,
+            metadata=body_error,
         )
 
     def get_batch_custom_ids(self, stuff: list[dict]) -> list[str]:
