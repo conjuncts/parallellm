@@ -48,7 +48,7 @@ with ParalleLLM.resume_directory(
         )
 
         dash.print(resp.resolve())
-        tool_calls = resp.resolve_function_calls(to_dict=False)
+        tool_calls = resp.resolve_function_calls()
         for call in tool_calls:
             dash.print(
                 f"Tool call: `{call.name}` with args {call.args} call_id {call.call_id}"

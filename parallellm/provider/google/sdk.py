@@ -1,10 +1,8 @@
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Union
-from venv import logger
 from pydantic import BaseModel
 from parallellm.core.identity import LLMIdentity
-from parallellm.file_io.file_manager import FileManager
 from parallellm.provider.base import (
     AsyncProvider,
     BaseProvider,
@@ -27,54 +25,69 @@ from parallellm.types import (
 from google import genai
 from google.genai import types
 
+from parallellm.utils.manip import maybe_snake_to_camel
+
 
 def _fix_docs_for_google(
     documents: Union[LLMDocument, List[LLMDocument]],
-) -> List[Union[dict, types.Content]]:
+) -> List["types.ContentDict"]:
     """Ensure documents are in the correct format for Gemini API"""
     if not isinstance(documents, list):
         documents = [documents]
 
     # For Gemini, we can pass strings directly or convert to proper format
     # The SDK will handle the conversion automatically
-    if len(documents) == 1 and isinstance(documents[0], str):
-        return documents[0]  # Single string can be passed directly
+    # if len(documents) == 1 and isinstance(documents[0], str):
+    # return documents[0]  # Single string can be passed directly
 
     # For multiple documents or mixed types, return as list
-    formatted_docs = []
+    formatted_docs: list[Union[str, "types.ContentDict"]] = []
     for doc in documents:
         if isinstance(doc, str):
-            formatted_docs.append(doc)
+            formatted_docs.append(
+                {
+                    "role": "user",
+                    "parts": [{"text": doc}],
+                }
+            )
         elif isinstance(doc, FunctionCallOutput):
             # https://ai.google.dev/gemini-api/docs/function-calling?example=meeting
-            function_response_part = types.Part(
-                function_response=types.FunctionResponse(
-                    name=doc.name,
-                    response={"output": doc.content},
-                )
-            )
+            function_response_part: "types.PartDict" = {
+                "function_response": {
+                    "name": doc.name,
+                    "response": {"output": doc.content},
+                }
+            }
+            # types.Part()
+            # types.FunctionResponse()
+            # types.Content()
             formatted_docs.append(
-                types.Content(role="user", parts=[function_response_part])
+                {
+                    "parts": [function_response_part],
+                    "role": "user",
+                }
             )
+
         elif isinstance(doc, FunctionCallRequest):
-            parts = []
+            parts: list["types.PartDict"] = []
             if doc.text_content:
-                parts.append(types.Part(text=types.Text(content=doc.text_content)))
-            parts += [
-                types.Part(
-                    function_call=types.FunctionCall(
-                        name=call.name,
-                        args=call.args,
-                        id=call.call_id,
-                    )
+                parts.append({"text": doc.text_content})
+                # parts.append(types.Part(text=types.Text(content=doc.text_content)))
+            for call in doc.calls:
+                parts.append(
+                    {
+                        "function_call": {
+                            "name": call.name,
+                            "args": call.args,
+                            "id": call.call_id,
+                        }
+                    }
                 )
-                for call in doc.calls
-            ]
             formatted_docs.append(
-                types.Content(
-                    role="model",
-                    parts=parts,
-                )
+                {
+                    "role": "model",
+                    "parts": parts,
+                }
             )
         elif isinstance(doc, tuple) and len(doc) == 2:
             # from google.genai.types import Content
@@ -106,22 +119,22 @@ def _fix_docs_for_google(
 
 def _prepare_tool_schema(
     func_schemas: List[Union[dict, ServerTool]],
-) -> List[types.Tool]:
+) -> List["types.ToolDict"]:
     """Convert tool definitions to Google Tool schema"""
 
     # if not isinstance(tools[0], types.Tool):
     #     tools = [types.Tool(function_declarations=[tool]) for tool in tools]
-    google_tools = []
+    google_tools: list["types.ToolDict"] = []
     for sch in func_schemas:
         if isinstance(sch, ServerTool):
+            # kwargs can be specialized tool parameters
+            extra_params: Union[
+                "types.GoogleSearchDict", "types.ToolCodeExecutionDict"
+            ] = sch.kwargs or {}
             if sch.server_tool_type == "web_search":
-                google_tools.append(
-                    types.Tool(google_search=types.GoogleSearch(**sch.kwargs))
-                )
+                google_tools.append({"google_search": extra_params})
             elif sch.server_tool_type == "code_interpreter":
-                google_tools.append(
-                    types.Tool(code_execution=types.ToolCodeExecution(**sch.kwargs))
-                )
+                google_tools.append({"code_execution": extra_params})
             continue
         if isinstance(sch, types.Tool):
             google_tools.append(sch)
@@ -132,8 +145,9 @@ def _prepare_tool_schema(
             sch.pop("type")
 
         # function_declarations = [types.FunctionDeclaration(**tool)]
-        google_tool = types.Tool(function_declarations=[sch])
-        google_tools.append(google_tool)
+        # google_tool = types.Tool(function_declarations=[sch])
+        function_tool: "types.ToolDict" = {"function_declarations": [sch]}
+        google_tools.append(function_tool)
     return google_tools
 
 
@@ -147,7 +161,7 @@ def _prepare_google_config(params: CommonQueryParameters, **kwargs):
 
     contents = _fix_docs_for_google(documents)
 
-    config = kwargs.copy()
+    config: "types.GenerateContentConfigDict" = kwargs.copy()
     if instructions:
         config["system_instruction"] = instructions
 
@@ -244,7 +258,7 @@ class GoogleProvider(BaseProvider):
                             call_id=func_call.id,
                         )
                     )
-            if tools and text is None:
+            if text is None:
                 text = ""  # I guess this can happen
             return ParsedResponse(
                 text=text, response_id=response_id, metadata=obj, function_calls=tools
@@ -264,17 +278,22 @@ class GoogleProvider(BaseProvider):
                 .get("content", {})
                 .get("parts", [])
             ):
-                if "function_call" in part:
+                func_call = None
+                if "functionCall" in part:
+                    func_call = part["functionCall"]
+                elif "function_call" in part:
                     func_call = part["function_call"]
+
+                if func_call:
                     tools.append(
                         FunctionCall(
-                            name=func_call["name"],
-                            arguments=func_call["args"],
-                            call_id=func_call["id"],
+                            name=func_call.get("name"),
+                            arguments=func_call.get("args"),
+                            call_id=func_call.get("id"),
                         )
                     )
 
-            if tools and text_content is None:
+            if text_content is None:
                 text_content = ""  # I guess this can happen
             return ParsedResponse(
                 text=text_content,
@@ -328,51 +347,31 @@ class AsyncGoogleProvider(AsyncProvider, GoogleProvider):
         return coro
 
 
+def _camel_case_items(items: dict) -> dict:
+    """Convert keys in a dictionary to camelCase."""
+    if isinstance(items, list):
+        return [_camel_case_items(item) for item in items]
+    if not isinstance(items, dict):
+        return items
+    return {
+        maybe_snake_to_camel(key): _camel_case_items(value)
+        for key, value in items.items()
+    }
+
+
+def _capitalize_function_decl(items: dict) -> None:
+    """Convert function declaration types to CAPITAL, because enums must be capitalized.
+    MUTATES the object."""
+    if "type" in items:
+        items["type"] = items["type"].upper()
+    if "properties" in items:
+        for k, v in items["properties"].items():
+            _capitalize_function_decl(v)
+
+
 class BatchGoogleProvider(BatchProvider, GoogleProvider):
     def __init__(self, client: "genai.Client"):
         self.client = client
-
-    def _turn_to_gemini_batch(
-        self,
-        params: CommonQueryParameters,
-        custom_id: str,
-        **kwargs,
-    ):
-        """Convert CommonQueryParameters to Gemini batch request format"""
-        instructions = params["instructions"]
-        fixed_documents = _fix_docs_for_google(params["documents"])
-        text_format = params.get("text_format")
-        tools = params.get("tools")
-
-        gen_config = kwargs.copy()
-        config = {}
-        if instructions:
-            config["system_instruction"] = instructions
-
-        if text_format is not None:
-            gen_config["responseMimeType"] = "application/json"
-            if not isinstance(text_format, dict):
-                # pydantic?
-                if getattr(text_format, "model_json_schema", None):
-                    text_format = text_format.model_json_schema()
-            gen_config["responseJsonSchema"] = text_format
-
-        if tools:
-            gen_config["tools"] = _prepare_tool_schema(tools)
-
-        # Gemini batch request format
-        request = {
-            "key": custom_id,
-            "request": {
-                "contents": fixed_documents
-                if isinstance(fixed_documents, list)
-                else [{"parts": [{"text": fixed_documents}], "role": "user"}],
-                **config,
-                "generationConfig": gen_config,
-            },
-        }
-
-        return request
 
     def prepare_batch_call(
         self,
@@ -380,12 +379,30 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
         custom_id: str,
         **kwargs,
     ):
-        """Prepare batch call data for Gemini"""
-        return self._turn_to_gemini_batch(
-            params,
-            custom_id=custom_id,
-            **kwargs,
-        )
+        """Convert CommonQueryParameters to Gemini batch request format"""
+        model_name, fixed_documents, config = _prepare_google_config(params, **kwargs)
+
+        # For some reason, batch API uses slightly different
+        # enums must be capitalized
+        for tool in config.get("tools") or []:
+            for decl in tool.get("function_declarations") or []:
+                if "parameters" in decl:
+                    _capitalize_function_decl(decl["parameters"])
+
+        # Gemini batch request format
+        request = {
+            "key": custom_id,
+            "request": {
+                # https://ai.google.dev/api/batch-api#GenerateContentRequest
+                # "contents": fixed_documents,
+                # **config,
+                "contents": _camel_case_items(fixed_documents),
+                **_camel_case_items(config),
+                # "generationConfig": gen_config,
+            },
+        }
+
+        return request
 
     def _decode_gemini_batch_result(
         self, result: dict, custom_id: str

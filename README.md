@@ -42,11 +42,17 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 | Anthropic | ❌ | ❌ | ❌ |
 | Google | ✅ | ✅ | ✅ |
 
-| Tool Calls | Sync | Async | Batch |
+| Function Calls | Sync | Async | Batch |
 | --- | --- | --- | --- |
 | OpenAI | ✅ | ✅ | ✅ |
 | Anthropic | ✅ | ✅ | TODO |
-| Google | ✅ | ✅ | TODO |
+| Google | ✅ | ✅ | ✅ |
+
+| Web Search | Sync | Async | Batch |
+| --- | --- | --- | --- |
+| OpenAI | ✅ | ✅ | ✅ |
+| Anthropic | ✅ | ✅ | TODO |
+| Google | ✅ | ✅ | ✅ |
 
 
 ## TODO

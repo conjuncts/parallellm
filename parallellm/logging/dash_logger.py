@@ -69,11 +69,11 @@ class DashboardLogger:
         self._status_colors = {
             HashStatus.CACHED: Fore.GREEN,
             HashStatus.SENT: Fore.CYAN,
-            HashStatus.SENT_BATCH: Fore.BLUE,
+            HashStatus.SENT_BATCH: Fore.CYAN,
             HashStatus.RECEIVED: Fore.GREEN,
             HashStatus.RECEIVED_BATCH: Fore.MAGENTA,
             HashStatus.STORED: Fore.GREEN,
-            HashStatus.STORED_BATCH: Fore.MAGENTA,
+            HashStatus.STORED_BATCH: Fore.GREEN,
             HashStatus.STORED_ERROR_BATCH: Fore.MAGENTA,
         }
 
