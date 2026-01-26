@@ -234,7 +234,7 @@ class GoogleProvider(BaseProvider):
         if isinstance(raw_response, BaseModel):
             # Pydantic model (e.g., google.genai.types.GenerateContentResponse)
 
-            response: types.GenerateContentResponse = raw_response
+            response: "types.GenerateContentResponse" = raw_response
             # Suppress warning
             # text = response.text
             text = _extract_text_from_gemini_model(response)
@@ -250,7 +250,7 @@ class GoogleProvider(BaseProvider):
 
             for part in response.candidates[0].content.parts or []:
                 if part.function_call:
-                    func_call: types.FunctionCall = part.function_call
+                    func_call: "types.FunctionCall" = part.function_call
                     tools.append(
                         FunctionCall(
                             name=func_call.name,
@@ -353,10 +353,19 @@ def _camel_case_items(items: dict) -> dict:
         return [_camel_case_items(item) for item in items]
     if not isinstance(items, dict):
         return items
-    return {
-        maybe_snake_to_camel(key): _camel_case_items(value)
-        for key, value in items.items()
-    }
+
+    result = {}
+    for k, v in items.items():
+        if k == "properties":
+            # each key in properties is custom, and should be untouched
+            result[k] = {
+                prop_k: _camel_case_items(prop_v) for prop_k, prop_v in v.items()
+            }
+
+        else:
+            result[maybe_snake_to_camel(k)] = _camel_case_items(v)
+
+    return result
 
 
 def _capitalize_function_decl(items: dict) -> None:
@@ -381,6 +390,20 @@ class BatchGoogleProvider(BatchProvider, GoogleProvider):
     ):
         """Convert CommonQueryParameters to Gemini batch request format"""
         model_name, fixed_documents, config = _prepare_google_config(params, **kwargs)
+
+        # some differences: generationConfig
+        # convert pydantic schema -> json
+        gen_config = {}
+        if "response_schema" in config:
+            sch = config.pop("response_schema")
+            if not isinstance(sch, dict):
+                if getattr(sch, "model_json_schema", None):
+                    sch = sch.model_json_schema()
+            gen_config["responseJsonSchema"] = sch
+        if "response_mime_type" in config:
+            gen_config["responseMimeType"] = config.pop("response_mime_type")
+        if gen_config:
+            config["generationConfig"] = gen_config
 
         # For some reason, batch API uses slightly different
         # enums must be capitalized

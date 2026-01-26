@@ -25,7 +25,11 @@ class TestGeminiDocumentFormatting:
         """Test fixing a single string document"""
         result = _fix_docs_for_google("Hello world")
 
-        assert result == "Hello world"  # Single strings are passed directly
+        assert len(result) == 1
+        assert result[0] == {
+            "role": "user",
+            "parts": [{"text": "Hello world"}]
+        }
 
     def test_fix_docs_list_of_strings(self):
         """Test fixing a list of string documents"""
@@ -34,8 +38,14 @@ class TestGeminiDocumentFormatting:
 
         assert isinstance(result, list)
         assert len(result) == 2
-        assert result[0] == "First message"
-        assert result[1] == "Second message"
+        assert result[0] == {
+            "role": "user",
+            "parts": [{"text": "First message"}]
+        }
+        assert result[1] == {
+            "role": "user",
+            "parts": [{"text": "Second message"}]
+        }
 
 
 class TestGeminiProviders:
