@@ -9,13 +9,12 @@ Tests the Gemini provider functionality including:
 
 from dotenv import load_dotenv
 import pytest
-from parallellm.core.identity import LLMIdentity
+from parallellm.types import LLMIdentity
 from parallellm.provider.google.sdk import (
     SyncGoogleProvider,
     _fix_docs_for_google,
     GoogleProvider,
 )
-from parallellm.types import CallIdentifier
 
 
 class TestGeminiDocumentFormatting:

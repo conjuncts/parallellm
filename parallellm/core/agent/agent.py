@@ -3,10 +3,8 @@ from parallellm.core.ask import Askable
 from parallellm.core.cast.fix_docs import cast_documents
 from parallellm.core.exception import NotAvailable
 from parallellm.core.hash import compute_hash
-from parallellm.core.identity import LLMIdentity
 from parallellm.core.msg.state import MessageState
 from parallellm.core.response import (
-    LLMResponse,
     ReadyLLMResponse,
 )
 from parallellm.logging.dash_logger import HashStatus
@@ -15,6 +13,8 @@ from parallellm.types import (
     CallIdentifier,
     CommonQueryParameters,
     LLMDocument,
+    LLMIdentity,
+    LLMResponse,
     ServerTool,
 )
 

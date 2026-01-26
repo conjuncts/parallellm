@@ -1,16 +1,15 @@
 from typing import TYPE_CHECKING, List, Optional, Union
 from pydantic import BaseModel
-from parallellm.core.identity import LLMIdentity
 from parallellm.provider.base import AsyncProvider, BaseProvider, SyncProvider
 from parallellm.types import (
     ParsedResponse,
     CommonQueryParameters,
-    CallIdentifier,
-    LLMDocument,
-    ServerTool,
     FunctionCallRequest,
     FunctionCallOutput,
     FunctionCall,
+    LLMDocument,
+    LLMIdentity,
+    ServerTool,
 )
 
 if TYPE_CHECKING:

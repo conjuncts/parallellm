@@ -1,7 +1,11 @@
-from parallellm.types import CallIdentifier
+from typing import TYPE_CHECKING
 
 
-def _call_to_concise_dict(call: CallIdentifier) -> dict:
+if TYPE_CHECKING:
+    from parallellm.types import CallIdentifier
+
+
+def _call_to_concise_dict(call: "CallIdentifier") -> dict:
     """Convert CallIdentifier to the minimum dict"""
     return {
         "agent_name": call.get("agent_name"),
@@ -10,14 +14,14 @@ def _call_to_concise_dict(call: CallIdentifier) -> dict:
     }
 
 
-def _concise_dict_to_call(d: dict) -> CallIdentifier:
+def _concise_dict_to_call(d: dict) -> "CallIdentifier":
     """Convert concise dict back to CallIdentifier. Mutates in place."""
     d.setdefault("session_id", None)
     d.setdefault("meta", {"provider_type": None, "tag": None})
     return d
 
 
-def _call_matches(c1: CallIdentifier, c2: CallIdentifier) -> bool:
+def _call_matches(c1: "CallIdentifier", c2: "CallIdentifier") -> bool:
     """
     Given c1 and c2, compares agent_name, doc_hash, seq_id but NOT session_id.
 

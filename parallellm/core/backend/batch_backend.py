@@ -5,8 +5,6 @@ from pathlib import Path
 from typing import List, Literal, Optional, Union, TYPE_CHECKING
 from parallellm.core.backend import BaseBackend
 from parallellm.core.datastore.sqlite import SQLiteDatastore
-from parallellm.core.exception import NotAvailable
-from parallellm.core.identity import LLMIdentity
 from parallellm.core.response import BatchLLMResponse
 from parallellm.file_io.file_manager import FileManager
 from parallellm.logging.dash_logger import (
@@ -18,10 +16,10 @@ from parallellm.provider.base import BatchProvider
 from parallellm.types import (
     BatchIdentifier,
     BatchResult,
-    BatchStatus,
     CallIdentifier,
     CommonQueryParameters,
     CohortIdentifier,
+    LLMIdentity,
     ParsedResponse,
 )
 
@@ -144,8 +142,6 @@ class BatchBackend(BaseBackend):
 
         :param call_id: The call identifier
         :param stuff: Arbitrary data needed to make the call later. Should be a dict.
-
-        :raises NotAvailable: If the call_id is already in a pending batch
         """
         # If call is already in a pending batch,
         # do not add it again

@@ -1,11 +1,11 @@
 from typing import Literal, Union
-from parallellm.core.response import LLMResponse
 from parallellm.types import (
     DocumentType,
     LLMDocument,
     FunctionCall,
     FunctionCallOutput,
     FunctionCallRequest,
+    LLMResponse,
     to_serial_id,
 )
 

@@ -13,8 +13,7 @@ import json
 
 from PIL import Image
 
-if TYPE_CHECKING:
-    from parallellm.core.identity import LLMIdentity
+from parallellm.utils.hardcoded import guess_provider_and_name
 
 
 class AgentMetadata(TypedDict):
@@ -249,6 +248,37 @@ class ParsedResponse:
     """The unique identifier for this response, only populated in batch requests."""
 
 
+class LLMIdentity:
+    def __init__(
+        self,
+        identity: str,
+        *,
+        provider: Optional[ProviderType] = None,
+        model_name: Optional[str] = None,
+    ):
+        """
+        Identify a specific LLM agent.
+
+        :param identity: The identity string of the LLM.
+            Can be a canonical name, like "gpt-4o-mini", or a convenient
+            nickname like "alex".
+        :param provider: The provider of the LLM, if known. For instance, "openai".
+        :param model_name: If a nickname is used for identity, the actual model name.
+        """
+        self.identity = identity
+
+        if provider is None:
+            # do some guessing
+            provider, model_name = guess_provider_and_name(identity)
+        elif model_name is None:
+            # if provider is given but not model_name, assume identity is model_name
+            model_name = identity
+        # else: both provider and model_name are given, use as-is
+
+        self.provider = provider
+        self.model_name = model_name
+
+
 class CommonQueryParameters(TypedDict):
     """
     Common parameters for LLM calls across providers.
@@ -295,3 +325,59 @@ class ParsedError:
 
     metadata: Optional[dict]
     """Additional metadata from the provider (usage stats, model info, etc.)."""
+
+
+class LLMResponse:
+    """
+    Any response outputted by an LLM. **You must call resolve() to obtain the final value.**
+    """
+
+    def __init__(self, value: str, *, call_id: CallIdentifier = None):
+        self.value = value
+        self.call_id = call_id
+        self._pr: Optional[ParsedResponse] = None
+
+    def resolve(self) -> str:
+        """
+        Resolve the response to a string.
+
+        :returns: The resolved string response. If this value is not available,
+            execution should stop gracefully and proceed to the next batch.
+        """
+        return self.value
+
+    def resolve_json(self) -> dict:
+        """
+        Resolve the response to a JSON object.
+
+        :returns: The resolved JSON response. If this value is not available,
+            execution should stop gracefully and proceed to the next batch.
+        """
+
+        value = self.resolve()
+        return json.loads(value)
+
+    def resolve_function_calls(self, to_dict=False) -> list[FunctionCall]:
+        """
+        Resolve function calls (tool calls to user-defined functions) associated with this response.
+
+        :param to_dict: Whether to parse the function calls' arguments into dictionaries (if they're JSON strings)
+        :returns: A list of FunctionCall objects
+        """
+        if self._pr and self._pr.function_calls:
+            # cast and jsonify if needed
+            return self._pr.function_calls
+        return []
+
+    def __repr__(self):
+        v = self.value
+        if v and len(v) > 50:
+            v = v[:47] + "..."
+        return (
+            f"{self.__class__.__name__}({v!r}, doc_hash={self.call_id['doc_hash'][:8]})"
+        )
+
+    def __str__(self):
+        if self.value is not None:
+            return self.value
+        return repr(self)

@@ -139,7 +139,7 @@ Chymotrypsin
                     responses_round.append(resp)
                 else:
                     # Odd number - this team advances automatically
-                    from parallellm.core.response import LLMResponse
+                    from parallellm.types import LLMResponse
 
                     responses_round.append(LLMResponse(teams[i]))
 

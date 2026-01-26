@@ -3,7 +3,7 @@ import time
 from parallellm.core.gateway import ParalleLLM
 from dotenv import load_dotenv
 
-from parallellm.core.response import LLMResponse
+from parallellm.types import LLMResponse
 
 start = time.time()
 load_dotenv()

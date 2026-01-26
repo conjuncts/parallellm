@@ -1,7 +1,6 @@
 from typing import List, Optional, Union
 
-from parallellm.core.response import LLMResponse
-from parallellm.types import FunctionCallRequest, LLMDocument
+from parallellm.types import FunctionCallRequest, LLMDocument, LLMResponse
 
 
 def _to_assistant_message(resp: LLMResponse) -> LLMDocument:

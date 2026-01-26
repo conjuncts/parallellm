@@ -8,8 +8,8 @@ Tests the LLM identity system including:
 - Default provider behavior
 """
 
-from parallellm.core.identity import LLMIdentity
-from parallellm.provider.hardcoded import guess_provider, guess_provider_and_name
+from parallellm.types import LLMIdentity
+from parallellm.utils.hardcoded import guess_provider, guess_provider_and_name
 
 
 def test_identity_with_guessed_provider():
