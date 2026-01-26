@@ -82,7 +82,7 @@ class SyncBackend(BaseBackend):
         *,
         call_id: CallIdentifier,
         **kwargs,
-    ):
+    ) -> ReadyLLMResponse:
         """
         New control flow: Backend calls provider to get callable, then executes it.
         This inverts control from provider calling backend.

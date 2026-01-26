@@ -1,14 +1,15 @@
 import json
-from typing import Optional
-from parallellm.core.backend import BaseBackend
+from typing import TYPE_CHECKING, Optional
 from parallellm.core.calls import _call_to_concise_dict, _concise_dict_to_call
+from parallellm.core.exception import NotAvailable
 from parallellm.types import (
     CallIdentifier,
-    LLMDocument,
     ParsedResponse,
-    FunctionCallRequest,
     FunctionCall,
 )
+
+if TYPE_CHECKING:
+    from parallellm.core.backend import BaseBackend
 
 
 class LLMResponse:
@@ -85,7 +86,7 @@ class PendingLLMResponse(LLMResponse):
     def __init__(
         self,
         call_id: CallIdentifier,
-        backend: BaseBackend,
+        backend: "BaseBackend",
     ):
         super().__init__(value=None, call_id=call_id)
         self._backend = backend
@@ -118,3 +119,19 @@ class ReadyLLMResponse(LLMResponse):
     ):
         super().__init__(value=pr.text if pr else value, call_id=call_id)
         self._pr = pr
+
+
+class BatchLLMResponse(LLMResponse):
+    """
+    A response that is pending and cannot be resolved due to being
+    sent in a batch.
+    """
+
+    def __init__(
+        self,
+        call_id: CallIdentifier,
+    ):
+        super().__init__(value=None, call_id=call_id)
+
+    def resolve(self):
+        raise NotAvailable()

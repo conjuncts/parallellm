@@ -157,7 +157,7 @@ class AsyncBackend(BaseBackend):
         *,
         call_id: CallIdentifier,
         **kwargs,
-    ):
+    ) -> PendingLLMResponse:
         """
         New control flow: Backend calls provider to get coroutine, then executes it.
         This inverts control from provider calling backend.
