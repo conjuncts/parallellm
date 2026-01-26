@@ -104,7 +104,12 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
 
     def ask_llm(
         self,
-        documents: Union[LLMDocument, List[LLMDocument], "MessageState"] = None,
+        documents: Union[
+            LLMDocument,
+            LLMResponse,
+            List[Union[LLMDocument, LLMResponse]],
+            "MessageState",
+        ] = None,
         *additional_documents: LLMDocument,
         instructions: Optional[str] = None,
         llm: Union[LLMIdentity, str, None] = None,

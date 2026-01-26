@@ -39,7 +39,7 @@ class TestDocumentFixing:
 
     def test_fix_docs_single_string(self):
         """Test fixing a single string document"""
-        result = _fix_docs_for_openai("Hello world")
+        result = _fix_docs_for_openai(["Hello world"])
 
         assert isinstance(result, list)
         assert len(result) == 1

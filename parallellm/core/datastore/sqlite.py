@@ -20,6 +20,7 @@ from parallellm.types import (
     BatchResult,
     CallIdentifier,
     LLMDocument,
+    LLMResponse,
     ParsedError,
     ParsedResponse,
 )
@@ -657,9 +658,9 @@ class SQLiteDatastore(Datastore):
         doc_hash: str,
         *,
         instructions: Optional[str],
-        documents: Union[LLMDocument, List[LLMDocument], MessageState],
-        salt_terms: list[str],
+        msgs: List[Union[LLMDocument, LLMResponse]],
         msg_hashes: list[str],
+        salt_terms: list[str],
     ):
         self.doc_hash_table.log_kv(
             doc_hash,
@@ -669,15 +670,13 @@ class SQLiteDatastore(Datastore):
                 "salt_terms": salt_terms,
             },
         )
-        if not isinstance(documents, (list, MessageState)):
-            documents = [documents]
 
-        if len(documents) != len(msg_hashes):
+        if len(msgs) != len(msg_hashes):
             raise ValueError(
-                f"Number of documents ({len(documents)}) must equal number of hashes ({len(msg_hashes)})"
+                f"Number of documents ({len(msgs)}) must equal number of hashes ({len(msg_hashes)})"
             )
 
-        for msg, msg_hash in zip(documents, msg_hashes):
+        for msg, msg_hash in zip(msgs, msg_hashes):
             val = cast_document_to_str(msg)
             if val is not None:
                 content, msg_type, msg_extra = val

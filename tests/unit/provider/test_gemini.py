@@ -22,7 +22,7 @@ class TestGeminiDocumentFormatting:
 
     def test_fix_docs_single_string(self):
         """Test fixing a single string document"""
-        result = _fix_docs_for_google("Hello world")
+        result = _fix_docs_for_google(["Hello world"])
 
         assert len(result) == 1
         assert result[0] == {"role": "user", "parts": [{"text": "Hello world"}]}

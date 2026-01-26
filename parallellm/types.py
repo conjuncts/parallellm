@@ -285,7 +285,7 @@ class CommonQueryParameters(TypedDict):
     """
 
     instructions: Optional[str]
-    documents: Union[LLMDocument, List[LLMDocument]]
+    strict_documents: List[LLMDocument]
     llm: "LLMIdentity"
     text_format: Optional[dict]
     tools: Optional[List[dict]]
@@ -346,18 +346,7 @@ class LLMResponse:
         """
         return self.value
 
-    def resolve_json(self) -> dict:
-        """
-        Resolve the response to a JSON object.
-
-        :returns: The resolved JSON response. If this value is not available,
-            execution should stop gracefully and proceed to the next batch.
-        """
-
-        value = self.resolve()
-        return json.loads(value)
-
-    def resolve_function_calls(self, to_dict=False) -> list[FunctionCall]:
+    def resolve_function_calls(self) -> list[FunctionCall]:
         """
         Resolve function calls (tool calls to user-defined functions) associated with this response.
 

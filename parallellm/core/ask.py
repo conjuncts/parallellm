@@ -14,7 +14,12 @@ class Askable(ABC):
 
     def ask_llm(
         self,
-        documents: Union[LLMDocument, List[LLMDocument], "MessageState"],
+        documents: Union[
+            LLMDocument,
+            LLMResponse,
+            List[Union[LLMDocument, LLMResponse]],
+            "MessageState",
+        ],
         *additional_documents: LLMDocument,
         instructions: Optional[str] = None,
         llm: Union[LLMIdentity, str, None] = None,

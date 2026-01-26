@@ -57,7 +57,7 @@ with ParalleLLM.resume_directory(
             # llm="gpt-4o"
         )
 
-        tool_calls = resp.resolve_function_calls(to_dict=False)
+        tool_calls = resp.resolve_function_calls()
         assert len(tool_calls) == 1
         assert tool_calls[0].name == "count_files"
 

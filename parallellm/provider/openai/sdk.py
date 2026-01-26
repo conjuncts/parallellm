@@ -34,11 +34,9 @@ class OpenAIProvider(BaseProvider):
 
     def _fix_docs_for_openai(
         self,
-        documents: Union[LLMDocument, List[LLMDocument]],
+        documents: List[LLMDocument],
     ) -> "List[Message]":
         """Ensure documents are in the correct format for OpenAI API"""
-        if not isinstance(documents, list):
-            documents = [documents]
 
         formatted_docs = []
         for doc in documents:
@@ -194,7 +192,7 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
     ):
         """Prepare a synchronous callable for OpenAI API"""
         instructions = params["instructions"]
-        documents = self._fix_docs_for_openai(params["documents"])
+        fixed_documents = self._fix_docs_for_openai(params["strict_documents"])
         llm = params["llm"]
         text_format = params.get("text_format")
         tools = self._fix_server_tools_for_openai(params.get("tools"))
@@ -203,7 +201,7 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
             return self.client.responses.parse(
                 model=llm.model_name,
                 instructions=instructions,
-                input=documents,
+                input=fixed_documents,
                 text_format=text_format,
                 tools=tools,
                 **kwargs,
@@ -222,7 +220,7 @@ class SyncOpenAIProvider(SyncProvider, OpenAIProvider):
         return self.client.responses.create(
             model=llm.model_name,
             instructions=instructions,
-            input=documents,
+            input=fixed_documents,
             tools=tools,
             **kwargs,
         )
@@ -239,7 +237,7 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
     ):
         """Prepare an async coroutine for OpenAI API"""
         instructions = params["instructions"]
-        documents = self._fix_docs_for_openai(params["documents"])
+        fixed_documents = self._fix_docs_for_openai(params["strict_documents"])
         llm = params["llm"]
         text_format = params.get("text_format")
         tools = self._fix_server_tools_for_openai(params.get("tools"))
@@ -248,7 +246,7 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
             coro = self.client.responses.parse(
                 model=llm.model_name,
                 instructions=instructions,
-                input=documents,
+                input=fixed_documents,
                 text_format=text_format,
                 tools=tools,
                 **kwargs,
@@ -257,7 +255,7 @@ class AsyncOpenAIProvider(AsyncProvider, OpenAIProvider):
             coro = self.client.responses.create(
                 model=llm.model_name,
                 instructions=instructions,
-                input=documents,
+                input=fixed_documents,
                 tools=tools,
                 **kwargs,
             )
@@ -277,7 +275,7 @@ class BatchOpenAIProvider(BatchProvider, OpenAIProvider):
     ):
         """Prepare batch call data for OpenAI"""
         instructions = params["instructions"]
-        fixed_documents = self._fix_docs_for_openai(params["documents"])
+        fixed_documents = self._fix_docs_for_openai(params["strict_documents"])
         llm = params["llm"]
         text_format = params.get("text_format")
         tools = self._fix_server_tools_for_openai(params.get("tools"))

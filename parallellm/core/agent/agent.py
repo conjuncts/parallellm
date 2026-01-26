@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, List, Literal, Optional, Union
 from parallellm.core.ask import Askable
-from parallellm.core.cast.fix_docs import cast_documents
+from parallellm.core.cast.fix_docs import cast_documents, reduce_to_list
 from parallellm.core.exception import NotAvailable
 from parallellm.core.hash import compute_hash
 from parallellm.core.msg.state import MessageState
@@ -82,7 +82,12 @@ class AgentContext(Askable):
 
     def ask_llm(
         self,
-        documents: Union[LLMDocument, List[LLMDocument], MessageState],
+        documents: Union[
+            LLMDocument,
+            LLMResponse,
+            List[Union[LLMDocument, LLMResponse]],
+            MessageState,
+        ],
         *additional_documents: LLMDocument,
         instructions: Optional[str] = None,
         llm: Union[LLMIdentity, str, None] = None,
@@ -110,7 +115,8 @@ class AgentContext(Askable):
         if isinstance(documents, MessageState):
             documents = list(documents)
 
-        documents = cast_documents(documents, list(additional_documents))
+        documents = reduce_to_list(documents, list(additional_documents))
+        strict_documents = cast_documents(documents)
 
         # Compute salt
         salt_terms: list[str] = []
@@ -123,14 +129,14 @@ class AgentContext(Askable):
                         salt_terms.append(llm.identity)
                     else:
                         salt_terms.append(self._bm._provider.provider_type)
-        hashed = compute_hash(instructions, documents + salt_terms)
+        hashed = compute_hash(instructions, strict_documents + salt_terms)
 
         if save_input:
-            msg_hashes = [compute_hash(None, [msg]) for msg in documents]
+            msg_hashes = [compute_hash(None, [msg]) for msg in strict_documents]
             self._bm._backend._get_datastore().store_doc_hash(
                 hashed,
                 instructions=instructions,
-                documents=documents,
+                msgs=documents,
                 salt_terms=salt_terms,
                 msg_hashes=msg_hashes,
             )
@@ -164,7 +170,7 @@ class AgentContext(Askable):
 
         params: CommonQueryParameters = {
             "instructions": instructions,
-            "documents": documents,
+            "strict_documents": strict_documents,
             "llm": llm,
             "text_format": text_format,
             "tools": tools,

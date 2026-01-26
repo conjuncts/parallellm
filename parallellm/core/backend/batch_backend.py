@@ -107,17 +107,6 @@ class BatchBackend(BaseBackend):
     ) -> Optional[ParsedResponse]:
         return self._ds.retrieve(call_id, metadata=metadata)
 
-    def store_doc_hash(
-        self, doc_hash, *, instructions, documents, salt_terms, msg_hashes
-    ):
-        return self._ds.store_doc_hash(
-            doc_hash,
-            instructions=instructions,
-            documents=documents,
-            salt_terms=salt_terms,
-            msg_hashes=msg_hashes,
-        )
-
     def close(self):
         """Clean up resources"""
         if hasattr(self._ds, "close"):

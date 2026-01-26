@@ -6,6 +6,7 @@ from parallellm.types import (
     BatchResult,
     CallIdentifier,
     LLMDocument,
+    LLMResponse,
     ParsedError,
     ParsedResponse,
 )
@@ -84,9 +85,9 @@ class Datastore(ABC):
         doc_hash: str,
         *,
         instructions: Optional[str],
-        documents: Union[LLMDocument, List[LLMDocument], "MessageState"],
-        salt_terms: list[str],
+        msgs: List[Union[LLMDocument, LLMResponse]],
         msg_hashes: list[str],
+        salt_terms: list[str],
     ):
         pass
 

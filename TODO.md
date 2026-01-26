@@ -38,6 +38,8 @@ Input storage:
 - [ ] image as valid document type
 - [ ] fix tag for batches
 
+- [ ] the doc_hash/msg_hash naming convention is kinda backward due to history
+
 - [ ] resolve_all
 - [ ] export_all
 - [ ] import batch.zip

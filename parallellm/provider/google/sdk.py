@@ -27,11 +27,9 @@ from parallellm.utils.manip import maybe_snake_to_camel
 
 
 def _fix_docs_for_google(
-    documents: Union[LLMDocument, List[LLMDocument]],
+    documents: List[LLMDocument],
 ) -> List["types.ContentDict"]:
     """Ensure documents are in the correct format for Gemini API"""
-    if not isinstance(documents, list):
-        documents = [documents]
 
     # For Gemini, we can pass strings directly or convert to proper format
     # The SDK will handle the conversion automatically
@@ -152,12 +150,11 @@ def _prepare_tool_schema(
 def _prepare_google_config(params: CommonQueryParameters, **kwargs):
     """Prepare config and contents for Google API calls"""
     instructions = params["instructions"]
-    documents = params["documents"]
     llm = params["llm"]
     text_format = params.get("text_format")
     tools = params.get("tools")
 
-    contents = _fix_docs_for_google(documents)
+    contents = _fix_docs_for_google(params["strict_documents"])
 
     config: "types.GenerateContentConfigDict" = kwargs.copy()
     if instructions:

@@ -18,11 +18,9 @@ if TYPE_CHECKING:
 
 
 def _fix_docs_for_anthropic(
-    documents: Union[LLMDocument, List[LLMDocument]],
+    documents: List[LLMDocument],
 ) -> List[dict]:
     """Ensure documents are in the correct format for Anthropic API"""
-    if not isinstance(documents, list):
-        documents = [documents]
 
     formatted_docs = []
     for doc in documents:
@@ -102,14 +100,13 @@ def _fix_docs_for_anthropic(
 def _prepare_anthropic_config(params: CommonQueryParameters, **kwargs) -> tuple:
     """Prepare config and messages for Anthropic API calls"""
     instructions = params["instructions"]
-    documents = params["documents"]
     llm = params["llm"]
     tools = params.get("tools")
 
     if tools:
         tools = _prepare_tool_schema(tools)
 
-    messages = _fix_docs_for_anthropic(documents)
+    messages = _fix_docs_for_anthropic(params["strict_documents"])
 
     config = kwargs.copy()
     if instructions:
