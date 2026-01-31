@@ -1,9 +1,10 @@
 import logging
 
 from pydantic import BaseModel
-from parallellm.core.gateway import ParalleLLM
 from dotenv import load_dotenv
+from PIL import Image
 
+from parallellm.core.gateway import ParalleLLM
 from parallellm.tools.server import WebSearchTool
 
 load_dotenv()
@@ -55,7 +56,10 @@ with ParalleLLM.resume_directory(
             "What is the capital of France?", hash_by=["llm"], text_format=MyModel
         )
 
-        for resp in [resp1, resp2, resp3, resp4]:
+        img = Image.open("tests/data/images/Nokota_Horses_cropped.jpg")
+        resp5 = dash.ask_llm("What animal is this?", img, hash_by=["llm"])
+
+        for resp in [resp1, resp2, resp3, resp4, resp5]:
             if fcs := resp.resolve_function_calls():
                 for fc in fcs:
                     dash.print(f"function_call {fc.name} {fc.args} {fc.call_id}")

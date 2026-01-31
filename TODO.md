@@ -35,8 +35,9 @@ Input storage:
 - [x] doc_hash <=> list of message hashes (doc_table)
 - [x] message_hash <=> message_value (message_table)
 - [x] tool calls for batch mode
-- [ ] image as valid document type
+- [x] image as valid document type
 - [ ] fix tag for batches
+- [ ] roll up messages when several consecutive come from the same role
 
 - [ ] the doc_hash/msg_hash naming convention is kinda backward due to history
 

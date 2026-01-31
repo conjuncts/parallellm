@@ -32,6 +32,12 @@
 | Anthropic | ✅ | ✅ | TODO |
 | Google | ✅ | ✅ | ✅ |
 
+| Image Input | Sync | Async | Batch |
+| --- | --- | --- | --- |
+| OpenAI | ✅ | ✅? | ✅? |
+| Anthropic | ✅ | ✅? | TODO |
+| Google | ✅ | ✅? | ✅? |
+
 
 
 ## Philosophy

@@ -23,6 +23,7 @@ from parallellm.types import (
 from google import genai
 from google.genai import types
 
+from parallellm.utils.image import get_image_type, image_to_b64, is_image
 from parallellm.utils.manip import maybe_snake_to_camel
 
 
@@ -107,6 +108,20 @@ def _fix_docs_for_google(
                 formatted_docs.append(doc)
             else:
                 raise ValueError(f"Invalid document dict format for Google: {doc}")
+        elif is_image(doc):
+            formatted_docs.append(
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "inline_data": {
+                                "mime_type": get_image_type(doc),
+                                "data": image_to_b64(doc),
+                            }
+                        }
+                    ],
+                }
+            )
         else:
             raise ValueError(f"Unsupported document type: {type(doc)}")
 

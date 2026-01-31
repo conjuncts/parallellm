@@ -11,7 +11,6 @@ Tests the core hashing and caching functionality including:
 import pytest
 from unittest.mock import Mock, patch
 import hashlib
-from io import BytesIO
 from PIL import Image
 from parallellm.core.hash import compute_hash
 from parallellm.logging.dash_logger import DashboardLogger, HashStatus

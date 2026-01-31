@@ -11,6 +11,7 @@ from parallellm.types import (
     LLMIdentity,
     ServerTool,
 )
+from parallellm.utils.image import get_image_type, image_to_b64, is_image
 
 if TYPE_CHECKING:
     from anthropic import Anthropic, AsyncAnthropic
@@ -90,6 +91,23 @@ def _fix_docs_for_anthropic(
             if "role" in doc and "content" in doc:
                 formatted_docs.append(doc)
                 continue
+        elif is_image(doc):
+            formatted_docs.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": get_image_type(doc),
+                                "data": image_to_b64(doc),
+                            },
+                        },
+                    ],
+                }
+            )
+            continue
         raise ValueError(f"Unsupported document type: {type(doc)}")
 
     # TODO: roll up consecutive messages from the same role, especially for assistant role
