@@ -1,7 +1,23 @@
 from collections import UserList
-from typing import TYPE_CHECKING, List, Literal, Optional, Union
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Literal,
+    Optional,
+    Union,
+)
 from parallellm.core.ask import Askable
-from parallellm.types import LLMDocument, LLMIdentity, LLMResponse, ServerTool
+from parallellm.core.cast.fix_docs import reduce_to_list
+from parallellm.types import (
+    FunctionCallOutput,
+    LLMDocument,
+    LLMIdentity,
+    LLMResponse,
+    ServerTool,
+)
 
 if TYPE_CHECKING:
     from parallellm.core.agent.agent import AgentContext
@@ -12,13 +28,14 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
 
     def __init__(
         self,
+        initlist=None,
         *,
         agent_name: str = None,
         anon_ctr=0,
         chkp_ctr=0,
         true_agent: "AgentContext" = None,
     ):
-        super().__init__()
+        super().__init__(initlist)
         self.agent_name = agent_name
         self.anon_ctr = anon_ctr
         self.chkp_ctr = chkp_ctr
@@ -96,7 +113,7 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
         self._update_seq_counters(item)
         self.data.insert(i, item)
 
-    def extend(self, others: list[Union[LLMDocument, LLMResponse]], /):
+    def extend(self, others: Iterable[Union[LLMDocument, LLMResponse]], /):
         """Extend this MessageState with a list of other MessageStates."""
         for item in others:
             self._update_seq_counters(item)
@@ -147,7 +164,7 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
             it should not be resolved until you actually need it.
         """
         if documents is not None:
-            self.extend(documents)
+            self.extend(reduce_to_list(documents))
             self.extend(list(additional_documents))
         out = self._true_agent.ask_llm(
             self,
@@ -175,3 +192,54 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
         """Persist the current message state to the agent's storage."""
         if self._true_agent:
             self._true_agent._try_persist_msg_state(self)
+
+    def ask_functions(
+        self,
+        functions: Dict[str, Callable] = None,
+        *,
+        if_func_not_exist: Union[str, Exception] = ValueError,
+        **kwargs,
+    ):
+        """
+        If the agent requested any function calls, then this
+
+        Functions should be provided as kwargs.
+
+        :param functions: Available functions to the model. Mapping from function name to callable.
+        :param kwargs: Any additional functions will be added to "functions".
+        :param if_func_not_exist: What to do if a function is not found.
+            If an Exception is passed, it will be raised. If a string is passed, it will be added to the
+            conversation as an error message but allowed to continue.
+            Default: ValueError.
+        """
+        if functions is None:
+            functions = {}
+        functions.update(kwargs)
+
+        # Obtain last message from LLM; check if it made any function calls
+        if len(self) <= 0:
+            # Nothing to do??
+            return
+
+        last_msg = self[-1]
+        if isinstance(last_msg, LLMResponse):
+            fcs = last_msg.resolve_function_calls()
+            for fc in fcs:
+                callme = functions.get(fc.name)
+                if callme is None:
+                    # Function not found
+                    if if_func_not_exist == ValueError:
+                        raise ValueError(
+                            f"LLM asked for {fc.name}, but it was not provided."
+                        )
+                    if isinstance(if_func_not_exist, Exception):
+                        raise if_func_not_exist
+                    else:
+                        self.append(if_func_not_exist)
+                        continue
+
+                # Execute the function
+                result = callme(**fc.args)
+                self.append(
+                    FunctionCallOutput(content=result, name=fc.name, call_id=fc.call_id)
+                )

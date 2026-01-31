@@ -60,13 +60,6 @@ with ParalleLLM.resume_directory(
         tool_calls = resp.resolve_function_calls()
         assert len(tool_calls) == 1
         assert tool_calls[0].name == "count_files"
-
-        computed_tool_output = FunctionCallOutput(
-            name=tool_calls[0].name,
-            content=ls_tool(tool_calls[0].args),
-            call_id=tool_calls[0].call_id,
-        )
-        convo.append(computed_tool_output)
-
-        resp = convo.ask_llm(hash_by=["llm"])
+        convo.ask_functions(count_files=ls_tool)
+        convo.ask_llm(hash_by=["llm"])
         dash.print(convo)
