@@ -187,14 +187,15 @@ class AgentContext(Askable):
         # No-op
         pass
 
-    def get_msg_state(self, persist=True) -> MessageState:
+    def get_msg_state(self, persist=False) -> MessageState:
         """
         Get the current MessageState for this agent.
 
         :param persist: Whether to persist the MessageState upon exit.
-            (This lets you save and resume conversations.
-            If False, responses still get cached in the backend,
-            but they won't appear in MessageState.)
+            This lets you save and resume conversations.
+            If True, the conversation will always resume where it left off.
+            If False, the conversation will be fresh every time. Either way,
+            responses still get cached in the backend.
         :returns: The current message state.
         """
         if self._msg_state is None:

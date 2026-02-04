@@ -1,5 +1,6 @@
 import inspect
-from typing import Optional, get_origin, get_args
+from typing import Callable, List, Optional, get_origin, get_args
+
 
 def python_type_to_json_schema(tp):
     origin = get_origin(tp)
@@ -20,7 +21,9 @@ def python_type_to_json_schema(tp):
 
     return {"type": "string"}  # fallback
 
-def to_tool_schema(funcs):
+
+def to_tool_schema(funcs: List[Callable]) -> List[dict]:
+    """Turns a list of functions into a list of OpenAPI-style JSON tool schemas, for use in tool calls."""
     tool_schemas = []
     for func in funcs:
         sig = inspect.signature(func)
@@ -34,10 +37,12 @@ def to_tool_schema(funcs):
             if param.default is inspect.Parameter.empty:
                 params["required"].append(name)
 
-        tool_schemas.append({
-            "type": "function",
-            "name": func.__name__,
-            "description": func.__doc__ or "",
-            "parameters": params,
-        })
+        tool_schemas.append(
+            {
+                "type": "function",
+                "name": func.__name__,
+                "description": func.__doc__ or "",
+                "parameters": params,
+            }
+        )
     return tool_schemas
