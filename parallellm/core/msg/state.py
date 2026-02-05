@@ -243,3 +243,13 @@ class MessageState(UserList[Union[LLMDocument, LLMResponse]], Askable):
                 self.append(
                     FunctionCallOutput(content=result, name=fc.name, call_id=fc.call_id)
                 )
+
+    def resolve(self) -> List[LLMDocument]:
+        """Helper to make sure that all messages have been resolved."""
+        resolved = []
+        for msg in self.data:
+            if isinstance(msg, LLMResponse):
+                resolved.append(msg.resolve())
+            else:
+                resolved.append(msg)
+        return resolved

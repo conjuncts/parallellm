@@ -18,10 +18,11 @@ explicitly not-agentic philosophy (more of an input/output machine) although age
 
 
 ## TODO
-- centrally track documents (and incorporate with MessageState) just as responses are also tracked
-- tree-based MessageState, which in turn stores all historical MessageState's
+- [x] centrally track documents (and incorporate with MessageState) just as responses are also tracked
+- [x] tree-based MessageState, which in turn stores all historical MessageState's
+    - Solution: existing storage is fine. A Trie can regenerate the MessageState.
 
-- Error handling: 
+- [ ] Error handling: 
     - sync: ask_llm raises an error OR ask_llm produces an error object (ErrorResponse), which is raised when resolve() is called
     - async: ask_llm is fine, but resolve() raises an error
     - mode 1: exceptions are fatal
@@ -44,3 +45,9 @@ Input storage:
 - [ ] resolve_all
 - [ ] export_all
 - [ ] import batch.zip
+
+- [ ] fix that ReadyLLMResponse don't have the original sess_id. pertinent: ParsedResponse should be modified to contain (seq_id, sess_id).
+- [ ] need to hash based on available tools??? (TODO: issue a warning)
+- [ ] material docs
+- [ ] restore resolve_json()
+- [ ] continuable errors (ie. JSON)

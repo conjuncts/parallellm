@@ -40,4 +40,4 @@ with ParalleLLM.resume_directory(
 
         convo.ask_functions(multiply=multiply, add=add, divide=divide)
         convo.ask_llm(hash_by=["llm"])
-        dash.print(convo)
+        dash.print(convo.resolve())

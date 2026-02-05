@@ -370,3 +370,11 @@ class LLMResponse:
         if self.value is not None:
             return self.value
         return repr(self)
+
+
+class HumanResponse(LLMResponse):
+    """
+    A response provided by a human. Useful for human-in-the-loop.
+
+    Like LLMResponse, you must call resolve() to obtain the final value.
+    """

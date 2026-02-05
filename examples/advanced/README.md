@@ -1,0 +1,1 @@
+MessageState is just a list - it can be pushed and popped. 

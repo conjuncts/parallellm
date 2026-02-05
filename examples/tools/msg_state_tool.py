@@ -62,4 +62,4 @@ with ParalleLLM.resume_directory(
         assert tool_calls[0].name == "count_files"
         convo.ask_functions(count_files=ls_tool)
         convo.ask_llm(hash_by=["llm"])
-        dash.print(convo)
+        dash.print(convo.resolve())

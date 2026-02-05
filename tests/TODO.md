@@ -9,3 +9,5 @@ msg_state bug where ask_llm(documents="One single string") would break down the 
 msg_state.ask_functions()
 - [ ] If there are pending but not submitted batch calls, they are automatically sent
 - [ ] Same for pending calls
+msg_state.resolve()
+msg_state.ask_human()

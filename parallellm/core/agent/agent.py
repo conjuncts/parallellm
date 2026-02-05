@@ -116,7 +116,7 @@ class AgentContext(Askable):
             documents = list(documents)
 
         documents = reduce_to_list(documents, list(additional_documents))
-        strict_documents = cast_documents(documents)
+        resolved_docs = cast_documents(documents)
 
         # Compute salt
         salt_terms: list[str] = []
@@ -129,10 +129,10 @@ class AgentContext(Askable):
                         salt_terms.append(llm.identity)
                     else:
                         salt_terms.append(self._bm._provider.provider_type)
-        hashed = compute_hash(instructions, strict_documents + salt_terms)
+        hashed = compute_hash(instructions, resolved_docs + salt_terms)
 
         if save_input:
-            msg_hashes = [compute_hash(None, [msg]) for msg in strict_documents]
+            msg_hashes = [compute_hash(None, [msg]) for msg in resolved_docs]
             self._bm._backend._get_datastore().store_doc_hash(
                 hashed,
                 instructions=instructions,
@@ -170,7 +170,7 @@ class AgentContext(Askable):
 
         params: CommonQueryParameters = {
             "instructions": instructions,
-            "strict_documents": strict_documents,
+            "strict_documents": resolved_docs,
             "llm": llm,
             "text_format": text_format,
             "tools": tools,
